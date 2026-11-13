@@ -235,6 +235,17 @@ GZIP_EXCLUDED_CONTENT_TYPES = (
 )
 # An upload's bytes are handed to a worker thread (hash and disk write) in pieces of this size.
 UPLOAD_WRITE_BYTES = 1024 * 1024
+# Features that ran an agent on the server and were removed. A build request that
+# asks for one is refused with 409 and error_code feature_removed (protocol/README.md).
+REMOVED_FEATURE_MESSAGES = {
+    "build_repair": (
+        "Build repair was removed from the server. Request the build without repair_mode."
+    ),
+    "review_card_generation": (
+        "Review-card generation was removed from the server. Create review cards from a client."
+    ),
+}
+
 SERVER_CAPABILITIES = [
     "permanent_document_identity_v1",
     "client_review_sources_v1",
@@ -296,7 +307,6 @@ SERVER_CAPABILITIES = [
     "agent_conversations_v1",
     "compiler_review_placement_v3",
     "annotation_anchor_v1",
-    "codex_build_repair_v1",
     "conditional_render_check_v1",
     "document_sync_v1",
     "device_sequence_state_v1",
@@ -3171,12 +3181,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             headers={"Retry-After": "30"},
         )
 
+    def feature_removed(feature: str) -> JSONResponse:
+        """409 for a build request that asks for a removed feature; nothing was queued."""
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": REMOVED_FEATURE_MESSAGES[feature],
+                "error_code": "feature_removed",
+                "feature": feature,
+            },
+        )
+
     @app.post("/v1/builds", response_model=BuildRecord)
     def create_build(
         request: BuildRequest,
         device: Device = Depends(current_device),
         session: Session = Depends(session_dependency),
     ) -> dict:
+        if (removed := request.removed_feature()) is not None:
+            return feature_removed(removed)
         try:
             return build_record(
                 enqueue_build(
@@ -3187,7 +3210,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     request.request_id,
                     request.source_frontier,
                     request.input_snapshot_sha256,
-                    repair_mode=request.repair_mode,
                     store=object_store,
                     queue_limit=active_settings.max_queued_builds,
                 ),
@@ -3221,8 +3243,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         device: Device = Depends(current_device),
         session: Session = Depends(session_dependency),
     ) -> dict:
-        if request.repair_mode == "codex":
-            return create_build(request.legacy_request(), device, session)
+        if (removed := request.removed_feature()) is not None:
+            return feature_removed(removed)
         if request.mode == "force":
             try:
                 target = request.scope.filename if request.scope.kind == "document" else "all"

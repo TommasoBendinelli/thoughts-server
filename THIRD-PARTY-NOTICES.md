@@ -57,8 +57,6 @@ runtime pinned in its `package-lock.json`:
 
 `deploy/fedora/install-native.sh` also installs:
 
-- the OpenAI Codex CLI (`@openai/codex`, Apache-2.0, <https://github.com/openai/codex>)
-  for the review-card and build-repair agents;
 - Fedora packages: PostgreSQL, TeX Live, Poppler, qpdf, Ghostscript, restic,
   bubblewrap, Qt 6 and KDE Frameworks development files and others, each under its
   own licence;

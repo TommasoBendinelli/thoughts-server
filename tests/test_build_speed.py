@@ -240,7 +240,7 @@ def test_a_job_is_only_covered_by_one_that_builds_at_least_as_much(library):
         # Newer by time but for older sources: it must not replace the first.
         queue(session, "newer-sources", 1, source_frontier=9)
         queue(session, "older-sources", 2, source_frontier=5)
-        # A repair and a review-card build are never part of a collapse.
+        # Rows left by removed build modes (repair, review-card generation) never collapse.
         queue(session, "repair", 3, target="repair.pdf", repair_mode="codex")
         queue(session, "after-repair", 4, target="repair.pdf")
         queue(session, "cards", 5, target="cards.pdf", progress={"review_generation": {"count": 3}})

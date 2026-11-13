@@ -128,12 +128,8 @@ def derive_settings(base: Settings, entry: LibraryEntry) -> Settings:
         source_bundle_root=_relocated(base.source_bundle_root, moves, entry.root / "source-bundle"),
         # Bootstrap tokens configure the default Library's devices only.
         bootstrap_tokens={},
-        # Another person's documents compile in a sandbox, and agents that run
-        # tools with the server's API key (Codex build repair, review-card agents)
-        # are not available to them; review cards re-anchor deterministically.
+        # Another person's documents compile in a sandbox.
         sandbox_builds=True,
-        openai_api_key=None,
-        review_agent_script=None,
     )
 
 
@@ -223,9 +219,10 @@ def library_environment(settings: Settings, environ: dict[str, str] | None = Non
     # Always explicit: the sandbox is on by default where it exists, so "off" must be said.
     environment["THOUGHTS_SANDBOX_BUILDS"] = "true" if settings.sandbox_builds else "false"
     if settings.library_id != default_library:
-        # Another person's Library runs no agents (derive_settings): its processes
-        # get no credentials they do not need. The default Library keeps its own.
+        # Another person's Library gets no credentials it does not need. The server
+        # itself no longer reads OPENAI_API_KEY; it is dropped here in case an older
+        # server.env still sets it.
         for name in list(environment):
-            if name in {"OPENAI_API_KEY", "THOUGHTS_REVIEW_AGENT_SCRIPT"} or name.startswith("RESTIC_"):
+            if name == "OPENAI_API_KEY" or name.startswith("RESTIC_"):
                 environment.pop(name)
     return environment

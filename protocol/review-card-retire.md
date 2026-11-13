@@ -76,7 +76,6 @@ A retired card:
 - is not counted as an active card in the Library review-card columns (clients count only active cards; deleted cards were already excluded);
 - keeps its review history, tags, group notes and answer note, its answer feedback, its source markers and answer location;
 - stays in re-anchoring and source linking on the server (its markers and PDF regions follow the source as before);
-- stays a duplicate guard for card generation (a retired passage is not proposed again);
 - is shown in History and the card's details with the state "Retired <date>", and in the card browser under the state/filter Retired;
 - can be answered from an older client that does not know retirement (§8). Such an answer is recorded as usual and does not restore the card.
 
@@ -84,7 +83,7 @@ A retired card:
 
 The server keeps no state table for retirement: it reads the events.
 `review_retirement.retired_review_cards(events)` implements §4 and `retired_review_card_ids(session)` reads it from the stored events.
-Re-anchoring, source linking and deduplication treat retired cards as live cards; only `_deleted_review_card_ids` stops them.
+Re-anchoring and source linking treat retired cards as live cards; only `_deleted_review_card_ids` stops them.
 Document deletion writes its usual delete events for retired cards too.
 
 ## 7. Clients

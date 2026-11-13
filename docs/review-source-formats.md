@@ -3,12 +3,10 @@
 
 # Review-card source formats
 
-Generation resolves the sources from the selected PDF's verified build manifest.
-Every source must still match its recorded SHA-256 before generation and before markers are saved.
-Only a publication without a source project and without a source artifact uses the existing PDF-only path.
-A missing, corrupt, stale, empty, or unsupported source artifact does not enable that fallback.
+Review cards are tied to their source by marker lines around the answer passage.
+The server does not generate cards: clients create them, and the server places, moves and removes their markers.
 
-`review_source_formats.py` owns the generation adapter contract and suffix registry.
+`review_source_formats.py` owns the adapter contract and suffix registry.
 LaTeX uses the existing scanner and `ReviewCardMaskStart`/`ReviewCardMaskEnd` markers.
 Markdown uses the existing Pandoc source parser and `thoughts:v1` HTML-comment markers.
 The Markdown adapter compares the parsed document structure before and after insertion to reject selections that would alter paragraphs, lists, tables, or code blocks.
@@ -17,14 +15,14 @@ Authored source bytes are preserved, with only marker lines and any required fin
 Both adapters return the existing version-2 source-anchor identities, including stable card and segment IDs, source paths, source hashes, content hashes, and source line ranges.
 The renderer publishes verified PDF regions for these identities after the anchor build.
 Rebuilds relocate the same markers instead of trusting the original PDF rectangles or line numbers.
-The common generation, transaction, card persistence, and rebuild workflow does not branch on source format.
+The common marking, transaction, card persistence, and rebuild workflow does not branch on source format.
 
 ## Adding a format
 
 Implement `ReviewSourceAdapter` for selection validation, marker encoding, insertion validation, canonical anchor extraction, and content media type.
 Register its supported suffixes only after its renderer can publish verified regions for the same stable card and segment IDs.
-Support source-marker removal and passage deletion through `review_source_delete.py`, including overlap protection, before enabling the format for generated cards.
-Test generation, source persistence, rendering, relocation after edits, disappearance of the answer, and deletion together.
+Support source-marker removal and passage deletion through `review_source_delete.py`, including overlap protection, before enabling the format for cards.
+Test marking, source persistence, rendering, relocation after edits, disappearance of the answer, and deletion together.
 Include a mixed-format card and prove that unsupported formats and changed sources fail explicitly.
 
 The current selection interface uses inclusive lines from UTF-8 source snapshots.

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import difflib
 import hashlib
 import json
 import logging
@@ -65,12 +64,6 @@ from .review_correspondence import (
     strict_gate_failures,
     validate_review_correspondences,
 )
-from .review_dedup import finalize_candidates, lock_generation_results, project_context
-from .review_creation import create_generated_cards
-from .review_creation import source_inputs as review_source_inputs
-from .review_generation import generate_review_candidates
-from .review_context import prompt_cards
-from .review_retry import load_drafts, save_drafts
 from .review_reanchor import project_review_anchors_for_publication
 from .source_owner import is_owner
 from .source_resources import (
@@ -83,7 +76,6 @@ from .source_resources import (
 from .sources import (
     materialize_all_sources,
     materialize_sources_after_frontier,
-    promote_codex_repair_sources,
     source_snapshot_identity,
     worktree_lock,
 )
@@ -173,7 +165,6 @@ def _utc_datetime(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC)
 
 
-RENDERER_REPAIR_MARKERS = {"THOUGHTS_CODEX_REPAIR", "MJPDF_CODEX_REPAIR"}
 PROGRESS_RE = re.compile(
     r"^(?:THOUGHTS|MJPDF)_PROGRESS\t(?P<phase>[a-z][a-z0-9_]*)\t(?P<completed>\d+)\t(?P<total>\d+)\t"
     r"(?P<unit>steps|files|projects|pdfs|documents)\t(?P<detail>.*)$"
@@ -829,7 +820,6 @@ def affected_document_filenames(
 def build_command(
     settings: Settings,
     target: str,
-    repair_mode: str = "none",
     *,
     affected_documents: list[str] | None = None,
     docs_root: Path | None = None,
@@ -841,8 +831,6 @@ def build_command(
         root = docs_root or settings.docs_root
         if root is None:
             return None
-        if repair_mode == "codex":
-            raise RuntimeError("Codex repair must be run as a separate source proposal before a native build")
         # The renderer runs inside the build workspace, which holds client files.
         command = module_command(
             "thoughts_server.native_renderer",
@@ -868,106 +856,22 @@ def build_live_log_path(settings: Settings, job_id: str) -> Path:
     return settings.state_root / "build-logs" / f"{job_id}.log"
 
 
-def _repair_path_is_generated(relative: Path) -> bool:
-    return bool(
-        {
-            ".runtime",
-            "build",
-            "clean_pdfs",
-            "comments",
-            "current_pdfs",
-            "pdf",
-        }.intersection(relative.parts)
-        or relative.name == ".thoughts-worktree.lock"
-    )
-
-
-def _repair_tree_inventory(root: Path) -> dict[str, tuple[str, int, int, int, str | None]]:
-    inventory: dict[str, tuple[str, int, int, int, str | None]] = {}
-    for current, directories, filenames in os.walk(root, followlinks=False):
-        current_path = Path(current)
-        for name in list(directories):
-            path = current_path / name
-            relative = path.relative_to(root)
-            if _repair_path_is_generated(relative):
-                directories.remove(name)
-                continue
-            if path.is_symlink():
-                stat_result = path.lstat()
-                inventory[relative.as_posix()] = (
-                    "symlink",
-                    stat_result.st_size,
-                    stat_result.st_mtime_ns,
-                    stat_result.st_mode,
-                    os.readlink(path),
-                )
-                directories.remove(name)
-        for name in filenames:
-            path = current_path / name
-            relative = path.relative_to(root)
-            if _repair_path_is_generated(relative):
-                continue
-            stat_result = path.lstat()
-            if path.is_symlink():
-                inventory[relative.as_posix()] = (
-                    "symlink",
-                    stat_result.st_size,
-                    stat_result.st_mtime_ns,
-                    stat_result.st_mode,
-                    os.readlink(path),
-                )
-            elif path.is_file():
-                inventory[relative.as_posix()] = (
-                    "file",
-                    stat_result.st_size,
-                    stat_result.st_mtime_ns,
-                    stat_result.st_mode,
-                    None,
-                )
-    return inventory
-
-
-def _repair_entry_bytes(root: Path, relative: str, entry) -> bytes | None:
-    if entry is None:
-        return None
-    if entry[0] == "symlink":
-        return (entry[4] or "").encode("utf-8")
-    return (root / relative).read_bytes()
-
-
-def _repair_unified_diff(relative: str, before: bytes | None, after: bytes | None) -> str:
-    try:
-        before_text = (before or b"").decode("utf-8").splitlines(keepends=True)
-        after_text = (after or b"").decode("utf-8").splitlines(keepends=True)
-    except UnicodeDecodeError:
-        return ""
-    if len(before or b"") + len(after or b"") > 2 * 1024 * 1024:
-        return ""
-    return "".join(
-        difflib.unified_diff(
-            before_text,
-            after_text,
-            fromfile=f"a/{relative}",
-            tofile=f"b/{relative}",
-        )
-    )
-
-
 def build_record(job: BuildJob, settings: Settings | None = None) -> dict:
     return {
         "id": job.id,
         "trace_id": job.trace_id,
         "target": job.target,
-        "repair_mode": job.repair_mode,
+        # Always "none": the modes that ran an agent were removed, and rows queued
+        # with one keep their stored value only in the database.
+        "repair_mode": "none",
         "status": job.status,
         "command": (
             build_command(
                 settings,
                 job.target,
-                job.repair_mode,
                 affected_documents=(job.progress or {}).get("documents") or [],
             )
-            if settings is not None and job.repair_mode != "review_cards"
+            if settings is not None and job.repair_mode == "none"
             else None
         ),
         "source_frontier": job.source_frontier,
@@ -1534,11 +1438,9 @@ def enqueue_build(
     source_frontier: int | None = None,
     input_snapshot_sha256: str | None = None,
     *,
-    repair_mode: str = "none",
     conditional: bool = False,
     affected_documents: list[str] | None = None,
     retry_terminal: bool = False,
-    review_generation: dict | None = None,
     commit: bool = True,
     store: ObjectStore | None = None,
     queue_limit: int | None = None,
@@ -1611,12 +1513,6 @@ def enqueue_build(
         toolchain_key,
         annotation_frontier,
     )
-    if repair_mode not in {"none", "codex"}:
-        raise ValueError("repair_mode must be 'none' or 'codex'")
-    if review_generation is not None:
-        raise ValueError("review-card generation has been retired")
-    if conditional and repair_mode != "none":
-        raise ValueError("conditional render checks cannot request repair")
     dedupe_payload = (
         ["conditional-projects-v3", render_fingerprint, sorted(affected_documents or []), source_frontier,
          sorted(input_snapshot_sources.items())]
@@ -1626,7 +1522,8 @@ def enqueue_build(
         else [
             "explicit",
             render_fingerprint,
-            repair_mode,
+            # The former repair mode: kept so that a repeated request still finds its build.
+            "none",
             target,
             source_frontier,
             source_snapshot_sha256,
@@ -1634,7 +1531,8 @@ def enqueue_build(
             annotation_frontier,
             toolchain_key,
             request_id,
-            review_generation,
+            # The former review-card generation options, for the same reason.
+            None,
         ]
     )
     dedupe_raw = json.dumps(dedupe_payload, separators=(",", ":")).encode("utf-8")
@@ -1667,7 +1565,7 @@ def enqueue_build(
         trace_id=trace_id,
         requested_by=requested_by,
         target=target,
-        repair_mode=repair_mode,
+        repair_mode="none",
         source_frontier=source_frontier,
         source_snapshot_sha256=source_snapshot_sha256,
         input_snapshot_sha256=stored_input_snapshot_sha256,
@@ -1689,7 +1587,6 @@ def enqueue_build(
                 target,
                 annotation_frontier,
             ),
-            **({"review_generation": review_generation} if review_generation is not None else {}),
             **(
                 {
                     "input_snapshot_identity": input_snapshot_sha256,
@@ -2726,8 +2623,6 @@ class BuildWorker:
         }
         for name in (
             "BIBINPUTS",
-            "CODEX_FIX_MODEL",
-            "CODEX_FIX_REASONING_EFFORT",
             "DOCS_RENDER_DISABLE_FSEVENTS",
             "DOCS_RENDER_PYTHON",
             "SOURCE_DATE_EPOCH",
@@ -2758,12 +2653,6 @@ class BuildWorker:
         )
         # Always explicit: the renderer must not fall back to a default of its own.
         environment["THOUGHTS_SANDBOX_BUILDS"] = "true" if self.settings.sandbox_builds else "false"
-        if job.repair_mode == "codex":
-            codex_home = self.settings.state_root / "codex"
-            codex_home.mkdir(parents=True, exist_ok=True, mode=0o700)
-            environment["CODEX_HOME"] = str(codex_home)
-            if self.settings.openai_api_key:
-                environment["OPENAI_API_KEY"] = self.settings.openai_api_key
         return environment
 
     def _command(
@@ -2777,7 +2666,6 @@ class BuildWorker:
         command = build_command(
             self.settings,
             job.target,
-            job.repair_mode,
             affected_documents=(job.progress or {}).get("documents") or [],
             docs_root=docs_root,
             publication_root=publication_root,
@@ -3613,157 +3501,6 @@ class BuildWorker:
             ),
         }
 
-    def _prepare_repair_baseline(self, job: BuildJob) -> Path:
-        repair_root = self.settings.state_root / "repair-jobs" / job.id / str(job.attempts)
-        baseline = repair_root / "baseline"
-        if repair_root.exists():
-            shutil.rmtree(repair_root)
-        baseline.mkdir(parents=True)
-        completed = subprocess.run(
-            [
-                "cp",
-                "-a",
-                "--reflink=always",
-                f"{self.settings.worktree_root}/.",
-                str(baseline),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if completed.returncode != 0:
-            shutil.rmtree(baseline)
-            shutil.copytree(
-                self.settings.worktree_root,
-                baseline,
-                symlinks=True,
-                ignore=shutil.ignore_patterns(".thoughts-worktree.lock"),
-            )
-        return baseline
-
-    def _restore_repair_baseline(self, baseline: Path) -> None:
-        completed = subprocess.run(
-            [
-                "rsync",
-                "-a",
-                "--delete",
-                "--exclude=.thoughts-worktree.lock",
-                f"{baseline}/",
-                f"{self.settings.worktree_root}/",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if completed.returncode != 0:
-            raise RuntimeError(f"could not restore Codex repair baseline: {completed.stderr.strip()}")
-
-    def _record_repair_audit(self, job: BuildJob, baseline: Path) -> dict:
-        before_inventory = _repair_tree_inventory(baseline)
-        after_inventory = _repair_tree_inventory(self.settings.worktree_root)
-        changed = sorted(
-            path
-            for path in before_inventory.keys() | after_inventory.keys()
-            if before_inventory.get(path) != after_inventory.get(path)
-        )
-        entries = []
-        patches = []
-        with self.session_factory() as session:
-            for relative in changed:
-                before = _repair_entry_bytes(baseline, relative, before_inventory.get(relative))
-                after = _repair_entry_bytes(
-                    self.settings.worktree_root,
-                    relative,
-                    after_inventory.get(relative),
-                )
-                before_record = (
-                    self.store.put_bytes(session, before, "application/octet-stream")
-                    if before is not None
-                    else None
-                )
-                after_record = (
-                    self.store.put_bytes(session, after, "application/octet-stream")
-                    if after is not None
-                    else None
-                )
-                patch = _repair_unified_diff(relative, before, after)
-                if patch:
-                    patches.append(patch)
-                entries.append(
-                    {
-                        "path": relative,
-                        "action": "added" if before is None else "deleted" if after is None else "modified",
-                        "before_sha256": before_record.sha256 if before_record else None,
-                        "after_sha256": after_record.sha256 if after_record else None,
-                    }
-                )
-            patch_record = self.store.put_bytes(
-                session,
-                "\n".join(patches).encode("utf-8"),
-                "text/x-diff; charset=utf-8",
-            )
-            manifest = {
-                "schema_version": 1,
-                "job_id": job.id,
-                "attempt": job.attempts,
-                "entries": entries,
-                "patch_sha256": patch_record.sha256,
-            }
-            manifest_record = self.store.put_bytes(
-                session,
-                (json.dumps(manifest, sort_keys=True) + "\n").encode("utf-8"),
-                "application/vnd.thoughts.codex-repair-audit+json",
-            )
-            active_job = session.get(BuildJob, job.id)
-            result = dict(active_job.result or {}) if active_job is not None else {}
-            audit = {
-                "repair_attempted": True,
-                "repair_changed_paths": changed,
-                "repair_change_manifest_sha256": manifest_record.sha256,
-                "repair_patch_sha256": patch_record.sha256,
-            }
-            result.update(audit)
-            if active_job is not None:
-                active_job.result = result
-                active_job.updated_at = utc_now()
-            session.commit()
-        return audit
-
-    def _set_repair_outcome(self, job_id: str, succeeded: bool, **values) -> None:
-        with self.session_factory() as session:
-            job = session.get(BuildJob, job_id)
-            if job is None:
-                return
-            result = dict(job.result or {})
-            result.update(values)
-            result["repair_attempted"] = True
-            result["repair_succeeded"] = succeeded
-            job.result = result
-            job.updated_at = utc_now()
-            session.commit()
-
-    def _rollback_repair(
-        self,
-        job: BuildJob,
-        baseline: Path,
-        audit: dict | None = None,
-    ) -> dict:
-        audit_error: Exception | None = None
-        if audit is None:
-            try:
-                audit = self._record_repair_audit(job, baseline)
-            except Exception as error:  # rollback must still happen if audit capture fails
-                audit_error = error
-                audit = {}
-        try:
-            self._restore_repair_baseline(baseline)
-        finally:
-            shutil.rmtree(baseline.parent, ignore_errors=True)
-        self._set_repair_outcome(job.id, False, **audit)
-        if audit_error is not None:
-            raise RuntimeError(f"repair audit capture failed after rollback: {audit_error}")
-        return audit
-
     def _real_build_locked(
         self,
         job: BuildJob,
@@ -3852,7 +3589,6 @@ class BuildWorker:
         if snapshot_ready is not None:
             snapshot_ready()
         workspace_ready_at = time.perf_counter()
-        repair_baseline = self._prepare_repair_baseline(job) if job.repair_mode == "codex" else None
         environment = self._renderer_environment(job)
         command = self._command(
             job,
@@ -3937,22 +3673,7 @@ class BuildWorker:
                             signal_process(signal.SIGTERM)
                             break
                     fields = line.rstrip("\r\n").split("\t")
-                    if len(fields) == 2 and fields[0] in RENDERER_REPAIR_MARKERS:
-                        if fields[1] == "started":
-                            self._set_progress(
-                                job.id,
-                                {
-                                    "phase": "codex_repair",
-                                    "completed": 0,
-                                    "total": 1,
-                                    "unit": "steps",
-                                    "detail": "Codex is repairing the failed documents",
-                                },
-                            )
-                        elif fields[1] == "succeeded":
-                            partial_success = False
-                            failed_documents.clear()
-                    elif (
+                    if (
                         len(fields) == 3
                         and fields[0] in RENDERER_RESULT_MARKERS
                         and fields[1:] == ["partial_success", "true"]
@@ -4020,379 +3741,323 @@ class BuildWorker:
         failure_summary = self._renderer_failure_summary(live_log_path)
         log_sha256 = self._record_log(job.id, live_log_path)
         if cancelled.is_set():
-            if repair_baseline is not None:
-                self._rollback_repair(job, repair_baseline)
             raise InterruptedError("build cancelled")
         if timed_out.is_set():
-            if repair_baseline is not None:
-                self._rollback_repair(job, repair_baseline)
             raise RuntimeError(
                 f"renderer exceeded {self.settings.build_timeout_seconds} seconds; log object {log_sha256}"
             )
-        repair_audit = self._record_repair_audit(job, repair_baseline) if repair_baseline is not None else {}
-        if return_code != 0 and (job.repair_mode == "codex" or not partial_success):
-            if repair_baseline is not None:
-                self._rollback_repair(job, repair_baseline, repair_audit)
+        if return_code != 0 and not partial_success:
             if failed_documents:
                 self._record_renderer_failures(job.id, failed_documents)
             raise RuntimeError(self._renderer_exit_error(return_code, log_sha256, failure_summary))
-        try:
-            publication_entries = self._publication_entries(
-                job,
-                rendered_source_artifacts,
-                {failure["pdf_filename"] for failure in failed_documents},
-                changes_detected,
-                artifact_root,
-            )
-            html_edition_projects: set[str] = set()
-            with self.session_factory() as session:
-                repair_sources = {
-                    "paths": [],
-                    "source_frontier": job.source_frontier,
-                    "source_snapshot_sha256": job.source_snapshot_sha256,
-                }
-                if repair_baseline is not None:
-                    repair_sources = promote_codex_repair_sources(
-                        session,
-                        self.store,
-                        self.settings.worktree_root,
-                        job.id,
-                    )
-                    job.source_frontier = repair_sources["source_frontier"]
-                    job.source_snapshot_sha256 = repair_sources["source_snapshot_sha256"]
-                    job.render_fingerprint = build_render_fingerprint(
-                        session,
-                        job.target,
-                        job.source_frontier,
-                        (
-                            (job.progress or {}).get("effective_input_identity")
-                            if job.target != "all"
-                            else _job_input_snapshot_identity(job)
-                        ),
-                        job.toolchain_key,
-                        job.annotation_frontier,
-                    )
-                    active_job = session.get(BuildJob, job.id)
-                    if active_job is not None:
-                        active_job.source_frontier = job.source_frontier
-                        active_job.source_snapshot_sha256 = job.source_snapshot_sha256
-                        active_job.render_fingerprint = job.render_fingerprint
-                        active_job.updated_at = utc_now()
-                artifacts = []
-                outcomes = []
-                library_changed = False
-                input_snapshot_sources = (job.progress or {}).get("input_snapshot_sources")
-                expected_projects = {expectation["target"]: expectation["project"]
-                                     for expectation in closure_expectations}
-                failed_by_filename = {failure["pdf_filename"]: failure for failure in failed_documents}
-                for failure in failed_documents:
-                    outcomes.append(
-                        {
-                            "filename": failure["pdf_filename"],
-                            "status": "failed",
-                            "message": failure["message"],
-                        }
-                    )
-                if changes_detected is False and job.target != "all":
-                    current_publication = session.get(Publication, job.target)
-                    if current_publication is not None and html_jobs.queue_edition(
-                        session, self.settings, publication=current_publication, build_id=job.id,
-                        workspace=build_docs_root,
-                    ):
-                        html_edition_projects.add(current_publication.project)
+        publication_entries = self._publication_entries(
+            job,
+            rendered_source_artifacts,
+            {failure["pdf_filename"] for failure in failed_documents},
+            changes_detected,
+            artifact_root,
+        )
+        html_edition_projects: set[str] = set()
+        with self.session_factory() as session:
+            artifacts = []
+            outcomes = []
+            library_changed = False
+            input_snapshot_sources = (job.progress or {}).get("input_snapshot_sources")
+            expected_projects = {expectation["target"]: expectation["project"]
+                                 for expectation in closure_expectations}
+            failed_by_filename = {failure["pdf_filename"]: failure for failure in failed_documents}
+            for failure in failed_documents:
+                outcomes.append(
+                    {
+                        "filename": failure["pdf_filename"],
+                        "status": "failed",
+                        "message": failure["message"],
+                    }
+                )
+            if changes_detected is False and job.target != "all":
+                current_publication = session.get(Publication, job.target)
+                if current_publication is not None and html_jobs.queue_edition(
+                    session, self.settings, publication=current_publication, build_id=job.id,
+                    workspace=build_docs_root,
+                ):
+                    html_edition_projects.add(current_publication.project)
+                if (
+                    current_publication is None
+                    or (current_publication.metadata_json or {}).get("kind") == "unlinked"
+                ):
+                    raise RuntimeError("targeted no-op build has no source-linked publication")
+                artifacts.append(
+                    {
+                        "filename": current_publication.filename,
+                        "sha256": current_publication.object_sha256,
+                        "size_bytes": current_publication.size_bytes,
+                        "media_type": "application/pdf",
+                        "build_id": current_publication.build_id,
+                        "placement_manifest_sha256": current_publication.placement_manifest_sha256,
+                        "source_artifact_sha256": current_publication.source_artifact_sha256,
+                    }
+                )
+                outcomes.append(
+                    {
+                        "filename": current_publication.filename,
+                        "status": "unchanged",
+                        "sha256": current_publication.object_sha256,
+                        "placement_manifest_sha256": current_publication.placement_manifest_sha256,
+                        "source_artifact_sha256": current_publication.source_artifact_sha256,
+                    }
+                )
+            for path in self._published_paths(job, publication_entries, publication_root):
+                if path.name in failed_by_filename:
+                    continue
+                media_type = mimetypes.guess_type(path.name)[0] or "application/pdf"
+                record = self.store.ingest_file(session, path, media_type)
+                metadata = dict(publication_entries[path.name])
+                metadata["kind"] = "source_linked"
+                publication_input_snapshot_sha256 = (
+                    input_snapshot_sources.get(path.name)
+                    if job.target == "all" and isinstance(input_snapshot_sources, dict)
+                    else job.input_snapshot_sha256
+                )
+                publication_input_snapshot = (
+                    session.get(BuildInputSnapshot, publication_input_snapshot_sha256)
+                    if isinstance(publication_input_snapshot_sha256, str)
+                    else None
+                )
+                if (
+                    publication_input_snapshot is not None
+                    and publication_input_snapshot.schema_version == 3
+                ):
+                    closure_path = artifact_root / "closures" / f"{path.name}.json"
+                    try:
+                        closure_bytes = closure_path.read_bytes()
+                        closure = json.loads(closure_bytes)
+                    except (OSError, json.JSONDecodeError) as error:
+                        raise RuntimeError(
+                            "project_layout_invalid: verified closure is unavailable for "
+                            f"{path.name}: {error}"
+                        ) from error
                     if (
-                        current_publication is None
-                        or (current_publication.metadata_json or {}).get("kind") == "unlinked"
-                    ):
-                        raise RuntimeError("targeted no-op build has no source-linked publication")
-                    artifacts.append(
-                        {
-                            "filename": current_publication.filename,
-                            "sha256": current_publication.object_sha256,
-                            "size_bytes": current_publication.size_bytes,
-                            "media_type": "application/pdf",
-                            "build_id": current_publication.build_id,
-                            "placement_manifest_sha256": current_publication.placement_manifest_sha256,
-                            "source_artifact_sha256": current_publication.source_artifact_sha256,
-                        }
-                    )
-                    outcomes.append(
-                        {
-                            "filename": current_publication.filename,
-                            "status": "unchanged",
-                            "sha256": current_publication.object_sha256,
-                            "placement_manifest_sha256": current_publication.placement_manifest_sha256,
-                            "source_artifact_sha256": current_publication.source_artifact_sha256,
-                        }
-                    )
-                for path in self._published_paths(job, publication_entries, publication_root):
-                    if path.name in failed_by_filename:
-                        continue
-                    media_type = mimetypes.guess_type(path.name)[0] or "application/pdf"
-                    record = self.store.ingest_file(session, path, media_type)
-                    metadata = dict(publication_entries[path.name])
-                    metadata["kind"] = "source_linked"
-                    publication_input_snapshot_sha256 = (
-                        input_snapshot_sources.get(path.name)
-                        if job.target == "all" and isinstance(input_snapshot_sources, dict)
-                        else job.input_snapshot_sha256
-                    )
-                    publication_input_snapshot = (
-                        session.get(BuildInputSnapshot, publication_input_snapshot_sha256)
-                        if isinstance(publication_input_snapshot_sha256, str)
-                        else None
-                    )
-                    if (
-                        publication_input_snapshot is not None
-                        and publication_input_snapshot.schema_version == 3
-                    ):
-                        closure_path = artifact_root / "closures" / f"{path.name}.json"
-                        try:
-                            closure_bytes = closure_path.read_bytes()
-                            closure = json.loads(closure_bytes)
-                        except (OSError, json.JSONDecodeError) as error:
-                            raise RuntimeError(
-                                "project_layout_invalid: verified closure is unavailable for "
-                                f"{path.name}: {error}"
-                            ) from error
-                        if (
-                            closure.get("kind") != ("thoughts-verified-source-closure" if publication_input_snapshot.discovery_policy == "source-closure-v2" else "thoughts-verified-tex-closure")
-                            or closure.get("discovery_policy") != publication_input_snapshot.discovery_policy
-                            or closure.get("target") != path.name
-                            # A moved document's closure is its new folder's (build_closure_expectations).
-                            or closure.get("project") != expected_projects.get(
-                                path.name, publication_input_snapshot.project)
-                            or closure.get("snapshot_sha256") != publication_input_snapshot.sha256
-                            or not isinstance(closure.get("closure_sha256"), str)
-                            or not isinstance(closure.get("input_count"), int)
-                            or not isinstance(closure.get("input_bytes"), int)
-                        ):
-                            raise RuntimeError(
-                                "project_layout_invalid: verified closure identity is invalid for "
-                                f"{path.name}"
-                            )
-                        closure_record = self.store.put_bytes(
-                            session,
-                            closure_bytes,
-                            "application/vnd.thoughts.verified-tex-closure+json",
-                        )
-                        metadata.update(
-                            {
-                                "verified_closure_sha256": closure["closure_sha256"],
-                                "verified_closure_object_sha256": closure_record.sha256,
-                                "verified_closure_input_count": closure["input_count"],
-                                "verified_closure_input_bytes": closure["input_bytes"],
-                                "build_input_discovery_policy": publication_input_snapshot.discovery_policy,
-                            }
-                        )
-                    dependencies = _renderer_dependency_paths(artifact_root, path.name)
-                    if dependencies is not None:
-                        metadata["compiler_dependencies"] = {"version": 1, "paths": dependencies}
-                    if metadata.get("pdf_sha256") != record.sha256:
-                        raise RuntimeError(f"published PDF does not match source index: {path.name}")
-                    publication = session.get(Publication, path.name)
-                    if (
-                        publication is not None
-                        and (publication.metadata_json or {}).get("kind") == "unlinked"
+                        closure.get("kind") != ("thoughts-verified-source-closure" if publication_input_snapshot.discovery_policy == "source-closure-v2" else "thoughts-verified-tex-closure")
+                        or closure.get("discovery_policy") != publication_input_snapshot.discovery_policy
+                        or closure.get("target") != path.name
+                        # A moved document's closure is its new folder's (build_closure_expectations).
+                        or closure.get("project") != expected_projects.get(
+                            path.name, publication_input_snapshot.project)
+                        or closure.get("snapshot_sha256") != publication_input_snapshot.sha256
+                        or not isinstance(closure.get("closure_sha256"), str)
+                        or not isinstance(closure.get("input_count"), int)
+                        or not isinstance(closure.get("input_bytes"), int)
                     ):
                         raise RuntimeError(
-                            f"source-linked build conflicts with unlinked publication: {path.name}"
+                            "project_layout_invalid: verified closure identity is invalid for "
+                            f"{path.name}"
                         )
-                    previous_metadata = publication.metadata_json or {} if publication is not None else {}
-                    previous_pdf_sha256 = publication.object_sha256 if publication is not None else None
-                    previous_display_name = previous_metadata.get("display_name")
-                    if isinstance(previous_display_name, str) and previous_display_name.strip():
-                        metadata["display_name"] = previous_display_name.strip()
-                    metadata["archived"] = previous_metadata.get("archived") is True
-                    pdf_unchanged = publication is not None and publication.object_sha256 == record.sha256
-                    delta = None
-                    if not pdf_unchanged and previous_pdf_sha256 is not None:
-                        with publication_stage("pdf_patch"):
-                            delta = create_pdf_delta(
-                                session,
-                                self.store,
-                                previous_pdf_sha256,
-                                record.sha256,
-                                record.size_bytes,
-                            )
-                        if delta is not None:
-                            metadata["delta"] = delta
-                    document_id = (
-                        publication.document_id if publication is not None else registered_publication_id(session, self.store, path.name, str(metadata.get("project", "")))
+                    closure_record = self.store.put_bytes(
+                        session,
+                        closure_bytes,
+                        "application/vnd.thoughts.verified-tex-closure+json",
                     )
-                    with publication_stage("placement_manifest"):
-                        placement_manifest = self._placement_manifest(
-                            session,
-                            job,
-                            path.name,
-                            document_id,
-                            record.sha256,
-                            path,
-                        )
-                        placement_record = self.store.put_bytes(
-                            session,
-                            (json.dumps(placement_manifest, sort_keys=True) + "\n").encode("utf-8"),
-                            "application/vnd.thoughts.annotation-placement+json",
-                        )
-                    source_artifact_sha256 = metadata.get("source_artifact_sha256")
-                    if not isinstance(source_artifact_sha256, str):
-                        raise RuntimeError(f"document source artifact identity is missing: {path.name}")
-                    with publication_stage("source_artifact_ingestion"):
-                        source_manifest = self._ingest_document_source_artifact(
-                            session,
-                            path.name,
-                            source_artifact_sha256,
-                            artifact_root,
-                        )
-                    metadata["source_resources"] = api_source_resources(
-                        source_manifest.get("resources"),
-                        str(metadata.get("project", "")),
-                    )
-                    if publication is None:
-                        publication = Publication(
-                            filename=path.name,
-                            document_id=document_id,
-                            object_sha256=record.sha256,
-                            size_bytes=record.size_bytes,
-                        )
-                        session.add(publication)
-                    publication.object_sha256 = record.sha256
-                    publication.trace_id = job.trace_id
-                    publication.size_bytes = record.size_bytes
-                    publication.project = str(metadata.get("project", ""))
-                    publication.source_frontier = job.source_frontier
-                    publication.comment_frontier = job.comment_frontier
-                    publication.annotation_frontier = job.annotation_frontier
-                    publication.build_id = job.id
-                    publication.source_snapshot_sha256 = job.source_snapshot_sha256
-                    publication.input_snapshot_sha256 = publication_input_snapshot_sha256
-                    publication.placement_manifest_sha256 = placement_record.sha256
-                    publication.source_artifact_sha256 = source_artifact_sha256
-                    publication.metadata_json = metadata
-                    publication.published_at = utc_now()
-                    library_changed = True
-                    # The HTML edition is built later, in the background, from this
-                    # build's workspace; queueing it can never fail the publication.
-                    if html_jobs.queue_edition(session, self.settings, publication=publication,
-                                               build_id=job.id, workspace=build_docs_root):
-                        html_edition_projects.add(publication.project)
-                    with publication_stage("review_anchor_projection"):
-                        from .reading_migration import migrate_review_placements, migrate_comment_placements
-                        migrate_review_placements(session, self.store, publication, source_manifest)
-                        migrate_comment_placements(session, self.store, publication, source_manifest)
-                        project_review_anchors_for_publication(
-                            session,
-                            path.name,
-                            record.sha256,
-                            source_manifest,
-                            store=self.store,
-                        )
-                    if not pdf_unchanged:
-                        artifact = {
-                            "filename": path.name,
-                            "sha256": record.sha256,
-                            "size_bytes": record.size_bytes,
-                            "media_type": record.media_type,
-                            "placement_manifest_sha256": placement_record.sha256,
-                            "source_artifact_sha256": source_artifact_sha256,
+                    metadata.update(
+                        {
+                            "verified_closure_sha256": closure["closure_sha256"],
+                            "verified_closure_object_sha256": closure_record.sha256,
+                            "verified_closure_input_count": closure["input_count"],
+                            "verified_closure_input_bytes": closure["input_bytes"],
+                            "build_input_discovery_policy": publication_input_snapshot.discovery_policy,
                         }
-                        if delta is not None:
-                            artifact["delta"] = delta
-                        artifacts.append(artifact)
-                    outcome = {
+                    )
+                dependencies = _renderer_dependency_paths(artifact_root, path.name)
+                if dependencies is not None:
+                    metadata["compiler_dependencies"] = {"version": 1, "paths": dependencies}
+                if metadata.get("pdf_sha256") != record.sha256:
+                    raise RuntimeError(f"published PDF does not match source index: {path.name}")
+                publication = session.get(Publication, path.name)
+                if (
+                    publication is not None
+                    and (publication.metadata_json or {}).get("kind") == "unlinked"
+                ):
+                    raise RuntimeError(
+                        f"source-linked build conflicts with unlinked publication: {path.name}"
+                    )
+                previous_metadata = publication.metadata_json or {} if publication is not None else {}
+                previous_pdf_sha256 = publication.object_sha256 if publication is not None else None
+                previous_display_name = previous_metadata.get("display_name")
+                if isinstance(previous_display_name, str) and previous_display_name.strip():
+                    metadata["display_name"] = previous_display_name.strip()
+                metadata["archived"] = previous_metadata.get("archived") is True
+                pdf_unchanged = publication is not None and publication.object_sha256 == record.sha256
+                delta = None
+                if not pdf_unchanged and previous_pdf_sha256 is not None:
+                    with publication_stage("pdf_patch"):
+                        delta = create_pdf_delta(
+                            session,
+                            self.store,
+                            previous_pdf_sha256,
+                            record.sha256,
+                            record.size_bytes,
+                        )
+                    if delta is not None:
+                        metadata["delta"] = delta
+                document_id = (
+                    publication.document_id if publication is not None else registered_publication_id(session, self.store, path.name, str(metadata.get("project", "")))
+                )
+                with publication_stage("placement_manifest"):
+                    placement_manifest = self._placement_manifest(
+                        session,
+                        job,
+                        path.name,
+                        document_id,
+                        record.sha256,
+                        path,
+                    )
+                    placement_record = self.store.put_bytes(
+                        session,
+                        (json.dumps(placement_manifest, sort_keys=True) + "\n").encode("utf-8"),
+                        "application/vnd.thoughts.annotation-placement+json",
+                    )
+                source_artifact_sha256 = metadata.get("source_artifact_sha256")
+                if not isinstance(source_artifact_sha256, str):
+                    raise RuntimeError(f"document source artifact identity is missing: {path.name}")
+                with publication_stage("source_artifact_ingestion"):
+                    source_manifest = self._ingest_document_source_artifact(
+                        session,
+                        path.name,
+                        source_artifact_sha256,
+                        artifact_root,
+                    )
+                metadata["source_resources"] = api_source_resources(
+                    source_manifest.get("resources"),
+                    str(metadata.get("project", "")),
+                )
+                if publication is None:
+                    publication = Publication(
+                        filename=path.name,
+                        document_id=document_id,
+                        object_sha256=record.sha256,
+                        size_bytes=record.size_bytes,
+                    )
+                    session.add(publication)
+                publication.object_sha256 = record.sha256
+                publication.trace_id = job.trace_id
+                publication.size_bytes = record.size_bytes
+                publication.project = str(metadata.get("project", ""))
+                publication.source_frontier = job.source_frontier
+                publication.comment_frontier = job.comment_frontier
+                publication.annotation_frontier = job.annotation_frontier
+                publication.build_id = job.id
+                publication.source_snapshot_sha256 = job.source_snapshot_sha256
+                publication.input_snapshot_sha256 = publication_input_snapshot_sha256
+                publication.placement_manifest_sha256 = placement_record.sha256
+                publication.source_artifact_sha256 = source_artifact_sha256
+                publication.metadata_json = metadata
+                publication.published_at = utc_now()
+                library_changed = True
+                # The HTML edition is built later, in the background, from this
+                # build's workspace; queueing it can never fail the publication.
+                if html_jobs.queue_edition(session, self.settings, publication=publication,
+                                           build_id=job.id, workspace=build_docs_root):
+                    html_edition_projects.add(publication.project)
+                with publication_stage("review_anchor_projection"):
+                    from .reading_migration import migrate_review_placements, migrate_comment_placements
+                    migrate_review_placements(session, self.store, publication, source_manifest)
+                    migrate_comment_placements(session, self.store, publication, source_manifest)
+                    project_review_anchors_for_publication(
+                        session,
+                        path.name,
+                        record.sha256,
+                        source_manifest,
+                        store=self.store,
+                    )
+                if not pdf_unchanged:
+                    artifact = {
                         "filename": path.name,
-                        "status": "unchanged" if pdf_unchanged else "published",
                         "sha256": record.sha256,
+                        "size_bytes": record.size_bytes,
+                        "media_type": record.media_type,
                         "placement_manifest_sha256": placement_record.sha256,
                         "source_artifact_sha256": source_artifact_sha256,
                     }
                     if delta is not None:
-                        outcome["delta"] = delta
-                    outcomes.append(outcome)
-                if not outcomes and changes_detected is not False:
-                    raise RuntimeError("renderer succeeded but reported no canonical PDF outcome")
-                input_index_record = None
-                if job.target == "all":
-                    index_path = publication_root / ".thoughts-source-index.json"
-                    input_index_record = self.store.ingest_file(session, index_path, "application/json")
-                # The exact client-facing index is derived from the authoritative
-                # publication rows, so a targeted publication changes it too.
-                # Persist it after every successful build, including no-op targets,
-                # to repair a missing content-addressed object idempotently.
-                session.flush()
-                from .library_projects import publish_project_readings
-                with publication_stage("project_composition"):
-                    library_changed |= bool(publish_project_readings(
-                        session, self.store, self.settings.docs_root,
-                        changed_filenames={outcome["filename"] for outcome in outcomes},
-                    ))
-                with publication_stage("source_index_validation"):
-                    validate_published_document_sources(session, self.store)
-                    published_index_record = store_published_source_index(session, self.store)
-                session.commit()
-                if library_changed:
-                    write_library_index(session, self.settings.docs_root)
-            if failed_by_filename:
-                self._restore_authoritative_publications(job, set(failed_by_filename))
-            if html_edition_projects and job_workspace_root is None:
-                # No private build workspace to keep: copy the published projects.
-                html_jobs.copy_inputs(self.settings, job.id, build_docs_root, html_edition_projects)
-            result = {
-                "development": False,
-                "attention": partial_success,
-                "changes_detected": changes_detected,
-                "render_path": (
-                    "fast_noop"
-                    if changes_detected is False
-                    else "incremental_all"
-                    if job.target == "all"
-                    else "incremental_target"
-                ),
-                "fallback_reason": None,
-                "failed_documents": failed_documents,
-                "warnings": warnings,
-                "log_sha256": log_sha256,
-                "source_index_sha256": (
-                    published_index_record.sha256 if published_index_record is not None else None
-                ),
-                "source_layout_input_sha256": (
-                    input_index_record.sha256 if input_index_record is not None else None
-                ),
-                "artifacts": artifacts,
-                "outcomes": outcomes,
-                "publication_timings_ms": publication_timings,
-                "html_edition_inputs": bool(html_edition_projects),
-                "timings_ms": {
-                    "source_materialization": round((sources_ready_at - started_at) * 1000),
-                    "build_input_materialization": round((inputs_ready_at - sources_ready_at) * 1000),
-                    "annotation_export": round((annotations_ready_at - inputs_ready_at) * 1000),
-                    "workspace_snapshot": round((workspace_ready_at - annotations_ready_at) * 1000),
-                    "renderer_setup": round((renderer_started_at - workspace_ready_at) * 1000),
-                    "renderer": round((renderer_finished_at - renderer_started_at) * 1000),
-                    "publication": round((time.perf_counter() - renderer_finished_at) * 1000),
-                    "total": round((time.perf_counter() - started_at) * 1000),
-                },
-            }
-            if repair_baseline is not None:
-                result.update(repair_audit)
-                result.update(
-                    {
-                        "repair_attempted": True,
-                        "repair_succeeded": True,
-                        "repair_source_paths": repair_sources["paths"],
-                        "repair_source_frontier": repair_sources["source_frontier"],
-                    }
-                )
-                shutil.rmtree(repair_baseline.parent, ignore_errors=True)
-            return result
-        except Exception:
-            if repair_baseline is not None:
-                self._rollback_repair(job, repair_baseline, repair_audit)
-            raise
+                        artifact["delta"] = delta
+                    artifacts.append(artifact)
+                outcome = {
+                    "filename": path.name,
+                    "status": "unchanged" if pdf_unchanged else "published",
+                    "sha256": record.sha256,
+                    "placement_manifest_sha256": placement_record.sha256,
+                    "source_artifact_sha256": source_artifact_sha256,
+                }
+                if delta is not None:
+                    outcome["delta"] = delta
+                outcomes.append(outcome)
+            if not outcomes and changes_detected is not False:
+                raise RuntimeError("renderer succeeded but reported no canonical PDF outcome")
+            input_index_record = None
+            if job.target == "all":
+                index_path = publication_root / ".thoughts-source-index.json"
+                input_index_record = self.store.ingest_file(session, index_path, "application/json")
+            # The exact client-facing index is derived from the authoritative
+            # publication rows, so a targeted publication changes it too.
+            # Persist it after every successful build, including no-op targets,
+            # to repair a missing content-addressed object idempotently.
+            session.flush()
+            from .library_projects import publish_project_readings
+            with publication_stage("project_composition"):
+                library_changed |= bool(publish_project_readings(
+                    session, self.store, self.settings.docs_root,
+                    changed_filenames={outcome["filename"] for outcome in outcomes},
+                ))
+            with publication_stage("source_index_validation"):
+                validate_published_document_sources(session, self.store)
+                published_index_record = store_published_source_index(session, self.store)
+            session.commit()
+            if library_changed:
+                write_library_index(session, self.settings.docs_root)
+        if failed_by_filename:
+            self._restore_authoritative_publications(job, set(failed_by_filename))
+        if html_edition_projects and job_workspace_root is None:
+            # No private build workspace to keep: copy the published projects.
+            html_jobs.copy_inputs(self.settings, job.id, build_docs_root, html_edition_projects)
+        result = {
+            "development": False,
+            "attention": partial_success,
+            "changes_detected": changes_detected,
+            "render_path": (
+                "fast_noop"
+                if changes_detected is False
+                else "incremental_all"
+                if job.target == "all"
+                else "incremental_target"
+            ),
+            "fallback_reason": None,
+            "failed_documents": failed_documents,
+            "warnings": warnings,
+            "log_sha256": log_sha256,
+            "source_index_sha256": (
+                published_index_record.sha256 if published_index_record is not None else None
+            ),
+            "source_layout_input_sha256": (
+                input_index_record.sha256 if input_index_record is not None else None
+            ),
+            "artifacts": artifacts,
+            "outcomes": outcomes,
+            "publication_timings_ms": publication_timings,
+            "html_edition_inputs": bool(html_edition_projects),
+            "timings_ms": {
+                "source_materialization": round((sources_ready_at - started_at) * 1000),
+                "build_input_materialization": round((inputs_ready_at - sources_ready_at) * 1000),
+                "annotation_export": round((annotations_ready_at - inputs_ready_at) * 1000),
+                "workspace_snapshot": round((workspace_ready_at - annotations_ready_at) * 1000),
+                "renderer_setup": round((renderer_started_at - workspace_ready_at) * 1000),
+                "renderer": round((renderer_finished_at - renderer_started_at) * 1000),
+                "publication": round((time.perf_counter() - renderer_finished_at) * 1000),
+                "total": round((time.perf_counter() - started_at) * 1000),
+            },
+        }
+        return result
 
     def _real_build(self, job: BuildJob) -> dict:
         started_at = time.perf_counter()
-        # A Codex repair promotes its edits to a newer frontier; cleanup starts from this one.
         build_source_frontier = job.source_frontier
         worktree_context = worktree_lock(self.settings.worktree_root)
         worktree_context.__enter__()
@@ -4406,7 +4071,7 @@ class BuildWorker:
 
         release_after_snapshot = (
             release_snapshot_lock
-            if self.settings.renderer_backend == "native" and job.repair_mode != "codex"
+            if self.settings.renderer_backend == "native"
             else None
         )
         result = None
@@ -4437,7 +4102,7 @@ class BuildWorker:
                             already_locked=True,
                         )
                     else:
-                        # A repair edits the worktree itself: restore everything.
+                        # The renderer worked in the worktree itself: restore everything.
                         materialize_all_sources(
                             session,
                             self.store,
@@ -4456,104 +4121,6 @@ class BuildWorker:
         timings["cleanup"] = round((time.perf_counter() - cleanup_started_at) * 1000)
         timings["total"] = round((time.perf_counter() - started_at) * 1000)
         return result
-
-    def _generate_review_cards(self, job: BuildJob) -> dict:
-        options = (job.progress or {}).get("review_generation")
-        if not isinstance(options, dict):
-            raise RuntimeError("review-card generation options are missing")
-        expected_sha256 = options.get("expected_pdf_sha256")
-        with self.session_factory() as session:
-            publication = session.get(Publication, job.target)
-            if publication is None or publication.object_sha256 != expected_sha256:
-                raise RuntimeError("the selected PDF changed before card generation started")
-            pdf_path = self.store.path(publication.object_sha256)
-            source_files = review_source_inputs(session, self.store, job.target, str(expected_sha256))
-            source_segments = []
-            if publication.source_artifact_sha256:
-                raw = self.store.path(publication.source_artifact_sha256).read_bytes()
-                if hashlib.sha256(raw).hexdigest() != publication.source_artifact_sha256:
-                    raise RuntimeError("the review source artifact failed verification")
-                source_manifest = json.loads(raw)
-                if source_manifest.get("pdf", {}).get("pdf_sha256") != expected_sha256:
-                    raise RuntimeError("the review source artifact belongs to another PDF")
-                source_segments = source_manifest["pdf"].get("segments", [])
-            existing_cards = project_context(session, self.store, job.target, exclude_job=job.id)
-            avoid_regions = []
-            for card in existing_cards:
-                anchor = card["anchor"]
-                if (card["pdf_stem"] == Path(job.target).stem
-                        and anchor.get("pdf_sha256") == expected_sha256):
-                    avoid_regions.extend(anchor.get("regions") or [anchor])
-        if not pdf_path.is_file():
-            raise RuntimeError("the immutable review PDF object is missing")
-        page_count = len(PdfReader(pdf_path).pages)
-
-        def report(phase: str, completed: int, total: int, detail: str) -> None:
-            if not self._set_progress(
-                job.id,
-                {
-                    "phase": phase,
-                    "completed": completed,
-                    "total": total,
-                    "unit": "steps",
-                    "detail": detail,
-                },
-            ):
-                raise InterruptedError("review-card generation was cancelled")
-
-        generation_warnings: list[dict] = []
-        source_pages, pdf_pages = set(), set()
-        for segment in source_segments:
-            first, count = segment.get("start_page"), segment.get("page_count")
-            if (type(first) is not int or type(count) is not int or first < 1 or count < 1
-                    or type(segment.get("source_available")) is not bool):
-                source_pages, pdf_pages = set(), set()
-                break
-            pages = set(range(first, first + count))
-            (source_pages if segment.get("source_available") is True else pdf_pages).update(pages)
-        else:
-            if source_pages & pdf_pages or source_pages | pdf_pages != set(range(1, page_count + 1)):
-                source_pages, pdf_pages = set(), set()
-        max_candidates = int(options.get("max_candidates", 20))
-        groups = [(None, source_files, max_candidates)]
-        if source_files and source_pages and pdf_pages:
-            source_budget = max(1, min(max_candidates - 1,
-                round(max_candidates * len(source_pages) / page_count))) if max_candidates > 1 else 1
-            groups = [(source_pages, source_files, source_budget),
-                      (pdf_pages, None, max_candidates - source_budget if max_candidates > 1 else 1)]
-        candidates = []
-        for allowed_pages, group_sources, budget in groups:
-            candidates.extend(generate_review_candidates(
-                self.settings, pdf_path, Path(job.target).stem, str(expected_sha256), page_count,
-                max_candidates=budget,
-                instruction=str(options.get("instruction") or ""),
-                model=(str(options["agent_model"]) if options.get("agent_model")
-                       else self.settings.review_agent_model),
-                reasoning_effort=(str(options["agent_reasoning_effort"])
-                                  if options.get("agent_reasoning_effort")
-                                  else self.settings.review_agent_reasoning_effort),
-                avoid_regions=avoid_regions,
-                existing_cards=prompt_cards(self.settings, self.store, existing_cards),
-                source_files=group_sources,
-                allowed_pages=allowed_pages,
-                progress=report,
-                warnings=generation_warnings,
-            ))
-        candidates = candidates[:max_candidates]
-        return {
-            "review_generation": {
-                "schema_version": 3,
-                "pdf_stem": Path(job.target).stem,
-                "pdf_sha256": expected_sha256,
-                "candidates": candidates,
-                "warnings": generation_warnings,
-                "source_sha256": {
-                    path: hashlib.sha256(text.encode()).hexdigest() for path, text in source_files.items()
-                },
-            },
-            "publications": [],
-            "warnings": generation_warnings,
-        }
 
     def run_job(self, job_id: str) -> None:
         with self.session_factory() as session:
@@ -4581,8 +4148,9 @@ class BuildWorker:
             )
         )
         try:
-            if detached.repair_mode == "review_cards":
-                raise RuntimeError("review-card generation has been retired")
+            if detached.repair_mode != "none":
+                # A row queued by an earlier server for a mode that ran an agent.
+                raise RuntimeError("this build asks for a feature that was removed from the server")
             self._set_progress(
                 job_id,
                 {
@@ -4593,49 +4161,22 @@ class BuildWorker:
                     "detail": "Validating build inputs",
                 },
             )
-            if detached.repair_mode == "review_cards":
-                result = load_drafts(self.settings, job_id)
-                if result is None:
-                    result = self._generate_review_cards(detached)
-                    save_drafts(self.settings, job_id, result)
+            backend = self.settings.renderer_backend
+            production_configured = backend == "native"
+            if not production_configured:
+                if not self.settings.allow_development_builds:
+                    raise RuntimeError("production renderer is not configured")
+                result = self._fake_build(detached)
             else:
-                backend = self.settings.renderer_backend
-                production_configured = backend == "native"
-                if not production_configured:
-                    if not self.settings.allow_development_builds:
-                        raise RuntimeError("production renderer is not configured")
-                    result = self._fake_build(detached)
-                else:
-                    result = self._real_build(detached)
-            if detached.repair_mode == "review_cards":
-                self._set_progress(job_id, {
-                    "phase": "review_duplicate_check", "completed": 0, "total": 1,
-                    "unit": "steps",
-                    "draft_count": len(result["review_generation"]["candidates"]),
-                    "detail": f'{len(result["review_generation"]["candidates"])} drafts prepared; checking duplicates',
-                })
+                result = self._real_build(detached)
             with self.session_factory() as session:
-                if detached.repair_mode == "review_cards":
-                    lock_generation_results(session)
                 job = session.get(BuildJob, job_id)
                 if job is None:
                     return
-                if detached.repair_mode == "review_cards" and not job.cancellation_requested:
-                    generation = result["review_generation"]
-                    result["review_generation"] = finalize_candidates(
-                        self.settings, self.store, job, generation,
-                        project_context(session, self.store, job.target, exclude_job=job.id),
-                    )
-                    # Cancellation can arrive while the semantic check is running.
-                    session.refresh(job)
                 if job.cancellation_requested:
                     job.status = "cancelled"
                     job.error = "cancelled by client"
                 else:
-                    if detached.repair_mode == "review_cards":
-                        result["review_generation"] = create_generated_cards(
-                            session, self.store, self.settings, job, result["review_generation"],
-                        )
                     result_warnings = [
                         warning
                         for warning in (result.get("warnings") or [])
@@ -4643,14 +4184,7 @@ class BuildWorker:
                     ]
                     warning_count = len(result_warnings)
                     warning_label = "warning" if warning_count == 1 else "warnings"
-                    generated_count = len(
-                        (result.get("review_generation") or {}).get("candidates") or []
-                    )
-                    publication_message = (
-                        f"The server generated {generated_count} review cards."
-                        if detached.repair_mode == "review_cards"
-                        else "The server published the completed build."
-                    )
+                    publication_message = "The server published the completed build."
                     if warning_count:
                         first_warning = result_warnings[0]
                         warning_summary = ": ".join(
@@ -4670,15 +4204,7 @@ class BuildWorker:
                     progress = dict(job.progress or {})
                     progress.update(
                         {
-                            "phase": (
-                                "attention"
-                                if result.get("attention")
-                                else (
-                                    "review_candidates_ready"
-                                    if detached.repair_mode == "review_cards"
-                                    else "published"
-                                )
-                            ),
+                            "phase": "attention" if result.get("attention") else "published",
                             "completed": 1,
                             "total": 1,
                             "unit": "steps",
@@ -4688,11 +4214,7 @@ class BuildWorker:
                                 else (
                                     f"Build completed with {warning_count} {warning_label}"
                                     if warning_count
-                                    else (
-                                        f"Generated {generated_count} review cards"
-                                        if detached.repair_mode == "review_cards"
-                                        else "Build completed"
-                                    )
+                                    else "Build completed"
                                 )
                             ),
                         }
@@ -4702,12 +4224,7 @@ class BuildWorker:
                 job.updated_at = utc_now()
                 terminal_status = job.status
                 notify_build_state(session, job.id)
-                terminal_phase = (
-                    "review_candidates_ready"
-                    if terminal_status == "succeeded"
-                    and detached.repair_mode == "review_cards"
-                    else ("published" if terminal_status == "succeeded" else terminal_status)
-                )
+                terminal_phase = "published" if terminal_status == "succeeded" else terminal_status
                 terminal_message = (
                     publication_message
                     if terminal_status == "succeeded"
@@ -4787,7 +4304,8 @@ class BuildWorker:
         restoration_error: Exception | None = None
         with self.session_factory() as session:
             failed_job = session.get(BuildJob, job_id)
-            if failed_job is not None and failed_job.repair_mode != "review_cards":
+            # A row of a removed mode fails before it changes anything: nothing to restore.
+            if failed_job is not None and failed_job.repair_mode == "none":
                 try:
                     self._restore_authoritative_publications(failed_job)
                 except Exception as restore_error:

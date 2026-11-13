@@ -18,7 +18,7 @@ One server serves several people. Each person has their own Library, with their 
   - A device created while the server runs is routed within 5 seconds.
 - **Each worker service** (build, export, anchor, review) starts one child process per Library (`thoughts_server.library_supervisor`) and restarts any child that exits. Each child's environment names only its own Library's database and folders, so it is a single-Library worker in every respect, renderer and helpers included.
 - **The API's start** (`ExecStartPre`) runs `alembic upgrade head` for production, then `thoughts-admin upgrade-library-databases` for every other Library.
-- **Shared** between Libraries: the code, the toolchain, the limits, the agent keys and the address. Nothing a Library stores is readable through another Library's token: separate database, separate object store, separate folders.
+- **Shared** between Libraries: the code, the toolchain, the limits and the address. Nothing a Library stores is readable through another Library's token: separate database, separate object store, separate folders.
 - **Build sandbox.** Every Library, the default one included, compiles in a sandbox (`thoughts_server.build_sandbox`). All Libraries are compiled by the same Unix account, so without a sandbox a LaTeX document could read any file that account can (TeX opens absolute paths) or run code: latexmk executes a project's `latexmkrc`, and code can reach the database socket. latexmk therefore runs in bubblewrap with:
   - no network, no `/proc`, its own process-ID namespace, no environment variables except TeX's own, and `-norc`;
   - read-only access to the TeX installation and the server's own code;
@@ -28,7 +28,7 @@ One server serves several people. Each person has their own Library, with their 
   - `THOUGHTS_SANDBOX_BUILDS=false` in `server.env` turns the sandbox off for the default Library only. Do this only on a server whose single user is its operator: every document and every agent proposal then compiles with the server account's full access. Other Libraries are always sandboxed.
   - latexmk gets `-norc` with or without the sandbox, so a `latexmkrc` in a document folder, in the account's home or in `/etc` is never read.
   - Inside the sandbox TeX cannot run programs at all (`shell_escape=f`), so a document that relies on restricted shell escape, for example on-the-fly EPS conversion, must ship the converted figure.
-- **No agents for other Libraries.** They get no agent features that run tools with the server's API key: no Codex build repair and no review-card agents (their review cards re-anchor deterministically). Their worker processes receive no `OPENAI_API_KEY` or restic credentials.
+- **No credentials for other Libraries.** Their worker processes receive no restic credentials, and no `OPENAI_API_KEY` if an older `server.env` still sets one (the server itself no longer uses it: it runs no agents, and review cards re-anchor deterministically in every Library).
 - **Sandbox tests.** `tests/test_build_sandbox.py` compiles a hostile document in the sandbox: an absolute `\input` of an outside file, a `latexmkrc`, and `\write18`. It runs wherever bubblewrap works (Fedora; the builder's kernel refuses user namespaces). `pytest --sandbox-builds` runs every compile test sandboxed.
 - **Default folder segment.** Every Library must use the same default-folder segment (`default`). The API refuses to start if any Library differs. New Libraries are created with `default`.
 
@@ -96,7 +96,7 @@ sudo runuser -u thoughts -- bash -c 'set -a; . /etc/thoughts/server.env; set +a
 
 ## Not covered yet
 
-- **Agent paths.** The source-history timer, `integrity-check.sh` and agent features that read production's `/srv/thoughts` paths directly (the review agent's home, the Codex CLI) serve the default Library only.
+- **Default-Library paths.** The source-history timer and `integrity-check.sh` read production's `/srv/thoughts` paths directly and serve the default Library only.
 - **App-link fallback page.** `/open/document/<id>` has no token, so its web fallback page looks only in the default Library. On a phone, the app opens such links itself.
 - **Removing a Library.** There is no script yet. To remove one by hand:
   1. disable it in the registry;

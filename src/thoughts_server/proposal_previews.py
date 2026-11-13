@@ -77,7 +77,7 @@ def _preview_environment(settings: Settings) -> dict[str, str] | None:
         return dict(os.environ) | {"THOUGHTS_SANDBOX_BUILDS": "false"} | SAFE_PATH_ENVIRONMENT
     environment = {
         name: value for name, value in os.environ.items()
-        if name not in {"OPENAI_API_KEY", "THOUGHTS_REVIEW_AGENT_SCRIPT", "THOUGHTS_BOOTSTRAP_TOKENS"}
+        if name not in {"OPENAI_API_KEY", "THOUGHTS_BOOTSTRAP_TOKENS"}
         and not name.startswith("RESTIC_")
     }
     environment["THOUGHTS_SANDBOX_BUILDS"] = "true"

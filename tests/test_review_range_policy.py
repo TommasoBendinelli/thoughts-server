@@ -9,13 +9,10 @@ import pytest
 
 from thoughts_server.published_source_maps import LinkUnresolved
 from thoughts_server.renderer_tools.basic_review import content_identity, limit_card_extent
-from thoughts_server.review_generation import _region_schema
 from thoughts_server.review_source_link import eligible, line_ranges, select_basic_passage
 
 
-def test_single_range_schema_and_safe_whitespace_gaps():
-    schema = _region_schema(3, [1], {"docs-p/tex/source/a.tex": "Answer."})
-    assert schema["properties"]["candidates"]["items"]["properties"]["source_segments"]["maxItems"] == 1
+def test_safe_whitespace_gaps():
     raw = b"First.\n\nLast.\n"
     assert line_ranges(raw, [1, 3]) == [(0, len(raw))]
     with pytest.raises(LinkUnresolved, match="continuous"):

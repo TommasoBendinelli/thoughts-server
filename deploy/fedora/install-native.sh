@@ -72,7 +72,7 @@ if [[ ${APPLY} != true ]]; then
   echo "Source: $SOURCE"
   echo "Target: /srv/thoughts"
   echo "Desktop helper source: $DESKTOP_SOURCE"
-  echo "Packages: PostgreSQL, Python, Node.js, Codex CLI, Git, bubblewrap, qpdf, Poppler, Ghostscript, zstd, full TeX Live, CMake, Ninja, GCC C++, libzip, and SyncTeX development files"
+  echo "Packages: PostgreSQL, Python, Node.js, Git, bubblewrap, qpdf, Poppler, Ghostscript, zstd, full TeX Live, CMake, Ninja, GCC C++, libzip, and SyncTeX development files"
   echo "Services: thoughts-api.service, thoughts-worker.service, thoughts-anchor-worker.service, thoughts-review-worker.service, thoughts-export-worker.service"
   echo "Run again with --apply after reviewing the preflight report."
   echo "Use --no-start for a staged cutover that keeps the existing service online."
@@ -103,7 +103,6 @@ install -d -o thoughts -g thoughts -m 0750 \
   /srv/thoughts/objects \
   /srv/thoughts/state/review-home \
   /srv/thoughts/state/source-bundle \
-  /srv/thoughts/state/codex-cli \
   /srv/thoughts/state \
   /srv/thoughts/worktree
 # The code the services run (application, virtual environment, helper programs)
@@ -186,9 +185,6 @@ find /srv/thoughts/venv/lib /srv/thoughts/venv/lib64 \
   -path '*/site-packages/~thoughts_server*' -prune -exec rm -rf -- {} + 2>/dev/null || true
 runuser -u thoughts -- /srv/thoughts/venv/bin/pip install --upgrade pip
 runuser -u thoughts -- /srv/thoughts/venv/bin/pip install /srv/thoughts/app
-runuser -u thoughts -- env HOME=/srv/thoughts/state/review-home \
-  /usr/bin/npm install --prefix /srv/thoughts/state/codex-cli @openai/codex@0.141.0
-ln -sfn /srv/thoughts/state/codex-cli/node_modules/.bin/codex /srv/thoughts/bin/codex
 # Markdown math renders through the locked MathJax runtime next to render.mjs.
 # pip never installs node_modules, so a rebuilt venv loses it: install it every time.
 MARKDOWN_MATH=$(runuser -u thoughts -- /srv/thoughts/venv/bin/python -P -c \

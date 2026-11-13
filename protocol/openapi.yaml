@@ -1873,6 +1873,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BuildRecord'
+        '409':
+          description: >-
+            The request was refused and nothing was queued. With `error_code`
+            `feature_removed` it asked for a feature that was removed from the
+            server; `feature` names it and `detail` says so in words.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                  error_code:
+                    type: string
+                  feature:
+                    type: string
+                required:
+                - detail
         '422':
           description: Validation Error
           content:
@@ -1905,6 +1923,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BuildRecord'
+        '409':
+          description: >-
+            The request was refused and nothing was queued. With `error_code`
+            `feature_removed` it asked for a feature that was removed from the
+            server; `feature` names it and `detail` says so in words.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                  error_code:
+                    type: string
+                  feature:
+                    type: string
+                required:
+                - detail
         '422':
           description: Validation Error
           content:
@@ -3873,11 +3909,9 @@ components:
           title: Target
         repair_mode:
           type: string
-          enum:
-          - none
-          - codex
-          - review_cards
+          const: none
           title: Repair Mode
+          description: Always `none`. Kept for clients that read it.
           default: none
         status:
           type: string
@@ -3964,16 +3998,14 @@ components:
           default: all
         repair_mode:
           type: string
-          enum:
-          - none
-          - codex
-          - review_cards
+          const: none
           title: Repair Mode
+          description: >-
+            Only `none`, the default. Build repair (`codex`) and review-card
+            generation (`review_cards`, or a `review_generation` member) were
+            removed from the server: a request that names one is refused with 409
+            and `error_code` `feature_removed`.
           default: none
-        review_generation:
-          anyOf:
-          - $ref: '#/components/schemas/ReviewGenerationOptions'
-          - type: 'null'
         request_id:
           anyOf:
           - type: string
@@ -5175,45 +5207,6 @@ components:
       - status
       - source_frontier
       title: RenderStatusRecord
-    ReviewGenerationOptions:
-      properties:
-        expected_pdf_sha256:
-          type: string
-          pattern: ^[0-9a-f]{64}$
-          title: Expected Pdf Sha256
-        max_candidates:
-          type: integer
-          maximum: 50.0
-          minimum: 1.0
-          title: Max Candidates
-          default: 20
-        instruction:
-          type: string
-          maxLength: 2000
-          minLength: 1
-          title: Instruction
-          default: Create high-value question-and-answer review cards from this PDF.
-        agent_model:
-          anyOf:
-          - type: string
-            maxLength: 100
-            minLength: 1
-          - type: 'null'
-          title: Agent Model
-        agent_reasoning_effort:
-          anyOf:
-          - type: string
-            enum:
-            - low
-            - medium
-            - high
-            - xhigh
-          - type: 'null'
-          title: Agent Reasoning Effort
-      type: object
-      required:
-      - expected_pdf_sha256
-      title: ReviewGenerationOptions
     ScopedBuildRequest:
       properties:
         scope:
@@ -5225,16 +5218,14 @@ components:
           default: if_changed
         repair_mode:
           type: string
-          enum:
-          - none
-          - codex
-          - review_cards
+          const: none
           title: Repair Mode
+          description: >-
+            Only `none`, the default. Build repair (`codex`) and review-card
+            generation (`review_cards`, or a `review_generation` member) were
+            removed from the server: a request that names one is refused with 409
+            and `error_code` `feature_removed`.
           default: none
-        review_generation:
-          anyOf:
-          - $ref: '#/components/schemas/ReviewGenerationOptions'
-          - type: 'null'
         request_id:
           anyOf:
           - type: string

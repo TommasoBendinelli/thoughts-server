@@ -857,7 +857,7 @@ def test_internal_reanchor_rejects_ambiguous_answers(tmp_path, monkeypatch):
 
 def test_internal_reanchor_uses_verified_answer_without_workspace_script(tmp_path, monkeypatch):
     import pdfplumber
-    from thoughts_server import review_generation
+    from thoughts_server import review_pages
     from thoughts_server.review_reanchor import native_text_reanchor, _validated_success
     class Page:
         width, height = 100, 100
@@ -868,8 +868,8 @@ def test_internal_reanchor_uses_verified_answer_without_workspace_script(tmp_pat
         def __enter__(self): return self
         def __exit__(self, *args): pass
     monkeypatch.setattr(pdfplumber, "open", lambda _: Pdf())
-    monkeypatch.setattr(review_generation, "_render_pages", lambda *args: {1: tmp_path / "page.png"})
-    monkeypatch.setattr(review_generation, "_page_visual_sha256", lambda _: "a" * 64)
+    monkeypatch.setattr(review_pages, "render_pages", lambda *args: {1: tmp_path / "page.png"})
+    monkeypatch.setattr(review_pages, "page_visual_sha256", lambda _: "a" * 64)
     anchor = {"version": 1, "normalized_text": "answer", "text_sha256": hashlib.sha256(b"answer").hexdigest()}
     result = _validated_success(native_text_reanchor(tmp_path / "unused.pdf", {"primary": {"answer_anchor": anchor}}))
     assert result["page"] == 1 and result["rect"] == [0.1, 0.1, 0.3, 0.2]
@@ -887,16 +887,23 @@ def test_basic_current_cards_need_no_answer_anchor(client, settings):
         assert session.scalar(select(ReviewReanchorJob)) is None
 
 
-def test_basic_repair_never_invokes_agent(settings, tmp_path, monkeypatch):
+def test_the_runner_relocates_by_saved_answer_text_and_starts_no_process(settings, tmp_path, monkeypatch):
+    from thoughts_server import review_reanchor
     from thoughts_server.review_reanchor import NativeReviewReanchorRunner
     def forbidden(*args, **kwargs):
-        pytest.fail("Basic cards must never launch an agent")
+        pytest.fail("Re-anchoring a card must not start a process")
     monkeypatch.setattr("thoughts_server.review_reanchor.subprocess.run", forbidden)
-    script = tmp_path / "agent.py"
-    script.write_text("raise AssertionError('must not run')")
-    runner = NativeReviewReanchorRunner(replace(settings, review_agent_script=script))
-    with pytest.raises(RuntimeError, match="agent repair is disabled"):
+    # A variable an earlier server read; it must change nothing now.
+    monkeypatch.setenv("THOUGHTS_REVIEW_AGENT_SCRIPT", str(tmp_path / "agent.py"))
+    runner = NativeReviewReanchorRunner(settings)
+    with pytest.raises(RuntimeError, match="not relocated by text"):
         runner.reanchor(tmp_path / "paper.pdf", {"generation_method": "basic_half_page"})
+    seen = []
+    monkeypatch.setattr(review_reanchor, "native_text_reanchor", lambda pdf, card: seen.append((pdf, card)) or {})
+    card = {"primary": {"answer_anchor": {"version": 1}}}
+    assert runner.reanchor(tmp_path / "paper.pdf", card) == {}
+    assert seen == [(tmp_path / "paper.pdf", card)]
+    assert not hasattr(settings, "review_agent_script")
 
 
 def test_basic_recovery_preserves_answer_and_history_without_repair(client, settings):
@@ -940,7 +947,7 @@ def test_basic_source_reflow_and_content_change_use_same_card(client, settings):
 def test_first_source_page_fingerprint_verifies_pdf_object(tmp_path, monkeypatch):
     from PIL import Image
     from thoughts_server.review_reanchor import _first_source_page_fingerprint
-    from thoughts_server import review_generation
+    from thoughts_server import review_pages
     store = ObjectStore(tmp_path / 'objects')
     raw = b'isolated PDF renderer fixture'
     digest = hashlib.sha256(raw).hexdigest()
@@ -953,7 +960,7 @@ def test_first_source_page_fingerprint_verifies_pdf_object(tmp_path, monkeypatch
         image = directory / 'page.png'
         Image.new('RGB', (32, 48), 'white').save(image)
         return {pages[0]: image}
-    monkeypatch.setattr(review_generation, '_render_pages', render)
+    monkeypatch.setattr(review_pages, 'render_pages', render)
     result = _first_source_page_fingerprint(store, digest, 3)
     assert len(result) == 64
     assert calls == [(path, [3], 1024)]

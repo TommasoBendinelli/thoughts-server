@@ -72,16 +72,14 @@ def test_the_renderer_is_always_told_whether_to_sandbox(settings):
     database.close()
 
 
-def test_a_sandboxed_default_library_keeps_its_agents(settings, tmp_path):
-    sandboxed = replace(settings, sandbox_builds=True, openai_api_key="sk-secret",
-                        review_agent_script=tmp_path / "agent")
-    inherited = {"PATH": "/bin", "OPENAI_API_KEY": "sk-secret", "THOUGHTS_REVIEW_AGENT_SCRIPT": "/x"}
+def test_a_sandboxed_default_library_keeps_its_environment(settings, tmp_path):
+    sandboxed = replace(settings, sandbox_builds=True)
+    inherited = {"PATH": "/bin", "OPENAI_API_KEY": "sk-secret"}
 
     environment = library_environment(sandboxed, inherited)
 
     assert environment["THOUGHTS_SANDBOX_BUILDS"] == "true"
     assert environment["OPENAI_API_KEY"] == "sk-secret"
-    assert environment["THOUGHTS_REVIEW_AGENT_SCRIPT"] == "/x"
     # Turning the sandbox off is stated too: a child must not fall back to its own default.
     assert library_environment(replace(sandboxed, sandbox_builds=False), inherited)[
         "THOUGHTS_SANDBOX_BUILDS"] == "false"

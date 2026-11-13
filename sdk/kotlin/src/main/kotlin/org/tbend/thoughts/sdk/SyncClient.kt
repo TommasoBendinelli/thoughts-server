@@ -504,7 +504,6 @@ class SyncClient(
         requestId: String? = null,
         sourceFrontier: Long? = null,
         inputSnapshotSha256: String? = null,
-        repairMode: String = "none",
     ): BuildRecord =
         jsonRequest(
             "POST",
@@ -518,7 +517,6 @@ class SyncClient(
                     },
                 )
                 put("mode", "force")
-                put("repair_mode", repairMode)
                 if (requestId != null) put("request_id", requestId)
                 if (sourceFrontier != null) put("source_frontier", sourceFrontier)
                 if (inputSnapshotSha256 != null) put("input_snapshot_sha256", inputSnapshotSha256)

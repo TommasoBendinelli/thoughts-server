@@ -30,8 +30,7 @@ LockPersonality=true
 RestrictRealtime=true
 SystemCallArchitectures=native
 ReadWritePaths=/srv/thoughts/state /srv/thoughts/objects /srv/thoughts/worktree -/srv/thoughts/libraries
-# Resource limits (see thoughts-api.service): page rendering, and for the default
-# Library the review agent's own processes.
+# Resource limits (see thoughts-api.service): page rendering.
 CPUWeight=50
 MemoryMax=3G
 MemorySwapMax=1G

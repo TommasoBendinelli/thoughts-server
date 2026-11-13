@@ -18,12 +18,10 @@ from pathlib import Path, PurePosixPath
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from .auth import internal_token_hash
 from .config import Settings
 from .source_folder_names import same_location as _same_location
 from .models import (
     AnnotationAnchorJob,
-    Device,
     Entity,
     ObjectRecord,
     Operation,
@@ -1856,111 +1854,6 @@ def source_snapshot_identity(session: Session, frontier: int) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
-
-
-def promote_codex_repair_sources(
-    session: Session,
-    store: ObjectStore,
-    worktree_root: Path,
-    job_id: str,
-) -> dict:
-    """Promote live edits of already-managed sources while the worktree lock is held."""
-
-    device_id = "thoughts-codex-repair"
-    device = session.get(Device, device_id)
-    if device is None:
-        device = Device(
-            id=device_id,
-            name="Thoughts Codex repair",
-            token_hash=internal_token_hash(),
-            enabled=True,
-        )
-        session.add(device)
-        session.flush()
-    next_sequence = (
-        int(
-            session.scalar(
-                select(func.max(Operation.device_sequence)).where(Operation.device_id == device_id)
-            )
-            or 0
-        )
-        + 1
-    )
-    changed_paths: list[str] = []
-    root = worktree_root.resolve()
-    for source in session.scalars(select(SourceFile).order_by(SourceFile.path)):
-        path = (root / source.path).resolve()
-        if not path.is_relative_to(root):
-            raise SourceApplyError(f"managed source escapes the worktree: {source.path}")
-        content = path.read_bytes() if path.is_file() else None
-        current = None if source.deleted else store.path(source.object_sha256).read_bytes()
-        if content == current:
-            continue
-        if content is not None:
-            _validate_source_content(content)
-            record = store.put_bytes(session, content, "text/plain; charset=utf-8")
-            result_sha256 = record.sha256
-            result_object_sha256 = record.sha256
-            deleted = False
-        else:
-            record = store.put_bytes(session, b"", "text/plain; charset=utf-8")
-            result_sha256 = EMPTY_SHA256
-            result_object_sha256 = record.sha256
-            deleted = True
-        new_revision = source.revision + 1
-        operation_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"codex-fix:{job_id}:{source.path}"))
-        payload = {
-            "path": source.path,
-            "base_revision": source.revision,
-            "base_sha256": EMPTY_SHA256 if source.deleted else source.sha256,
-            "result_revision": new_revision,
-            "result_sha256": result_sha256,
-            "result_object_sha256": result_object_sha256,
-            "outcome": "applied",
-        }
-        if deleted:
-            payload.update({"action": "delete", "deleted": True})
-        operation = Operation(
-            operation_id=operation_id,
-            device_id=device_id,
-            device_sequence=next_sequence,
-            entity_type="source",
-            entity_id=source.path,
-            collection="source",
-            base_revision=source.revision,
-            client_timestamp=utc_now().isoformat(),
-            payload=payload,
-            outcome="applied",
-            entity_revision=new_revision,
-            provenance=f"codex-fix:{job_id}",
-            render_impact=source_render_impact(source.path),
-        )
-        session.add(operation)
-        session.flush()
-        _advance_render_frontier(session, operation)
-        source.revision = new_revision
-        source.sha256 = result_sha256
-        source.object_sha256 = result_object_sha256
-        source.operation_id = operation_id
-        source.deleted = deleted
-        source.updated_at = utc_now()
-        changed_paths.append(source.path)
-        next_sequence += 1
-    session.flush()
-    frontier = int(
-        session.scalar(
-            select(func.max(Operation.server_sequence)).where(
-                Operation.entity_type == "source",
-                Operation.outcome.in_(("applied", "merged")),
-            )
-        )
-        or 0
-    )
-    return {
-        "paths": changed_paths,
-        "source_frontier": frontier,
-        "source_snapshot_sha256": source_snapshot_identity(session, frontier),
-    }
 
 
 def materialize_all_sources(

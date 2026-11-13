@@ -16,9 +16,7 @@ from test_review_reanchor import _seed_card_and_publication
 
 from thoughts_server.api import create_app
 from thoughts_server.models import Entity
-from thoughts_server.object_store import ObjectStore
 from thoughts_server.operations import apply_operation
-from thoughts_server.review_dedup import project_context
 from thoughts_server.review_reanchor import _deleted_review_card_ids, queue_review_reanchors_for_publication
 from thoughts_server.review_retirement import (
     card_retirement_state,
@@ -185,7 +183,7 @@ def test_malformed_retire_events_are_refused(client, auth_headers):
     assert post(client, auth_headers, operation(1, skip), operation(2, answer)).status_code == 200
 
 
-def test_retired_card_keeps_reanchoring_and_guards_duplicates(client, settings):
+def test_retired_card_keeps_reanchoring(client, settings):
     card_id, target = _seed_card_and_publication(client, settings)
     with client.app.state.database.session_factory() as session:
         apply_event(session, 2, retire_payload("retire", "2026-10-27T10:00:00Z", card_id=card_id))
@@ -197,9 +195,6 @@ def test_retired_card_keeps_reanchoring_and_guards_duplicates(client, settings):
         assert queue_review_reanchors_for_publication(session, "paper.pdf", target, force=True) == 1
         session.commit()
     with client.app.state.database.session_factory() as session:
-        # Card generation still sees the retired card, so its passage is not proposed again.
-        context = project_context(session, ObjectStore(settings.object_root), "paper.pdf")
-        assert card_id in json.dumps(context)
         card = session.get(Entity, ("review_card", "cards", card_id))
         assert card is not None and not card.deleted
 

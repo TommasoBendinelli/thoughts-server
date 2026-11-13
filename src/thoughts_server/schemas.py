@@ -1629,19 +1629,36 @@ class ConflictDiscardRequest(BaseModel):
     expected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+# Build modes that ran an agent on the server. They were removed; requests that name
+# one are still parsed, so that the API can refuse them with error_code feature_removed.
+REMOVED_REPAIR_MODES = {"codex": "build_repair", "review_cards": "review_card_generation"}
+
+
+def _removed_build_feature(repair_mode: str, review_generation: Any) -> str | None:
+    if review_generation is not None:
+        return "review_card_generation"
+    return REMOVED_REPAIR_MODES.get(repair_mode)
+
+
+def _note_review_generation(value: Any) -> Any:
+    """Keep only that the removed ``review_generation`` options were sent, whatever they held."""
+    if isinstance(value, dict) and "review_generation" in value:
+        return {**value, "review_generation": True}
+    return value
+
+
 class BuildRequest(BaseModel):
     target: str = "all"
-    repair_mode: Literal["none", "codex"] = "none"
+    repair_mode: Literal["none", "codex", "review_cards"] = "none"
+    review_generation: bool | None = None
     request_id: str | None = Field(default=None, min_length=1, max_length=64)
     source_frontier: int | None = Field(default=None, ge=0)
     input_snapshot_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="before")
     @classmethod
-    def reject_generation(cls, value: Any) -> Any:
-        if isinstance(value, dict) and "review_generation" in value:
-            raise ValueError("review-card generation has been retired")
-        return value
+    def note_review_generation(cls, value: Any) -> Any:
+        return _note_review_generation(value)
 
     @field_validator("target")
     @classmethod
@@ -1651,6 +1668,11 @@ class BuildRequest(BaseModel):
         if "/" in value or "\\" in value or not value.casefold().endswith(".pdf"):
             raise ValueError("target must be 'all' or a PDF filename")
         return value
+
+    def removed_feature(self) -> str | None:
+        """The removed feature this request asks for, if any."""
+        return _removed_build_feature(self.repair_mode, self.review_generation)
+
 
 class BuildScope(BaseModel):
     kind: Literal["document", "library"]
@@ -1668,33 +1690,28 @@ class BuildScope(BaseModel):
 class ScopedBuildRequest(BaseModel):
     scope: BuildScope
     mode: Literal["if_changed", "force"] = "if_changed"
-    repair_mode: Literal["none", "codex"] = "none"
+    repair_mode: Literal["none", "codex", "review_cards"] = "none"
+    review_generation: bool | None = None
     request_id: str | None = Field(default=None, min_length=1, max_length=64)
     source_frontier: int | None = Field(default=None, ge=0)
     input_snapshot_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="before")
     @classmethod
-    def reject_generation(cls, value: Any) -> Any:
-        if isinstance(value, dict) and "review_generation" in value:
-            raise ValueError("review-card generation has been retired")
-        return value
+    def note_review_generation(cls, value: Any) -> Any:
+        return _note_review_generation(value)
 
-    def legacy_request(self) -> BuildRequest:
-        return BuildRequest(
-            target=self.scope.filename if self.scope.kind == "document" else "all",
-            repair_mode=self.repair_mode,
-            request_id=self.request_id,
-            source_frontier=self.source_frontier,
-            input_snapshot_sha256=self.input_snapshot_sha256,
-        )
+    def removed_feature(self) -> str | None:
+        """The removed feature this request asks for, if any."""
+        return _removed_build_feature(self.repair_mode, self.review_generation)
 
 
 class BuildRecord(BaseModel):
     id: str
     trace_id: str | None = None
     target: str
-    repair_mode: Literal["none", "codex", "review_cards"] = "none"
+    # Always "none"; kept for clients that read it.
+    repair_mode: Literal["none"] = "none"
     status: str
     command: list[str] | None = None
     source_frontier: int

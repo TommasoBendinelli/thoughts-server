@@ -20,6 +20,8 @@ Builds. When several builds of the same target wait, the server builds only the 
 
 A build request beyond the Library's queue limit is refused with `429`, `error_code: "build_queue_full"`, `queued_builds`, `max_queued_builds` and `Retry-After`; nothing was queued, and the same request can be sent again later. The limit counts builds that will run: a covered build, and a build of a target whose newest waiting build will cover it, count as one with that build.
 
+Build repair and review-card generation were removed from the server. A build request with `repair_mode: "codex"` is refused with `409`, `error_code: "feature_removed"`, `feature: "build_repair"` and a `detail` that says so; one with `repair_mode: "review_cards"` or a `review_generation` member is refused the same way with `feature: "review_card_generation"`. Nothing is queued. A request with `repair_mode: "none"`, or without the field, is an ordinary build. Build records always carry `repair_mode: "none"`. The server no longer lists the capability `codex_build_repair_v1`. Review cards re-anchor by their source markers and, without them, by their saved answer text (`review_reanchor_v1`); no agent takes part.
+
 Uploads. When the server has a storage limit for the Library, `POST /v1/objects` answers `507` with `error_code: "library_storage_quota_exceeded"`, `quota_bytes` and `used_bytes` for an object that would exceed it; an object the Library already stores is always accepted.
 
 Objects are immutable and addressed by the lowercase SHA-256 of their complete bytes.

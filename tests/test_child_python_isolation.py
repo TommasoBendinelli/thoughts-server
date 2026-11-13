@@ -156,6 +156,5 @@ def test_every_child_interpreter_is_started_through_a_reviewed_launcher():
     assert users == {
         "child_python.py",  # -P for every ``-m`` child that runs among client files
         "project_renderer.py",  # -P and PYTHONSAFEPATH; runs in the document workspace
-        "review_reanchor.py",  # runs the operator's script by path: the working directory is not searched
         "cli.py",  # alembic from the administrator's own checkout, never among client files
     }

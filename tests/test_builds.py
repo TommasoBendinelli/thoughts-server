@@ -24,7 +24,7 @@ from thoughts_server.builds import (
 )
 from thoughts_server.database import Database
 from thoughts_server.library import published_source_index_bytes
-from thoughts_server.models import BuildJob, DocumentIdentity, ObjectRecord, Operation, Publication, SourceFile, TraceEvent
+from thoughts_server.models import BuildJob, Device, DocumentIdentity, ObjectRecord, Operation, Publication, SourceFile, TraceEvent
 from thoughts_server.object_store import ObjectStore
 RETIRED_STYLE_PATH = "tools/latex/manual_style.sty"
 from thoughts_server.sources import source_render_impact, worktree_lock
@@ -1456,27 +1456,6 @@ def test_v2_scoped_build_skips_unchanged_target(client, auth_headers, settings):
     database.close()
 
 
-def test_v2_scoped_codex_repair_remains_explicit(client, auth_headers):
-    payload = {
-        "scope": {"kind": "document", "filename": "manual.pdf"},
-        "mode": "if_changed",
-        "repair_mode": "codex",
-    }
-    first = client.post(
-        "/v2/builds",
-        headers=auth_headers,
-        json={**payload, "request_id": "repair-one"},
-    )
-    second = client.post(
-        "/v2/builds",
-        headers=auth_headers,
-        json={**payload, "request_id": "repair-two"},
-    )
-    assert first.status_code == 200, first.text
-    assert second.status_code == 200, second.text
-    assert second.json()["id"] != first.json()["id"]
-
-
 @pytest.mark.parametrize("marker", ["THOUGHTS", "MJPDF"])
 def test_renderer_progress_markers(marker):
     match = PROGRESS_RE.fullmatch(f"{marker}_PROGRESS\tvalidating\t1\t2\tsteps\tChecking inputs")
@@ -1552,41 +1531,112 @@ def test_build_review_frontier_includes_logical_comments(client, auth_headers, s
     database.close()
 
 
-def test_codex_repair_is_an_explicit_distinct_build_mode(client, auth_headers, settings):
-    normal = client.post(
-        "/v1/builds",
-        headers=auth_headers,
-        json={"target": "all", "request_id": "normal"},
-    ).json()
-    repair = client.post(
-        "/v1/builds",
-        headers=auth_headers,
-        json={"target": "all", "request_id": "repair", "repair_mode": "codex"},
+REMOVED_REPAIR = {
+    "detail": "Build repair was removed from the server. Request the build without repair_mode.",
+    "error_code": "feature_removed",
+    "feature": "build_repair",
+}
+
+
+def test_a_build_request_for_repair_is_refused_and_queues_nothing(client, auth_headers, settings):
+    for endpoint, body in (
+        ("/v1/builds", {"target": "all"}),
+        ("/v1/builds", {"target": "manual.pdf"}),
+        ("/v2/builds", {"scope": {"kind": "library"}, "mode": "force"}),
+        ("/v2/builds", {"scope": {"kind": "document", "filename": "manual.pdf"}, "mode": "if_changed"}),
+    ):
+        refused = client.post(
+            endpoint, headers=auth_headers, json={**body, "request_id": "repair", "repair_mode": "codex"}
+        )
+        assert refused.status_code == 409, refused.text
+        assert refused.json() == REMOVED_REPAIR
+    database = Database(settings.database_url)
+    with database.session_factory() as session:
+        assert session.query(BuildJob).count() == 0
+    database.close()
+    unknown = client.post("/v1/builds", headers=auth_headers, json={"target": "all", "repair_mode": "other"})
+    assert unknown.status_code == 422, unknown.text
+
+
+def test_a_build_request_without_repair_is_the_same_build_with_or_without_the_field(client, auth_headers):
+    omitted = client.post("/v1/builds", headers=auth_headers, json={"target": "all", "request_id": "one"})
+    explicit = client.post(
+        "/v1/builds", headers=auth_headers, json={"target": "all", "request_id": "one", "repair_mode": "none"}
     )
+    scoped = client.post(
+        "/v2/builds",
+        headers=auth_headers,
+        json={"scope": {"kind": "library"}, "mode": "force", "request_id": "one", "repair_mode": "none"},
+    )
+    assert omitted.status_code == explicit.status_code == scoped.status_code == 200, scoped.text
+    assert omitted.json()["id"] == explicit.json()["id"] == scoped.json()["id"]
+    assert omitted.json()["repair_mode"] == "none"
 
-    assert repair.status_code == 200, repair.text
-    assert repair.json()["id"] != normal["id"]
-    assert normal["repair_mode"] == "none"
-    assert repair.json()["repair_mode"] == "codex"
-    assert repair.json()["command"] is None
+
+@pytest.mark.parametrize("stored_mode", ["codex", "review_cards"])
+def test_a_build_row_of_a_removed_mode_is_listed_and_never_run(client, auth_headers, settings, stored_mode):
+    database = Database(settings.database_url)
+    with database.session_factory() as session:
+        device = session.scalars(select(Device)).first()
+        session.add(BuildJob(
+            id="old-row", requested_by=device.id, target="manual.pdf", repair_mode=stored_mode,
+            source_frontier=0, comment_frontier=0, annotation_frontier=0, source_snapshot_sha256="0" * 64,
+            toolchain_key="test-toolchain", dedupe_key="1" * 64,
+            status="running", attempts=1, result={},
+        ))
+        session.commit()
+    listed = client.get("/v1/builds/old-row", headers=auth_headers)
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["repair_mode"] == "none"
+    assert listed.json()["command"] is None
+    assert client.get("/v2/builds/old-row", headers=auth_headers).status_code == 200
+    assert client.get("/v1/render-status?target=manual.pdf", headers=auth_headers).status_code == 200
+    BuildWorker(settings, database.session_factory, ObjectStore(settings.object_root)).run_job("old-row")
+    with database.session_factory() as session:
+        job = session.get(BuildJob, "old-row")
+        assert job.status == "failed"
+        assert job.error == "this build asks for a feature that was removed from the server"
+        assert job.repair_mode == stored_mode
+    assert client.get("/v1/builds/old-row", headers=auth_headers).json()["status"] == "failed"
+    database.close()
 
 
-def test_review_card_generation_build_requests_are_rejected(client, auth_headers):
+def test_the_server_advertises_no_capability_of_a_removed_feature(client, auth_headers):
+    for path in ("/v1/health", "/v1/ready"):
+        capabilities = client.get(path, headers=auth_headers).json()["capabilities"]
+        assert "review_reanchor_v1" in capabilities
+        assert not [name for name in capabilities if "codex" in name or "repair" in name]
+
+
+REMOVED_GENERATION = {
+    "detail": "Review-card generation was removed from the server. Create review cards from a client.",
+    "error_code": "feature_removed",
+    "feature": "review_card_generation",
+}
+
+
+def test_a_build_request_for_generated_review_cards_is_refused_and_queues_nothing(
+    client, auth_headers, settings
+):
+    options = {"expected_pdf_sha256": "a" * 64, "max_candidates": 5}
     for endpoint, body in (
         ("/v1/builds", {"target": "paper.pdf"}),
         ("/v2/builds", {"scope": {"kind": "document", "filename": "paper.pdf"}, "mode": "force"}),
     ):
-        generated = client.post(endpoint, headers=auth_headers, json={
-            **body,
-            "repair_mode": "review_cards",
-            "review_generation": {"expected_pdf_sha256": "a" * 64},
-        })
-        assert generated.status_code == 422, generated.text
-        options_only = client.post(endpoint, headers=auth_headers, json={
-            **body,
-            "review_generation": {"expected_pdf_sha256": "a" * 64},
-        })
-        assert options_only.status_code == 422, options_only.text
+        for extra in (
+            {"repair_mode": "review_cards", "review_generation": options},
+            {"repair_mode": "review_cards"},
+            {"review_generation": options},
+            {"review_generation": None},
+            {"repair_mode": "codex", "review_generation": options},
+        ):
+            refused = client.post(endpoint, headers=auth_headers, json={**body, **extra})
+            assert refused.status_code == 409, refused.text
+            assert refused.json() == REMOVED_GENERATION
+    database = Database(settings.database_url)
+    with database.session_factory() as session:
+        assert session.query(BuildJob).count() == 0
+    database.close()
 
 
 @pytest.mark.parametrize("terminal_status", ["failed", "cancelled", "attention"])

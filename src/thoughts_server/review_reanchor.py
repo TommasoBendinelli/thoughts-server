@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import subprocess
-import sys
 import time
 import tempfile
 import uuid
@@ -257,14 +255,14 @@ def _source_anchor_projection(
 
 def _first_source_page_fingerprint(store: ObjectStore, pdf_sha256: str, page: int) -> str:
     """Give newly placed source cards the real page identity required by clients."""
-    from .review_generation import _page_visual_sha256, _render_pages
+    from . import review_pages
 
     path = store.path(pdf_sha256)
     if hashlib.sha256(path.read_bytes()).hexdigest() != pdf_sha256:
         raise ValueError("The review PDF failed verification")
     with tempfile.TemporaryDirectory(prefix="thoughts-card-placement-") as directory:
-        image = _render_pages(path, Path(directory), [page], 1024)[page]
-        return _page_visual_sha256(image)
+        image = review_pages.render_pages(path, Path(directory), [page], 1024)[page]
+        return review_pages.page_visual_sha256(image)
 
 
 def _valid_rect(value: object) -> bool:
@@ -1309,7 +1307,7 @@ class ReviewReanchorRunner(Protocol):
 def native_text_reanchor(pdf_path: Path, card: dict) -> dict:
     """Relocate only an exact, unique saved answer using the internal renderer."""
     import pdfplumber
-    from .review_generation import _page_visual_sha256, _render_pages
+    from . import review_pages
 
     anchor = _card_primary(card).get("answer_anchor", {})
     text = anchor.get("normalized_text", "")
@@ -1347,68 +1345,25 @@ def native_text_reanchor(pdf_path: Path, card: dict) -> dict:
         raise RuntimeError("The saved answer is absent from the rebuilt PDF")
     page, rect = matches[0]
     with tempfile.TemporaryDirectory(prefix="thoughts-review-") as directory:
-        images = _render_pages(pdf_path, Path(directory), [page], 1024)
-        visual = _page_visual_sha256(images[page])
+        images = review_pages.render_pages(pdf_path, Path(directory), [page], 1024)
+        visual = review_pages.page_visual_sha256(images[page])
     return {"state": "succeeded", "page": page, "rect": rect,
             "page_visual_sha256": visual, "answer_anchor": anchor,
             "strategy": "unique_exact_answer", "verification": {"occurrences": 1}}
 
 
 class NativeReviewReanchorRunner:
+    """Relocates a card by its saved answer text; the server runs nothing else for it."""
+
     def __init__(self, settings: Settings):
         self.settings = settings
 
     def reanchor(self, pdf_path: Path, card: dict) -> dict:
         if card.get("generation_method") in BASIC_METHODS:
-            raise RuntimeError("Basic cards use saved PDFs and deterministic source passages; agent repair is disabled.")
-        script = self.settings.review_agent_script
-        if script is None:
-            return native_text_reanchor(pdf_path, card)
-        if not script.is_file():
-            raise RuntimeError("review re-anchor agent is unavailable")
-        codex_home = self.settings.state_root / "codex"
-        codex_home.mkdir(parents=True, exist_ok=True, mode=0o700)
-        runner_home = self.settings.state_root / "review-home"
-        runner_home.mkdir(parents=True, exist_ok=True, mode=0o700)
-        environment = {
-            "HOME": str(runner_home),
-            "CODEX_HOME": str(codex_home),
-            "LANG": os.environ.get("LANG", "C.UTF-8"),
-            "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
-            "PATH": "/srv/thoughts/bin:"
-            + os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
-            "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
-        }
-        if self.settings.openai_api_key:
-            environment["OPENAI_API_KEY"] = self.settings.openai_api_key
-        request = {
-            "schema_version": 1,
-            "docs_root": str(self.settings.docs_root),
-            "pdf_path": str(pdf_path),
-            "card": card,
-            "agent_model": self.settings.review_agent_model,
-            "agent_reasoning_effort": self.settings.review_agent_reasoning_effort,
-        }
-        completed = subprocess.run(
-            [sys.executable, str(script), "--reanchor-card"],
-            cwd=self.settings.docs_root,
-            env=environment,
-            input=json.dumps(request),
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=self.settings.review_agent_timeout_seconds,
-        )
-        if completed.returncode != 0:
-            detail = completed.stderr.strip().splitlines()
-            raise RuntimeError(detail[-1] if detail else "review re-anchor agent failed")
-        try:
-            result = json.loads(completed.stdout)
-        except json.JSONDecodeError as error:
-            raise RuntimeError("review re-anchor agent returned invalid JSON") from error
-        if not isinstance(result, dict):
-            raise RuntimeError("review re-anchor agent returned a non-object")
-        return result
+            raise RuntimeError(
+                "Basic cards use saved PDFs and deterministic source passages; they are not relocated by text."
+            )
+        return native_text_reanchor(pdf_path, card)
 
 
 def _valid_rect(value: object) -> list[float] | None:
@@ -1611,7 +1566,7 @@ class ReviewReanchorWorker:
                 raise RuntimeError("immutable review PDF object is missing")
             card_payload = dict(entity.payload)
 
-        # PDF inspection and Codex calls are intentionally outside a database
+        # PDF inspection is intentionally outside a database
         # transaction. A build may publish a newer PDF while this work runs.
         started = time.monotonic()
         result = self.runner.reanchor(pdf_path, card_payload)

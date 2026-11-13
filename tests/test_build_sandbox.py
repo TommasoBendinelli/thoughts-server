@@ -56,17 +56,15 @@ def test_settings_and_environment_of_another_library_are_sandboxed(settings, tmp
     entry = LibraryEntry("sam", "Sam", tmp_path / "d", "sqlite:///d.db")
     from dataclasses import replace
 
-    with_agents = replace(settings, openai_api_key="sk-secret", review_agent_script=tmp_path / "agent",
-                          sandbox_builds=False)
-    derived = derive_settings(with_agents, entry)
-    assert derived.sandbox_builds and derived.openai_api_key is None and derived.review_agent_script is None
-    assert not with_agents.sandbox_builds
+    unsandboxed = replace(settings, sandbox_builds=False)
+    derived = derive_settings(unsandboxed, entry)
+    assert derived.sandbox_builds
+    assert not unsandboxed.sandbox_builds
     environment = library_environment(derived, {
-        "PATH": "/bin", "OPENAI_API_KEY": "sk-secret", "RESTIC_PASSWORD": "r",
-        "THOUGHTS_REVIEW_AGENT_SCRIPT": "/x"})
+        "PATH": "/bin", "OPENAI_API_KEY": "sk-secret", "RESTIC_PASSWORD": "r"})
     assert environment["THOUGHTS_SANDBOX_BUILDS"] == "true"
-    assert not {"OPENAI_API_KEY", "RESTIC_PASSWORD", "THOUGHTS_REVIEW_AGENT_SCRIPT"} & set(environment)
-    default_environment = library_environment(with_agents, {"PATH": "/bin", "THOUGHTS_SANDBOX_BUILDS": "true"})
+    assert not {"OPENAI_API_KEY", "RESTIC_PASSWORD"} & set(environment)
+    default_environment = library_environment(unsandboxed, {"PATH": "/bin", "THOUGHTS_SANDBOX_BUILDS": "true"})
     # The sandbox is on by default where it exists, so a Library without it says so.
     assert default_environment["THOUGHTS_SANDBOX_BUILDS"] == "false"
 

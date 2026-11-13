@@ -37,14 +37,8 @@ class Settings:
     auto_create_schema: bool
     bootstrap_tokens: dict[str, str]
     source_bundle_root: Path | None = None
-    openai_api_key: str | None = None
     anchor_max_attempts: int = 5
     build_parallel_jobs: int = 5
-    review_agent_script: Path | None = None
-    review_agent_model: str = "gpt-5.6-sol"
-    review_agent_reasoning_effort: str = "high"
-    review_agent_timeout_seconds: int = 900
-    review_agent_auth_method: str = "api"
     review_reanchor_max_attempts: int = 3
     renderer_backend: str = "development"
     logical_comment_promotion_enabled: bool = False
@@ -124,7 +118,6 @@ class Settings:
         docs_value = os.environ.get("THOUGHTS_DOCS_ROOT", "").strip()
         helper_value = os.environ.get("THOUGHTS_COMMENT_SYNC_BIN", "").strip()
         source_bundle_value = os.environ.get("THOUGHTS_SOURCE_BUNDLE_OUTPUT", "").strip()
-        review_agent_value = os.environ.get("THOUGHTS_REVIEW_AGENT_SCRIPT", "").strip()
         raw_tokens = os.environ.get("THOUGHTS_BOOTSTRAP_TOKENS", "{}")
         try:
             bootstrap_tokens = json.loads(raw_tokens)
@@ -161,28 +154,12 @@ class Settings:
                 if source_bundle_value
                 else None
             ),
-            openai_api_key=os.environ.get("OPENAI_API_KEY", "").strip() or None,
             anchor_max_attempts=int(os.environ.get("THOUGHTS_ANCHOR_MAX_ATTEMPTS", "5")),
             build_parallel_jobs=max(
                 1,
                 int(os.environ.get("THOUGHTS_BUILD_PARALLEL_JOBS", "5")),
             ),
-            review_agent_script=(
-                Path(review_agent_value).expanduser().resolve() if review_agent_value else None
-            ),
             renderer_backend=os.environ.get("THOUGHTS_RENDERER_BACKEND", "native").strip().lower(),
-            review_agent_model=os.environ.get(
-                "THOUGHTS_REVIEW_AGENT_MODEL", "gpt-5.6-sol"
-            ).strip(),
-            review_agent_reasoning_effort=os.environ.get(
-                "THOUGHTS_REVIEW_AGENT_REASONING_EFFORT", "high"
-            ).strip(),
-            review_agent_timeout_seconds=int(
-                os.environ.get("THOUGHTS_REVIEW_AGENT_TIMEOUT_SECONDS", "900")
-            ),
-            review_agent_auth_method=os.environ.get(
-                "THOUGHTS_REVIEW_AGENT_AUTH_METHOD", "api"
-            ).strip().lower(),
             review_reanchor_max_attempts=int(
                 os.environ.get("THOUGHTS_REVIEW_REANCHOR_MAX_ATTEMPTS", "3")
             ),
