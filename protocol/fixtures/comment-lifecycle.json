@@ -1,0 +1,12 @@
+{
+  "cases": [
+    {"name":"standalone note", "records":[{"id":"note","subtype":"Note"}], "selected":["note"], "deleted":["note"]},
+    {"name":"unlinked comment", "records":[{"id":"unlinked"}], "selected":["unlinked"], "deleted":["unlinked"]},
+    {"name":"root includes nested replies", "records":[{"id":"root"},{"id":"reply","parent":"root"},{"id":"nested","parent":"reply"},{"id":"other"}], "selected":["root"], "deleted":["root","reply","nested"]},
+    {"name":"reply keeps root", "records":[{"id":"root"},{"id":"reply","parent":"root"},{"id":"nested","parent":"reply"}], "selected":["reply"], "deleted":["reply","nested"]},
+    {"name":"duplicates are one operation", "records":[{"id":"one"},{"id":"two"}], "selected":["one","one","two"], "deleted":["one","two"]},
+    {"name":"already deleted reply stays deleted after undo", "records":[{"id":"root"},{"id":"reply","parent":"root","deleted":true}], "selected":["root"], "deleted":["root"]},
+    {"name":"unknown identity fails whole selection", "records":[{"id":"one"}], "selected":["one","missing"], "deleted":[], "success":false},
+    {"name":"malformed cycle terminates", "records":[{"id":"a","parent":"b"},{"id":"b","parent":"a"}], "selected":["a"], "deleted":["a","b"]}
+  ]
+}

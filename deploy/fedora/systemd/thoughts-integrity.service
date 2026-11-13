@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+[Unit]
+Description=Verify Thoughts immutable object integrity
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=thoughts
+Group=thoughts
+EnvironmentFile=/etc/thoughts/server.env
+ExecStart=/usr/local/sbin/thoughts-integrity-check
+Nice=15
+IOSchedulingClass=idle
+# Resource limits (see thoughts-api.service): hashing files needs little memory.
+CPUWeight=20
+MemoryMax=1G
+TasksMax=256

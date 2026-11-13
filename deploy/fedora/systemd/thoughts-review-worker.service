@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+[Unit]
+Description=Thoughts review-card re-anchor worker
+After=network-online.target postgresql.service thoughts-api.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=thoughts
+Group=thoughts
+WorkingDirectory=/srv/thoughts/app
+EnvironmentFile=/etc/thoughts/server.env
+Environment=XDG_DATA_HOME=/srv/thoughts/state/xdg-data
+ExecStart=/srv/thoughts/venv/bin/thoughts-review-worker
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+ReadWritePaths=/srv/thoughts/state /srv/thoughts/objects /srv/thoughts/worktree -/srv/thoughts/libraries
+# Resource limits (see thoughts-api.service): page rendering, and for the default
+# Library the review agent's own processes.
+CPUWeight=50
+MemoryMax=3G
+MemorySwapMax=1G
+OOMPolicy=continue
+TasksMax=1024
+
+[Install]
+WantedBy=multi-user.target

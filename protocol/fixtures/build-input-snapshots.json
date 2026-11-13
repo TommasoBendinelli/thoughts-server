@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "legacy-v2",
+      "snapshot": {
+        "schema_version": 2,
+        "target": "manual.pdf",
+        "project": "docs-manual",
+        "discovery_policy": "content-tree-v1",
+        "entries": [
+          {
+            "path": "docs-manual/tex/generated/table.tex",
+            "sha256": "0d4fc4a78d3706edccafb665a8b2fdd9309e82c78625bb0f2b8e7bb9e1c4d21c",
+            "size_bytes": 5,
+            "media_type": "application/x-tex"
+          }
+        ]
+      },
+      "canonical_sha256": "88a2b39734f65328888d3f9a6b4a9b2cf85eaa0a878708f0ff18c562c8c607e9"
+    },
+    {
+      "name": "tex-closure-v3",
+      "snapshot": {
+        "schema_version": 3,
+        "target": "manual.pdf",
+        "project": "docs-manual",
+        "discovery_policy": "tex-closure-v1",
+        "entries": [
+          {
+            "path": "docs-manual/tex/assets/plot.pdf",
+            "sha256": "0f3850ab36e9d43a8615d62d179e484003562531b41a9f517c5f4e7313b00222",
+            "size_bytes": 4,
+            "media_type": "application/pdf",
+            "role": "asset"
+          },
+          {
+            "path": "docs-manual/tex/generated/table.tex",
+            "sha256": "0d4fc4a78d3706edccafb665a8b2fdd9309e82c78625bb0f2b8e7bb9e1c4d21c",
+            "size_bytes": 5,
+            "media_type": "application/x-tex",
+            "role": "generated"
+          },
+          {
+            "path": "third_party/shared.pdf",
+            "sha256": "2d3d246ebb8178a7315bb4511c67f64be8be647d43ac524535c799980be7f855",
+            "size_bytes": 11,
+            "media_type": "application/pdf",
+            "role": "external_pdf"
+          }
+        ]
+      },
+      "canonical_sha256": "ea383c81fe1e6b2caf071f6158930e35ce701f2e2ce0478127384b0fc5f3e2b6"
+    }
+  ]
+}

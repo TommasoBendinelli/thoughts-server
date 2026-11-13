@@ -1,0 +1,78 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+# Deploy a staged Thoughts server copy and its paired desktop copy.
+#
+# Installed as /usr/local/sbin/thoughts-deploy and allowed for the deploy
+# account without a password (see install-deploy-access.sh). The deploy account
+# is the one that runs it with sudo; only copies it staged in its home as
+#   ~/thoughts-server-<git sha>
+#   ~/thoughts-desktop-deploy-<git sha>
+# are accepted. Note that the staged installer runs as root, so whoever can
+# stage files as the deploy account can run code as root through this command.
+#
+# Usage: sudo thoughts-deploy SERVER_DIR DESKTOP_DIR [--bump-toolchain]
+#   --bump-toolchain  replace the toolchain key's revision suffix so every
+#                     earlier build result counts as outdated (forces rebuilds)
+set -euo pipefail
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "Run with sudo" >&2
+  exit 1
+fi
+if [[ $# -lt 2 || $# -gt 3 || ( $# -eq 3 && ${3} != --bump-toolchain ) ]]; then
+  echo "Usage: sudo thoughts-deploy SERVER_DIR DESKTOP_DIR [--bump-toolchain]" >&2
+  exit 2
+fi
+
+DEPLOY_USER=${SUDO_USER:-}
+if [[ -z ${DEPLOY_USER} || ${DEPLOY_USER} == root ]]; then
+  echo "Run with sudo from the deploy account" >&2
+  exit 1
+fi
+DEPLOY_HOME=$(getent passwd "${DEPLOY_USER}" | cut -d: -f6)
+if [[ ! ${DEPLOY_HOME} =~ ^/[A-Za-z0-9._/-]+$ || ${DEPLOY_HOME} == / ]]; then
+  echo "The deploy account ${DEPLOY_USER} has no usable home directory" >&2
+  exit 1
+fi
+
+check_staged() {
+  local path=$1 prefix=$2 required=$3
+  local name=${path#"${DEPLOY_HOME}/"}
+  if [[ ${path} != "${DEPLOY_HOME}/${name}" || ! ${name} =~ ^${prefix}-[0-9a-f]{7,40}$ ]]; then
+    echo "Not a staged copy: ${path}" >&2
+    exit 2
+  fi
+  if [[ -L ${path} || ! -d ${path} || $(realpath -- "${path}") != "${path}" ]]; then
+    echo "Staged copy must be a real directory: ${path}" >&2
+    exit 2
+  fi
+  if [[ $(stat -c %U -- "${path}") != "${DEPLOY_USER}" || ! -f ${path}/${required} ]]; then
+    echo "Staged copy must belong to ${DEPLOY_USER} and contain ${required}: ${path}" >&2
+    exit 2
+  fi
+}
+
+SERVER_DIR=$1
+DESKTOP_DIR=$2
+check_staged "${SERVER_DIR}" thoughts-server deploy/fedora/install-native.sh
+check_staged "${DESKTOP_DIR}" thoughts-desktop-deploy tools/thoughts-comment-sync.cpp
+
+LOG=/var/log/thoughts-deploy.log
+echo "$(date --iso-8601=seconds) deploy ${SERVER_DIR} ${DESKTOP_DIR} ${3:-}" >>"${LOG}"
+
+"${SERVER_DIR}/deploy/fedora/install-native.sh" --source "${SERVER_DIR}" --desktop-source "${DESKTOP_DIR}" --apply
+
+if [[ ${3:-} == --bump-toolchain ]]; then
+  # Keep the configured key and replace only the -r<digits> suffixes added to it.
+  key=$(sed -n 's/^THOUGHTS_TOOLCHAIN_KEY=//p' /etc/thoughts/server.env)
+  while [[ ${key} =~ ^(.*)-r[0-9]+$ ]]; do key=${BASH_REMATCH[1]}; done
+  sed -i "s|^THOUGHTS_TOOLCHAIN_KEY=.*\$|THOUGHTS_TOOLCHAIN_KEY=${key}-r$(date -u +%Y%m%d%H%M%S)|" /etc/thoughts/server.env
+  grep '^THOUGHTS_TOOLCHAIN_KEY=' /etc/thoughts/server.env
+  /usr/local/sbin/thoughts-restart-services
+fi
+
+"${SERVER_DIR}/deploy/fedora/restart-services.py" --check
+curl --fail --silent --show-error http://127.0.0.1:8080/v1/health >/dev/null
+echo "Deployed ${SERVER_DIR} with ${DESKTOP_DIR}; health ok"
+echo "$(date --iso-8601=seconds) ok ${SERVER_DIR}" >>"${LOG}"

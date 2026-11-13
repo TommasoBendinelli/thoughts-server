@@ -1,0 +1,71 @@
+/* Thoughts HTML viewer stylesheet. The app passes this file's text to
+   ThoughtsViewer load({css}); the viewer adopts it as a constructed stylesheet
+   (not subject to CSP style-src), or a <style> element where that is unsupported.
+   Highlight colours, the mask colour and the text size are generated at run time. */
+
+/* Not in attachment mode: an attachment page keeps its own text sizing. */
+html:not([data-tv-mode="attachment"]) { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* Theme: the app's choice wins over the edition's prefers-color-scheme rules. */
+html.tv-theme-light {
+  color-scheme: light;
+  --tv-bg: #ffffff; --tv-fg: #1b1b1b; --tv-link: #1a5fb4; --tv-muted: #666666; --tv-rule: #1b1b1b;
+  /* The spike edition's own variables. */
+  --bg: var(--tv-bg); --fg: var(--tv-fg); --link: var(--tv-link); --muted: var(--tv-muted);
+}
+html.tv-theme-dark {
+  color-scheme: dark;
+  --tv-bg: #151515; --tv-fg: #e6e6e6; --tv-link: #8ab4f8; --tv-muted: #aaaaaa; --tv-rule: #c8c8c8;
+  --bg: var(--tv-bg); --fg: var(--tv-fg); --link: var(--tv-link); --muted: var(--tv-muted);
+}
+html.tv-theme-light, html.tv-theme-light body,
+html.tv-theme-dark, html.tv-theme-dark body {
+  background-color: var(--tv-bg) !important;
+  color: var(--tv-fg) !important;
+}
+html.tv-theme-light a, html.tv-theme-dark a { color: var(--tv-link) !important; }
+/* Table rules, footnote lines and boxes are drawn in black for paper. */
+html.tv-theme-dark table, html.tv-theme-dark tr, html.tv-theme-dark td, html.tv-theme-dark th,
+html.tv-theme-dark hr, html.tv-theme-dark div.footnotes, html.tv-theme-dark div.fbox,
+html.tv-theme-dark div.algorithm table.caption {
+  border-color: var(--tv-rule) !important;
+}
+/* Figures are drawn for white paper: keep them on a light card instead of inverting them. */
+html.tv-theme-dark img { filter: none !important; background-color: #f4f4f4; border-radius: 3px; }
+html.tv-theme-light img { filter: none !important; }
+
+/* Overlays (highlight fallback, review mask) live in one layer at the document origin. */
+.tv-layer {
+  position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: visible;
+  z-index: 2147483000; pointer-events: none;
+}
+.tv-hl-layer, .tv-mask-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: visible; }
+.tv-hl { position: absolute; pointer-events: none; mix-blend-mode: multiply; border-radius: 1px; }
+html.tv-theme-dark .tv-hl { mix-blend-mode: screen; }
+
+/* Hidden answer: blank page, no pointer, nothing to select underneath. */
+.tv-mask-block {
+  position: absolute; pointer-events: auto; cursor: default;
+  -webkit-user-select: none; user-select: none;
+}
+/* Flipped mask: everything but the answer is hidden. */
+.tv-mask-inverted { position: absolute; pointer-events: none; }
+.tv-mask-inverted path { pointer-events: visiblePainted; }
+/* Revealed answer: the area that was hidden, framed. */
+.tv-mask-frame {
+  position: absolute; pointer-events: none; box-sizing: border-box;
+  border: 2px solid rgb(25, 95, 190); background-color: rgba(25, 95, 190, 0.07); border-radius: 2px;
+}
+html.tv-theme-dark .tv-mask-frame { border-color: rgb(110, 160, 255); background-color: rgba(110, 160, 255, 0.10); }
+
+/* Elements entirely inside the answer under review: never selectable; invisible while hidden. */
+.tv-masked { -webkit-user-select: none !important; user-select: none !important; }
+html.tv-mask-hidden .tv-masked { visibility: hidden !important; }
+
+/* Point anchors (a comment at one position). */
+span.tm.tv-point { cursor: pointer; }
+span.tm.tv-point::before {
+  content: "\25CF"; font-size: 0.7em; vertical-align: 0.35em; padding: 0 0.1em;
+  font-style: normal; font-weight: normal; text-decoration: none;
+  -webkit-user-select: none; user-select: none;
+}

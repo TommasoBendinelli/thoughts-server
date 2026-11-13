@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="style.css"></head><body>
+                                                                                      
+ 
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+       
+        
+
+ 
+ 
+ <p data-src-lines="docs-template/tex/source/thoughts_manual.tex:3-39"><!-- l. 5 --></p><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:5-8"><span class="ec-lmbx-12x-x-144">Thoughts Manual</span>
+<a id="x1-1doc"></a>
+</p><!-- l. 8 --><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:8-8">
+</p>
+<p></p><h3 class="likesectionHead" id="contents" data-src-lines="docs-template/tex/source/thoughts_manual.tex:8-8"> <a id="x1-1000"></a>Contents</h3><p data-src-lines="docs-template/tex/source/thoughts_manual.tex:3-50"></p><div class="tableofcontents"><span class="sectionToc">1 <a href="#getting-started" id="QQ2-1-2">Getting started</a></span><br><span class="subsectionToc">1.1 <a href="#navigation-area-and-pdf-viewer" id="QQ2-1-3">Navigation area and PDF viewer</a></span><br><span class="sectionToc">2 <a href="#projects-documents-and-source-folders" id="QQ2-1-4">Projects, documents, and source folders</a></span><br><span class="subsectionToc">2.1 <a href="#connected-source-folders" id="QQ2-1-6">Connected source folders</a></span><br><span class="subsectionToc">2.2 <a href="#what-appears-in-sources" id="QQ2-1-7">What appears in Sources</a></span><br><span class="subsectionToc">2.3 <a href="#importing-a-pdf-into-a-project" id="QQ2-1-8">Importing a PDF into a project</a></span><br><span class="subsectionToc">2.4 <a href="#missing-sources" id="QQ2-1-9">Missing sources</a></span><br><span class="subsectionToc">2.5 <a href="#moving-sources" id="QQ2-1-10">Moving sources</a></span><br><span class="subsectionToc">2.6 <a href="#organizing-projects" id="QQ2-1-11">Organizing projects</a></span><br><span class="subsectionToc">2.7 <a href="#exporting-a-project-as-one-pdf" id="QQ2-1-12">Exporting a project as one PDF</a></span><br><span class="subsectionToc">2.8 <a href="#options-on-documents" id="QQ2-1-13">Options on Documents</a></span><br><span class="subsectionToc">2.9 <a href="#options-for-unlinked-pdfs" id="QQ2-1-14">Options for unlinked PDFs</a></span><br><span class="subsectionToc">2.10 <a href="#library-columns" id="QQ2-1-15">Library columns</a></span><br><span class="subsectionToc">2.11 <a href="#links-between-documents" id="QQ2-1-16">Links between documents</a></span><br><span class="subsectionToc">2.12 <a href="#html-support" id="QQ2-1-17">HTML support</a></span><br><span class="subsubsectionToc">2.12.1 <a href="#limitations" id="QQ2-1-18">Limitations</a></span><br><span class="subsectionToc">2.13 <a href="#removing" id="QQ2-1-19">Removing</a></span><br><span class="subsubsectionToc">2.13.1 <a href="#projects" id="QQ2-1-20">Projects</a></span><br><span class="subsubsectionToc">2.13.2 <a href="#sorting-lists" id="QQ2-1-21">Sorting lists</a></span><br><span class="subsubsectionToc">2.13.3 <a href="#opening-sources" id="QQ2-1-22">Opening sources</a></span><br><span class="sectionToc">3 <a href="#annotations" id="QQ2-1-23">Annotations</a></span><br><span class="subsectionToc">3.1 <a href="#comments-and-text-markup" id="QQ2-1-24">Comments and text markup</a></span><br><span class="subsectionToc">3.2 <a href="#standalone-notes" id="QQ2-1-25">Standalone notes</a></span><br><span class="sectionToc">4 <a href="#reviewing-proposed-edits" id="QQ2-1-26">Reviewing proposed edits</a></span><br><span class="subsectionToc">4.1 <a href="#proposal-dates" id="QQ2-1-27">Proposal dates</a></span><br><span class="subsectionToc">4.2 <a href="#accepting-or-rejecting" id="QQ2-1-28">Accepting or rejecting</a></span><br><span class="subsectionToc">4.3 <a href="#editing-proposals-in-the-source" id="QQ2-1-29">Editing proposals in the source</a></span><br><span class="sectionToc">5 <a href="#review-cards" id="QQ2-1-30">Review cards</a></span><br><span class="subsectionToc">5.1 <a href="#card-note" id="QQ2-1-31">Card note</a></span><br><span class="subsectionToc">5.2 <a href="#card-browser" id="QQ2-1-32">Card browser</a></span><br><span class="subsectionToc">5.3 <a href="#review-card-history" id="QQ2-1-36">Review card history</a></span><br><span class="sectionToc">6 <a href="#syncing" id="QQ2-1-37">Syncing</a></span><br><span class="subsectionToc">6.1 <a href="#thoughts-sync-and-git" id="QQ2-1-38">Thoughts Sync and Git</a></span><br><span class="subsectionToc">6.2 <a href="#keeping-the-latest-pdfs" id="QQ2-1-39">Keeping the latest PDFs</a></span><br><span class="subsectionToc">6.3 <a href="#what-sync-rebuilds" id="QQ2-1-40">What Sync rebuilds</a></span><br><span class="subsectionToc">6.4 <a href="#when-sync-runs" id="QQ2-1-41">When Sync runs</a></span><br><span class="subsectionToc">6.5 <a href="#error-handling" id="QQ2-1-42">Error handling</a></span><br><span class="sectionToc">7 <a href="#working-with-agents" id="QQ2-1-46">Working with agents</a></span><br><span class="subsectionToc">7.1 <a href="#connecting-an-agent" id="QQ2-1-47">Connecting an agent</a></span><br><span class="subsectionToc">7.2 <a href="#thoughtsctl" id="QQ2-1-48">thoughtsctl</a></span><br><span class="subsectionToc">7.3 <a href="#on-the-phone" id="QQ2-1-49">On the phone</a></span></div><p data-src-lines="docs-template/tex/source/thoughts_manual.tex:3-50"><!-- l. 2 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:12-12">
+</p>
+<p></p><h3 class="sectionHead" id="getting-started" data-src-lines="tex/fragments/manual/01_getting_started.tex:2-2"><span class="titlemark">1   </span>   <a id="x1-20001"></a>Getting started</h3><p data-src-lines="tex/fragments/manual/01_getting_started.tex:2-2"><!-- l. 4 --></p><p class="noindent" data-src-lines="tex/fragments/manual/01_getting_started.tex:4-7">Thoughts is a workspace for reading PDFs, keeping comments and notes, reviewing proposed source
+edits, and studying material through review cards. The desktop application and Android
+application keep local data so that reading and ordinary editing can continue offline. The Fedora
+server receives synchronized changes and produces published PDFs from the corresponding
+sources.</p><!-- l. 8 --><p class="noindent" data-src-lines="tex/fragments/manual/01_getting_started.tex:8-17">A project groups documents and their related material. A project comprises documents and
+sources. Documents are PDFs. A document can come from editable sources or from an
+imported PDF. The PDF is the reading view. Thoughts calls comments, highlights and
+strikethroughs, review cards, and proposed source edits <span class="ec-lmri-10x-x-109">annotations</span>. Each annotation has its own
+identity and history, and its type determines the available actions. Proposed source edits
+are also called proposals. Standalone notes are independent entries rather than document
+annotations.
+</p>
+<p data-src-lines="tex/fragments/manual/01_getting_started.tex:18-18"></p><div class="center"><!-- l. 18 --><p class="noindent" data-src-lines="tex/fragments/manual/01_getting_started.tex:18-18">
+
+</p>
+<div class="minipage"><!-- l. 21 --><p class="noindent" data-src-lines="tex/fragments/manual/01_getting_started.tex:19-27"><img alt="figure" class="thoughts-fig" src="assets/0ba2ff86554d60db.png" width="720" height="1600">                 </p></div>   <div class="minipage"><img alt="figure" class="thoughts-fig" src="assets/0110cbb736127cc7.png" width="2250" height="1594" style="width:100%">                                                                                              </div><!-- l. 27 --><p class="noindent" data-src-lines="tex/fragments/manual/01_getting_started.tex:25-27"><span class="ec-lmr-10">Thought Client for mobile (left) and desktop (right).</span></p></div><p data-src-lines="tex/fragments/manual/01_getting_started.tex:28-30"><!-- l. 30 --></p><p class="noindent" data-src-lines="tex/fragments/manual/01_getting_started.tex:30-30">
+</p>
+<p></p><h4 class="subsectionHead" id="navigation-area-and-pdf-viewer" data-src-lines="tex/fragments/manual/01_getting_started.tex:30-30"><span class="titlemark">1.1   </span>   <a id="x1-30001.1"></a>Navigation area and PDF viewer</h4><p data-src-lines="tex/fragments/manual/01_getting_started.tex:30-30"><!-- l. 31 --></p><p class="noindent" data-src-lines="tex/fragments/manual/01_getting_started.tex:31-38">Thoughts has two main components: the navigation area and the PDF viewer. The navigation area
+contains Library, Notes, Comments, and Review. Opening a document or following a comment to
+its passage takes you to the PDF viewer. The PDF viewer supports multiple tabs, each
+displaying a document. On Android, tap the button in the bottom-right corner of the
+Library to return to the PDF viewer. Press and hold the button to access additional actions,
+including Add project. It comprises of four main tabs: Comments, Notes, Library and Review
+Cards.</p><!-- l. 2 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:2-3"><span class="tm" data-tm="start" data-key="card:bbb4a295-91f5-452d-a015-e9494adc1719:0"></span>
+</p>
+<p data-src-lines="tex/fragments/manual/02_library.tex:3-3"></p><h3 class="sectionHead" id="projects-documents-and-source-folders" data-src-lines="tex/fragments/manual/02_library.tex:3-3"><span class="titlemark">2   </span>   <a id="x1-40002"></a>Projects, documents, and source folders</h3><p data-src-lines="tex/fragments/manual/02_library.tex:3-3"><!-- l. 5 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:5-43">The Library tab shows all your projects. Each project groups PDF documents and their associated
+                                                                                      
+
+                                                                                      
+source folders. Every document belongs to a project. When a new project is created, Thoughts
+automatically creates a default source folder for it. This folder contains <span class="path"><span class="ec-lmtt-10x-x-109">thoughts-project.json</span></span>, the
+project manifest, which lists all project documents and records their selection and reading
+order. Imported PDFs are copied into the default source folder. Additional source folders
+can be connected to the project, so a project can contain documents from several source
+folders. However, each document built from sources uses files within a single source folder.
+<span class="tm" data-tm="end" data-key="card:bbb4a295-91f5-452d-a015-e9494adc1719:0"></span>
+</p>
+<p data-src-lines="tex/fragments/manual/02_library.tex:13-13"><!-- l. 13 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:13-18"><span class="paragraphHead" id="icon-meaning"> <a id="x1-5000"></a><span class="ec-lmbx-10x-x-109">Icon meaning</span></span>Documents appear in the Library as soon as they are added, even before their PDF is ready. A clock
+icon means the document is waiting for its first PDF build. The icon next to each document tells
+whether a PDF has editable sources linked to it.</p><!-- l. 18 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:18-18">
+</p>
+<p></p><h4 class="subsectionHead" id="connected-source-folders" data-src-lines="tex/fragments/manual/02_library.tex:18-18"><span class="titlemark">2.1   </span>   <a id="x1-60002.1"></a>Connected source folders</h4><p data-src-lines="tex/fragments/manual/02_library.tex:18-18"><!-- l. 25 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:25-33">To add a connected source folder, right-click <span class="ec-lmbx-10x-x-109">Sources </span>in a project and choose <span class="ec-lmbx-10x-x-109">Import sources…</span>.
+<span class="ec-lmbx-10x-x-109">From folder… </span>copies the documents you select, together with the files they need to build, into a new
+folder inside your Thoughts folder. <span class="ec-lmbx-10x-x-109">From Git repository… </span>clones the repository there once; pulling,
+committing and pushing are then up to you. The original folder or repository is not linked: later
+changes to it do not reach Thoughts, and edits made in Thoughts do not change it. Thoughts Sync
+transfers saved changes between the folder, the Thoughts server, and your other devices.
+Files are included unless excluded by the folder’s <span class="path"><span class="ec-lmtt-10x-x-109">.ThoughtIgnore</span></span> rules. See the <a href="thoughts-link:html?path=docs-template/tex/support/html/default-thought-ignore.html" data-thoughts-link="thoughts-link:html?path=docs-template/tex/support/html/default-thought-ignore.html" class="thoughts-link">default
+<span class="ec-lmtt-10x-x-109">.ThoughtIgnore </span>file</a> for the default exclusions. If you exclude a previously synchronized file, the
+next Sync removes its server copy while keeping the local file on the device where you
+added the rule. Other devices that still synchronize the file may delete their local copies
+when they receive that removal. For the relationship between Thoughts Sync and Git, see
+Section <a href="#syncing">6<!-- tex4ht:ref: sec:thoughts-manual-06_sync_troubleshooting  --></a>.</p><!-- l. 33 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:33-33">
+</p>
+<p></p><h4 class="subsectionHead" id="what-appears-in-sources" data-src-lines="tex/fragments/manual/02_library.tex:33-33"><span class="titlemark">2.2   </span>   <a id="x1-70002.2"></a>What appears in Sources</h4><p data-src-lines="tex/fragments/manual/02_library.tex:33-33"><!-- l. 34 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:34-81"><span class="ec-lmbx-10x-x-109">Sources </span>shows the files included in Thoughts Sync, grouped by their source folders. Each connected
+source folder appears directly under <span class="ec-lmbx-10x-x-109">Sources</span>, alongside the project’s <span class="ec-lmbx-10x-x-109">Default source folder</span>.
+Each folder shows a name, by default the imported folder’s or repository’s name; choose
+<span class="ec-lmbx-10x-x-109">Rename… </span>on the folder to change it on all your devices, which leaves the folder itself where
+it is. Files and subfolders follow the folder’s actual directory structure, and a connected
+folder remains visible even when it contains no included files. The tree includes files already
+synchronized and new or modified files waiting for Sync. Selecting a document for PDF rendering
+does not change whether its source files are synchronized or shown in <span class="ec-lmbx-10x-x-109">Sources</span>. Pending
+proposals in included source files can be reviewed before the document’s first successful PDF
+build.</p><!-- l. 43 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:43-81">
+</p>
+<p></p><h4 class="subsectionHead" id="importing-a-pdf-into-a-project" data-src-lines="tex/fragments/manual/02_library.tex:43-43"><span class="titlemark">2.3   </span>   <a id="x1-80002.3"></a>Importing a PDF into a project</h4><p data-src-lines="tex/fragments/manual/02_library.tex:43-43"><!-- l. 44 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:44-51">Use the project’s <span class="ec-lmbx-10x-x-109">Documents </span>menu to import a PDF into its <span class="ec-lmbx-10x-x-109">Default source folder</span>. The original
+file remains at its original location. The imported copy appears immediately in <span class="ec-lmbx-10x-x-109">Documents </span>for
+reading and ordering and in <span class="ec-lmbx-10x-x-109">Sources &gt; Default source folder </span>as a stored file. Both entries refer to
+the same document and share its comments and review cards. Thoughts Sync transfers
+the imported copy and its project membership to your other devices. Storing the PDF in
+<span class="ec-lmbx-10x-x-109">Sources </span>does not give it editable sources, so its status remains <span class="ec-lmbx-10x-x-109">PDF without editable
+sources</span>.</p><!-- l. 51 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:51-51">
+</p>
+<p></p><h4 class="subsectionHead" id="missing-sources" data-src-lines="tex/fragments/manual/02_library.tex:51-51"><span class="titlemark">2.4   </span>   <a id="x1-90002.4"></a>Missing sources</h4><p data-src-lines="tex/fragments/manual/02_library.tex:51-51"><!-- l. 52 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:52-62">When a file is deleted or moved out of a monitored source folder, it disappears from <span class="ec-lmbx-10x-x-109">Sources </span>after its
+absence has been confirmed. Each document known to depend on that file remains visible in
+<span class="ec-lmbx-10x-x-109">Documents</span>, and its link icon is replaced by a warning icon. The warning identifies the missing source
+paths, for example, “Missing source: <span class="ec-lmtt-10x-x-109">tex/source/release.tex</span>”. The document row otherwise keeps
+its existing appearance, and its last available PDF remains readable. A shared missing input warns
+every document known to depend on it. The user can click the missing-source warning and choose
+to remove the affected PDF’s entry from <span class="ec-lmbx-10x-x-109">Documents</span>. This action removes only that
+logical entry and archives its associated annotations. It does not delete any source file.
+Other documents that depend on the same missing source remain listed with their own
+warnings.</p><!-- l. 62 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:62-62">
+</p>
+<p></p><h4 class="subsectionHead" id="moving-sources" data-src-lines="tex/fragments/manual/02_library.tex:62-62"><span class="titlemark">2.5   </span>   <a id="x1-100002.5"></a>Moving sources</h4><p data-src-lines="tex/fragments/manual/02_library.tex:62-62"><!-- l. 63 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:63-68">Right-click a source folder and choose <span class="ec-lmbx-10x-x-109">Move to project </span>to transfer it to another project. This action
+transfers the folder, its files, its associated documents, and their annotations to the destination
+project. The transferred documents and annotations retain their identifiers, content, and
+history.</p><!-- l. 68 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:68-68">
+</p>
+<p></p><h4 class="subsectionHead" id="organizing-projects" data-src-lines="tex/fragments/manual/02_library.tex:68-68"><span class="titlemark">2.6   </span>   <a id="x1-110002.6"></a>Organizing projects</h4><p data-src-lines="tex/fragments/manual/02_library.tex:68-68"><!-- l. 69 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:69-71">The Library’s top level contains only projects. Every document belongs to a project, including
+imported PDFs without editable sources.</p><!-- l. 72 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:72-106">On desktop, every project provides <span class="ec-lmbx-10x-x-109">Manage documents… </span>and <span class="ec-lmbx-10x-x-109">Import HTML, PDF, Website…
+                                                                                      
+</span>
+                                                                                      
+in the context menu of <span class="ec-lmbx-10x-x-109">Documents </span>as soon as the project is created. Double-clicking a project
+containing documents opens one continuous reading view in the configured order, including when
+every document is an imported PDF. The client presents the individual document PDFs together
+without waiting for a combined PDF to be generated. Use the Library project actions to create or
+rename a project. The desktop order dialog lets you move documents before saving the
+new order. The saved order belongs to the project configuration and reaches other devices
+through Sync. Reordering unchanged documents updates the reading composition without
+rebuilding their PDFs. Comments, review cards, and bookmarks remain associated with their
+documents when the order changes. A combined PDF is generated separately when an export is
+requested.</p><!-- l. 82 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:82-82">
+</p>
+<p></p><h4 class="subsectionHead" id="exporting-a-project-as-one-pdf" data-src-lines="tex/fragments/manual/02_library.tex:82-82"><span class="titlemark">2.7   </span>   <a id="x1-120002.7"></a>Exporting a project as one PDF</h4><p data-src-lines="tex/fragments/manual/02_library.tex:82-82"><!-- l. 83 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:83-91">Use <span class="ec-lmbx-10x-x-109">Export combined PDF… </span>on a project to get a single file for sharing or printing; reading a
+project never needs one. Every document starts ticked; untick the ones to leave out. The server builds
+the export from the project’s latest synced revision, which can be newer than the one on this device.
+Edits that have not been synced are not included, and exporting never starts a Sync. On
+desktop you choose where to save the file; on Android the share sheet opens, also when you
+share a project from the reader. If the exported revision is older than the one you are
+reading, Thoughts says so. A failed export does not affect reading or Sync and can simply be
+retried.</p><!-- l. 91 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:91-91">
+</p>
+<p></p><h4 class="subsectionHead" id="options-on-documents" data-src-lines="tex/fragments/manual/02_library.tex:91-91"><span class="titlemark">2.8   </span>   <a id="x1-130002.8"></a>Options on Documents</h4><p data-src-lines="tex/fragments/manual/02_library.tex:91-91"><!-- l. 93 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:93-93"></p><dl class="description"><dt class="description" data-src-lines="tex/fragments/manual/02_library.tex:93-93"><a id="x1-13001x2.8"></a>
+<span class="ec-lmbx-10x-x-109">Manage documents…</span> </dt><dd class="description" data-src-lines="tex/fragments/manual/02_library.tex:93-93"><!-- l. 93 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:101-101">Open the project’s document list to choose which documents are included in the project
+     and to arrange their order. The list shows every document of the project, imported PDFs
+     included, followed by entry points found in its source folders that have not been added
+     yet. Each document has a checkbox controlling whether it is included in the project. An
+     unchecked document is not built and does not appear under <span class="ec-lmbx-10x-x-109">Documents </span>or in the reading
+     view; it stays in this list and keeps its position. Each row has a drag handle to change
+     its position. Dragging a document changes only its order and does not change whether
+     it is included. One <span class="ec-lmbx-10x-x-109">Apply </span>button saves the selection and order together, while <span class="ec-lmbx-10x-x-109">Cancel</span>
+     discards changes made in the dialog.</p></dd><dt class="description" data-src-lines="tex/fragments/manual/02_library.tex:102-102"><a id="x1-13002x2.8"></a>
+<span class="ec-lmbx-10x-x-109">Import HTML, PDF, Website</span> </dt><dd class="description" data-src-lines="tex/fragments/manual/02_library.tex:102-102"><!-- l. 102 --><p class="noindent">Add an HTML file, a PDF, or a website to the project.</p></dd></dl><p data-src-lines="tex/fragments/manual/02_library.tex:104-134"><!-- l. 106 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:106-134">
+</p>
+<p></p><h4 class="subsectionHead" id="options-for-unlinked-pdfs" data-src-lines="tex/fragments/manual/02_library.tex:106-106"><span class="titlemark">2.9   </span>   <a id="x1-140002.9"></a>Options for unlinked PDFs</h4><p data-src-lines="tex/fragments/manual/02_library.tex:106-106"><!-- l. 107 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:107-109">An unlinked PDF is a document without an editable source linked to it. Right-click the document
+under <span class="ec-lmbx-10x-x-109">Documents </span>to access its available actions.</p><!-- l. 111 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:111-111"></p><dl class="description"><dt class="description" data-src-lines="tex/fragments/manual/02_library.tex:111-111"><a id="x1-14001x2.9"></a>
+<span class="ec-lmbx-10x-x-109">Open PDF</span> </dt><dd class="description" data-src-lines="tex/fragments/manual/02_library.tex:111-111"><!-- l. 111 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:113-113">Open the selected document in the PDF viewer.</p></dd><dt class="description" data-src-lines="tex/fragments/manual/02_library.tex:114-114"><a id="x1-14002x2.9"></a>
+<span class="ec-lmbx-10x-x-109">Rename…</span> </dt><dd class="description" data-src-lines="tex/fragments/manual/02_library.tex:114-114"><!-- l. 114 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:116-116">Change the document’s display name without changing its PDF filename or identity.</p></dd><dt class="description" data-src-lines="tex/fragments/manual/02_library.tex:117-117"><a id="x1-14003x2.9"></a>
+<span class="ec-lmbx-10x-x-109">Remove from Project</span> </dt><dd class="description" data-src-lines="tex/fragments/manual/02_library.tex:117-117"><!-- l. 117 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:121-121">Remove the document and its corresponding comments and review cards from the project.
+     The original files remain. The change reaches other devices through Sync.</p></dd><dt class="description" data-src-lines="tex/fragments/manual/02_library.tex:122-122"><a id="x1-14004x2.9"></a>
+<span class="ec-lmbx-10x-x-109">Move PDF to different project</span> </dt><dd class="description" data-src-lines="tex/fragments/manual/02_library.tex:122-122"><!-- l. 122 --><p class="noindent">Choose a destination project and move the document and its annotations there, preserving
+     annotation  content  and  associations  and  removing  their  membership  in  the  original
+     project.</p></dd></dl><p data-src-lines="tex/fragments/manual/02_library.tex:124-124"><!-- l. 125 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:125-127"><span class="tm" data-tm="start" data-key="card:d644a493-def0-4033-a3a2-2ab6b2717f0f:0"></span></p><!-- l. 127 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:127-127">
+</p>
+<p></p><h4 class="subsectionHead" id="library-columns" data-src-lines="tex/fragments/manual/02_library.tex:127-127"><span class="titlemark">2.10   </span>   <a id="x1-150002.10"></a>Library columns</h4><p data-src-lines="tex/fragments/manual/02_library.tex:127-127"><!-- l. 128 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:128-128">On the desktop, the Library shows these columns for each project: </p><p data-src-lines="tex/fragments/manual/02_library.tex:130-130"></p><ul class="itemize1">
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:130-130"><!-- l. 130 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:131-131"><span class="ec-lmbx-10x-x-109">Date</span>: for a project or document, when its PDF was last built; for source files and folders,
+   when they were last modified.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:131-131"><!-- l. 131 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:132-132"><span class="ec-lmbx-10x-x-109">Size</span>: for a document, the size of its PDF; for source files and folders, their size on disk,
+   counting only files included in Sync; for a project, its PDF plus its included source files.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:132-132"><!-- l. 132 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:133-166"><span class="ec-lmbx-10x-x-109">Files</span>: the number of source files included in Sync, after <span class="path"><span class="ec-lmtt-10x-x-109">.ThoughtIgnore</span></span> rules.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:133-166"><!-- l. 133 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:134-134"><span class="ec-lmbx-10x-x-109">Review cards</span>: how many review cards belong to a document or project.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:134-134"><!-- l. 134 --><p class="noindent"><span class="ec-lmbx-10x-x-109">Pages</span>: the page count of a document, or the total for a project.</p></li></ul><p data-src-lines="tex/fragments/manual/02_library.tex:135-135"><!-- l. 136 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:136-139">A dash (—) means a value is not known yet, and a document waiting for its first build shows “Not
+built yet”. On the phone, each project and document shows its card and page counts under its name;
+<span class="ec-lmbx-10x-x-109">Show in Library </span>in the Home menu turns them on or off. <span class="tm" data-tm="end" data-key="card:d644a493-def0-4033-a3a2-2ab6b2717f0f:0"></span></p><!-- l. 140 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:140-141"><span class="tm" data-tm="start" data-key="card:63a9a932-acad-53d2-b732-8beba6a9f235:0"></span>
+</p>
+<p data-src-lines="tex/fragments/manual/02_library.tex:141-141"></p><h4 class="subsectionHead" id="links-between-documents" data-src-lines="tex/fragments/manual/02_library.tex:141-141"><span class="titlemark">2.11   </span>   <a id="x1-160002.11"></a>Links between documents</h4><p data-src-lines="tex/fragments/manual/02_library.tex:141-141"><!-- l. 142 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:142-142"><span class="tl-label" id="source-label:links-between-documents"></span>Within one document, use the source language’s own references. To link to another document, first
+place a source label at the destination. A <a href="thoughts-link:html?path=docs-template/tex/support/html/document-link-forms.html" data-thoughts-link="thoughts-link:html?path=docs-template/tex/support/html/document-link-forms.html" class="thoughts-link">source label</a> is a name for a place in a document that
+links from other documents can open. A link names its target document, the source label
+in it, and the text the reader clicks. There are four kinds of links between documents:
+</p><p data-src-lines="tex/fragments/manual/02_library.tex:149-149"></p><ul class="itemize1">
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:149-149"><!-- l. 149 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:150-150">to another document of the same source folder, named by its path within that folder;</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:150-150"><!-- l. 150 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:151-151">to a document of a different source folder, named by that folder and the path within it;</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:151-151"><!-- l. 151 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:152-152">to an imported PDF of the same project, named by its Library filename without <span class="ec-lmtt-10x-x-109">.pdf</span>;</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/02_library.tex:152-152"><!-- l. 152 --><p class="noindent">to an imported PDF of another project, named through one of that project’s <span class="ec-lmtt-10x-x-109">docs- </span>source
+   folders.</p></li></ul><p data-src-lines="tex/fragments/manual/02_library.tex:153-153"><!-- l. 154 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:154-190">The <a href="thoughts-link:html?path=docs-template/tex/support/html/document-link-forms.html" data-thoughts-link="thoughts-link:html?path=docs-template/tex/support/html/document-link-forms.html" class="thoughts-link">interactive examples</a> explain how each kind is written in LaTeX and in Markdown, including the
+anchors that links to imported PDFs use instead of source labels. The target document
+must be included in its project. A link to a document of another source folder opens that
+document’s published PDF, so it works only once that PDF has been built with the label. The
+target’s later changes do not rebuild the linking document; its link is resolved again the
+next time it is built. A link whose target is not included, cannot be found, or lacks the
+label or anchor stays inactive: its text remains but cannot be clicked. An inactive link
+never blocks the build of its document or of any other, and the document’s status lists its
+inactive links. The older LaTeX commands <span class="ec-lmtt-10x-x-109">TexLink </span>and <span class="ec-lmtt-10x-x-109">CrossTexLink </span>still work in existing
+sources. They take a path that starts with the source folder and an ordinary LaTeX label,
+or <span class="ec-lmtt-10x-x-109">document-start</span>, instead of a source label. New links use the forms in the examples.
+<span class="tm" data-tm="end" data-key="card:63a9a932-acad-53d2-b732-8beba6a9f235:0"></span></p><!-- l. 166 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:166-190">
+</p>
+<p></p><h4 class="subsectionHead" id="html-support" data-src-lines="tex/fragments/manual/02_library.tex:166-166"><span class="titlemark">2.12   </span>   <a id="x1-170002.12"></a>HTML support</h4><p data-src-lines="tex/fragments/manual/02_library.tex:166-166"><!-- l. 167 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:167-171">Thoughts supports adding self-contained HTML pages to a project and opening them from links in a
+PDF or directly from <span class="ec-lmbx-10x-x-109">Sources</span>. HTML sources can be located within existing project sources and
+Thoughts automatically picks them up and shows them under <span class="ec-lmbx-10x-x-109">Sources</span>.</p><!-- l. 171 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:171-171">
+</p>
+<p></p><h5 class="subsubsectionHead" id="limitations" data-src-lines="tex/fragments/manual/02_library.tex:171-171"><span class="titlemark">2.12.1   </span>   <a id="x1-180002.12.1"></a>Limitations</h5><p data-src-lines="tex/fragments/manual/02_library.tex:171-171"><!-- l. 172 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:172-178">Each HTML source must be a single self-contained UTF-8 HTML file no larger than 100 MB. Its
+JavaScript, CSS, images, fonts, and data must be embedded in that file. References to neighbouring
+files are not supported, even when those files are in the same project. Inline JavaScript, CSS,
+embedded images, and downloads are supported. External resources, network requests, frames, forms,
+and browser storage are unavailable.</p><!-- l. 178 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:178-178">
+</p>
+<p></p><h4 class="subsectionHead" id="removing" data-src-lines="tex/fragments/manual/02_library.tex:178-178"><span class="titlemark">2.13   </span>   <a id="x1-190002.13"></a>Removing</h4><p data-src-lines="tex/fragments/manual/02_library.tex:178-179"><!-- l. 179 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:179-179">
+</p>
+<p></p><h5 class="subsubsectionHead" id="projects" data-src-lines="tex/fragments/manual/02_library.tex:179-179"><span class="titlemark">2.13.1   </span>   <a id="x1-200002.13.1"></a>Projects</h5><p data-src-lines="tex/fragments/manual/02_library.tex:179-179"><!-- l. 180 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:180-184">You can right click on projects to have this entry: /Users/alex/Documents/screenshots/Screenshot
+2026-09-20 at 17.29.16.png Deleting a project will delete also all the comments, agent edits and
+reviews associated to it.</p><!-- l. 184 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:184-184">
+</p>
+<p></p><h5 class="subsubsectionHead" id="sorting-lists" data-src-lines="tex/fragments/manual/02_library.tex:184-184"><span class="titlemark">2.13.2   </span>   <a id="x1-210002.13.2"></a>Sorting lists</h5><p data-src-lines="tex/fragments/manual/02_library.tex:184-184"><!-- l. 185 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:185-189">In list views with columns, click or tap a column heading to sort the entries by that column.
+Select the same heading again to reverse the order. An arrow indicates the current sorting
+direction.</p><!-- l. 189 --><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:189-189">
+</p>
+                                                                                      
+<p data-src-lines="tex/fragments/manual/03_annotations.tex:24-24"></p><h5 class="subsubsectionHead" id="opening-sources" data-src-lines="tex/fragments/manual/03_annotations.tex:24-24"><span class="titlemark">2.13.3   </span>   <a id="x1-220002.13.3"></a>Opening sources</h5><p data-src-lines="tex/fragments/manual/02_library.tex:189-189"><!-- l. 190 --></p><p class="noindent" data-src-lines="tex/fragments/manual/02_library.tex:190-190">On desktop, double-click on a source opens it in VS Code. Choose <span class="ec-lmbx-10x-x-109">Open With… </span>to open the source
+with a different application. For self-contained HTML, if you do Open with "Browser" it will allows
+you to render the app on the browser.  
+</p>
+<p data-src-lines="tex/fragments/manual/03_annotations.tex:1-1"></p><h3 class="sectionHead" id="annotations" data-src-lines="tex/fragments/manual/03_annotations.tex:1-1"><span class="titlemark">3   </span>   <a id="x1-230003"></a>Annotations</h3><p data-src-lines="tex/fragments/manual/03_annotations.tex:1-2"><!-- l. 2 --></p><p class="noindent" data-src-lines="tex/fragments/manual/03_annotations.tex:2-2">
+</p>
+<p></p><h4 class="subsectionHead" id="comments-and-text-markup" data-src-lines="tex/fragments/manual/03_annotations.tex:2-2"><span class="titlemark">3.1   </span>   <a id="x1-240003.1"></a>Comments and text markup</h4><p data-src-lines="tex/fragments/manual/03_annotations.tex:2-2"><!-- l. 3 --></p><p class="noindent" data-src-lines="tex/fragments/manual/03_annotations.tex:3-3">Comments, highlights, and strikethroughs are annotations created by selecting text or a region in the
+PDF reader. Review cards and proposed edits are described in their own sections because they have
+different actions. When a comment or text-markup annotation is confirmed, the client uses its locally
+installed PDF, source files, and source mapping to identify the corresponding passage in the editable
+source. This process is called source localization. The <span class="ec-lmri-10x-x-109">Linking status </span>field for these annotations
+reports: </p><p data-src-lines="tex/fragments/manual/03_annotations.tex:9-9"></p><ul class="itemize1">
+   <li class="itemize" data-src-lines="tex/fragments/manual/03_annotations.tex:9-9"><!-- l. 9 --><p class="noindent" data-src-lines="tex/fragments/manual/03_annotations.tex:10-10"><span class="ec-lmri-10x-x-109">Linked </span>when localization succeeds.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/03_annotations.tex:10-10"><!-- l. 10 --><p class="noindent" data-src-lines="tex/fragments/manual/03_annotations.tex:11-11"><span class="ec-lmri-10x-x-109">PDF without source location </span>when the document has no editable source, so the annotation
+   retains its PDF position without a source link.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/03_annotations.tex:11-11"><!-- l. 11 --><p class="noindent"><span class="ec-lmri-10x-x-109">Linking failed </span>when automatic localization fails, in which case the missing connection can
+   be established in the source file.</p></li></ul><p data-src-lines="tex/fragments/manual/03_annotations.tex:12-12"><!-- l. 13 --></p><p class="noindent" data-src-lines="tex/fragments/manual/03_annotations.tex:13-17">For linked comments and text markup, the source markup is authoritative for their content and
+deletion. Editing that markup updates the corresponding annotation in the UI without requiring Sync.
+Editing a source file in another application updates these annotations and their statuses without
+bringing Thoughts to the front.</p><!-- l. 17 --><p class="noindent" data-src-lines="tex/fragments/manual/03_annotations.tex:17-17">
+</p>
+<p></p><h4 class="subsectionHead" id="standalone-notes" data-src-lines="tex/fragments/manual/03_annotations.tex:17-17"><span class="titlemark">3.2   </span>   <a id="x1-250003.2"></a>Standalone notes</h4><p data-src-lines="tex/fragments/manual/03_annotations.tex:17-17"><!-- l. 18 --></p><p class="noindent" data-src-lines="tex/fragments/manual/03_annotations.tex:18-24">In addition to PDF annotations, Thoughts also supports standalone notes. Standalone notes are short,
+independent entries for reminders, tasks, and ideas. A due date or a specific location can be assigned
+to them. They do not belong to a project or PDF and appear in the Notes tab. Creating,
+editing, and deleting a note does not require source localization or a PDF build. Changes
+                                                                                      
+
+                                                                                      
+are saved automatically on the device, while Sync propagates the saved changes to other
+devices.</p><!-- l. 25 --><p class="noindent" data-src-lines="tex/fragments/manual/03_annotations.tex:25-25">Android includes a quick-note entry point. Press Done to save a new quick note. Delete a note
+explicitly when it is no longer needed. </p><!-- l. 2 --><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:2-2">
+</p>
+<p></p><h3 class="sectionHead" id="reviewing-proposed-edits" data-src-lines="tex/fragments/manual/04_source_editing.tex:2-2"><span class="titlemark">4   </span>   <a id="x1-260004"></a>Reviewing proposed edits</h3><p data-src-lines="tex/fragments/manual/04_source_editing.tex:2-2"><!-- l. 4 --></p><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:4-8">A proposed source edit, or proposal, is an annotation containing a reason, the original source text, and
+the proposed replacement. An addition has no original text, while a removal has no replacement text.
+The proposed version can already be visible in the rendered PDF even while the proposal
+remains pending. Seeing that text in a PDF therefore does not establish that it has been
+accepted.</p><!-- l. 9 --><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:9-13">Select a proposal in the Comments view to inspect its explanation and alternatives. Review the
+currently displayed revision, since an agent can revise a pending proposal without changing its
+identity. Each proposal also records when it was created and which agent conversation created it, so it
+can be traced back to the task that prepared it.</p><!-- l. 13 --><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:13-13">
+</p>
+<p></p><h4 class="subsectionHead" id="proposal-dates" data-src-lines="tex/fragments/manual/04_source_editing.tex:13-13"><span class="titlemark">4.1   </span>   <a id="x1-270004.1"></a>Proposal dates</h4><p data-src-lines="tex/fragments/manual/04_source_editing.tex:13-13"><!-- l. 14 --></p><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:14-19">For an agent proposal, the Modified column shows when Thoughts last recorded a revision of an
+existing pending proposal, such as an agent changing its explanation or proposed replacement text. A
+dash means that no revision time is recorded for the proposal.</p><!-- l. 19 --><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:19-19">
+</p>
+<p></p><h4 class="subsectionHead" id="accepting-or-rejecting" data-src-lines="tex/fragments/manual/04_source_editing.tex:19-19"><span class="titlemark">4.2   </span>   <a id="x1-280004.2"></a>Accepting or rejecting</h4><p data-src-lines="tex/fragments/manual/04_source_editing.tex:19-19"><!-- l. 20 --></p><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:20-26">Accept Proposal retains the proposed replacement and removes the proposal wrapper from the
+editable source. Reject Proposal retains the original text instead. For an addition, rejection removes
+the proposed addition. For a removal, acceptance removes the original text. Accept and Reject are
+available in the Comments view on the desktop, in the PDF viewer and source review on the phone,
+and above each proposal in the VS Code extension. A proposal whose markup is damaged is shown
+with its problem and cannot be accepted or rejected until its source is fixed, while the other proposals
+in the same file stay available.</p><!-- l. 27 --><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:27-32">After a decision, check whether the source change is still local or has reached Fedora. A later build
+updates the published PDF to reflect the resulting source. On Android, source review depends on the
+installed editable source bundle for the document. If that source bundle is unavailable or stale, resolve
+the source state before retrying the decision.</p><!-- l. 32 --><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:32-32">
+</p>
+<p></p><h4 class="subsectionHead" id="editing-proposals-in-the-source" data-src-lines="tex/fragments/manual/04_source_editing.tex:32-32"><span class="titlemark">4.3   </span>   <a id="x1-290004.3"></a>Editing proposals in the source</h4><p data-src-lines="tex/fragments/manual/04_source_editing.tex:32-32"><!-- l. 33 --></p><p class="noindent" data-src-lines="tex/fragments/manual/04_source_editing.tex:33-39">The explanation and the proposed text of a pending proposal can be edited directly in its source, and
+Thoughts shows the edited proposal after the next Sync. Its identifier, original text, and creation
+details must stay unchanged. Accept or reject a proposal only in Thoughts or in the VS Code
+extension, never by deleting or rewriting its markup by hand, because Thoughts cannot
+tell such an edit from an accidental one. If the markup of a pending proposal disappears
+without a decision, the proposal stays in Thoughts and appears under Issues as <span class="ec-lmbx-10x-x-109">Removed
+outside Thoughts</span>. <span class="ec-lmbx-10x-x-109">Restore Proposal </span>puts the markup back into the source, and when the
+surrounding text has changed so that it cannot be placed safely, Thoughts offers to copy the
+proposal’s text instead. <span class="ec-lmbx-10x-x-109">Dismiss </span>removes the proposal from Thoughts without changing the
+source.</p><!-- l. 1 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:1-1">
+</p>
+<p></p><h3 class="sectionHead" id="review-cards" data-src-lines="tex/fragments/manual/05_review_cards.tex:1-1"><span class="titlemark">5   </span>   <a id="x1-300005"></a>Review cards</h3><p data-src-lines="tex/fragments/manual/05_review_cards.tex:1-1"><!-- l. 3 --></p><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:3-6">Review cards are annotations that turn PDF passages into material that can be reviewed
+according to intervals selected by the user. Review cards information is accessible outside
+Thoughts Review cards are created manually in the PDF viewer or in the source linked
+text.</p><!-- l. 7 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:7-19">Open the review area and select the available project or deck scope. Read the question, attempt an
+answer, and reveal the covered answer region when ready. The study controls distinguish Correct, Skip
+and Wrong. Correct means that the material has been internalized. Skip means that you don’t really
+care about the material. Wrong should be used sparingly, and means that the material is wrong.
+Inspect the interval shown with the action, and change it through the available timing choices when
+needed. The review mark and the interval are separate choices. The interval determines the next
+review time and can also be set to Never. Never leaves the card without a next review date while
+preserving the card and its history. Selecting a finite interval again schedules the card for a future
+review.</p><!-- l. 19 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:19-19">
+</p>
+<p></p><h4 class="subsectionHead" id="card-note" data-src-lines="tex/fragments/manual/05_review_cards.tex:19-19"><span class="titlemark">5.1   </span>   <a id="x1-310005.1"></a>Card note</h4><p data-src-lines="tex/fragments/manual/05_review_cards.tex:19-19"><!-- l. 20 --></p><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:20-27">Each review card supports an optional free-form plain-text note stored as metadata attached to the
+card. The note can be viewed, edited, or cleared from the card’s details on Android and Desktop. It
+can contain personal reminders, explanations, or context for future reviews. Editing the note preserves
+the card’s question, answer region, source link, review history, and next review time. Changes are
+saved locally and synchronized with the card when the user runs Sync. Editing a note does not require
+a PDF rebuild or source-linking operation.</p><!-- l. 27 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:27-44">
+                                                                                      
+</p>
+<p data-src-lines="tex/fragments/manual/05_review_cards.tex:44-44"></p><h4 class="subsectionHead" id="card-browser" data-src-lines="tex/fragments/manual/05_review_cards.tex:27-27"><span class="titlemark">5.2   </span>   <a id="x1-320005.2"></a>Card browser</h4><p data-src-lines="tex/fragments/manual/05_review_cards.tex:27-27"><!-- l. 28 --></p><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:28-30">The card browser displays one row per card, with selectable columns for Created, Question, Due,
+Project, Document, Page, Source, Review State and Card Status.
+</p>
+<p data-src-lines="tex/fragments/manual/05_review_cards.tex:30-30"><!-- l. 30 --></p><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:30-33"><span class="paragraphHead" id="review-state"> <a id="x1-33000"></a><span class="ec-lmbx-10x-x-109">Review State</span></span>Review State shows the card’s most recent review assessment and the total number of times it has
+been shown during reviews.
+</p>
+<p data-src-lines="tex/fragments/manual/05_review_cards.tex:33-33"><!-- l. 33 --></p><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:33-34"><span class="paragraphHead" id="card-status"> <a id="x1-34000"></a><span class="ec-lmbx-10x-x-109">Card Status</span></span>Card Status describes the card’s source link and placement in the current PDF. </p><p data-src-lines="tex/fragments/manual/05_review_cards.tex:36-36"></p><ul class="itemize1">
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:36-36"><!-- l. 36 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:37-37"><span class="ec-lmbx-10x-x-109">Linked </span>means the card is linked to its source and its answer region is located in the current
+   PDF.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:37-37"><!-- l. 37 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:38-38"><span class="ec-lmbx-10x-x-109">PDF only </span>means the card has a verified answer region in a PDF without editable source.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:38-38"><!-- l. 38 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:39-39"><span class="ec-lmbx-10x-x-109">Link pending </span>means source linking is waiting to run or is in progress.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:39-39"><!-- l. 39 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:40-40"><span class="ec-lmbx-10x-x-109">Link failed </span>means an attempt to establish the source link failed.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:40-40"><!-- l. 40 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:41-41"><span class="ec-lmbx-10x-x-109">Link removed </span>means a completed source check confirmed that the card’s previously linked
+   markers are absent.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:41-41"><!-- l. 41 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:42-42"><span class="ec-lmbx-10x-x-109">Source unavailable </span>means the source cannot currently be read or checked, so the link
+   cannot be verified.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:42-42"><!-- l. 42 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:43-65"><span class="ec-lmbx-10x-x-109">Placement pending </span>means the card is linked to its source and is awaiting placement in
+   the current PDF.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:43-65"><!-- l. 43 --><p class="noindent"><span class="ec-lmbx-10x-x-109">Placement failed </span>means the card is linked to its source, but its answer region could not
+   be located in the current PDF.</p></li></ul><p data-src-lines="tex/fragments/manual/05_review_cards.tex:44-44"><!-- l. 45 --></p><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:45-48">Link removed and Source unavailable preserve the card and its review history. Explicitly deleting a
+card removes it from the browser.
+</p>
+<p data-src-lines="tex/fragments/manual/05_review_cards.tex:48-48"><!-- l. 48 --></p><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:48-49"><span class="paragraphHead" id="card-filters"> <a id="x1-35000"></a><span class="ec-lmbx-10x-x-109">Card filters</span></span>The card browser provides the filters New, Seen, Never, Current good, Current Skip, Current wrong,
+Unavailable and All cards. </p><p data-src-lines="tex/fragments/manual/05_review_cards.tex:51-51"></p><ul class="itemize1">
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:51-51"><!-- l. 51 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:52-52">New shows cards with no recorded review action.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:52-52"><!-- l. 52 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:53-53">Seen shows cards with at least one recorded review action.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:53-53"><!-- l. 53 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:54-54">Never shows cards whose current interval is Never.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:54-54"><!-- l. 54 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:55-55">Current good shows cards whose most recent review mark is Correct, meaning that the
+   material has been internalized.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:55-55"><!-- l. 55 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:56-56">Current Skip shows cards whose most recent review mark is Skip.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:56-56"><!-- l. 56 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:57-57">Current wrong shows cards whose most recent review mark is Wrong, meaning that the
+   material itself is wrong.</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:57-57"><!-- l. 57 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:59-59">Unavailable  shows  cards  with  issues  such  as  source-linking,  PDF-placement  or  other
+   card-specific problems, with the reason shown for each card. These cards are not available
+   for reviews and require</p></li>
+   <li class="itemize" data-src-lines="tex/fragments/manual/05_review_cards.tex:59-59"><!-- l. 59 --><p class="noindent">All cards shows every card that has not been deleted.</p></li></ul><p data-src-lines="tex/fragments/manual/05_review_cards.tex:60-60"><!-- l. 61 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:26-26">These filters overlap because review history, the current mark, the selected interval and annotation
+issues describe different aspects of a card. Seen includes cards marked Correct, Skip or Wrong, and
+any card can have an issue. Current refers to the most recent review mark, independently of whether
+the card is due. The Due column shows the next review time, or Never when no further review is
+scheduled.</p><!-- l. 66 --><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:66-66">
+</p>
+<p></p><h4 class="subsectionHead" id="review-card-history" data-src-lines="tex/fragments/manual/05_review_cards.tex:66-66"><span class="titlemark">5.3   </span>   <a id="x1-360005.3"></a>Review card history</h4><p data-src-lines="tex/fragments/manual/05_review_cards.tex:66-66"><!-- l. 68 --></p><p class="noindent" data-src-lines="tex/fragments/manual/05_review_cards.tex:68-68">Every interval selection, including Never, and every review mark, including Correct, Skip and Wrong,
+is recorded in the card’s history together with the time at which it occurred. Changing the current
+mark or interval preserves the earlier history.  <span class="tm" data-tm="start" data-key="card:c8ed3614-30ba-51c3-9cb7-9dc8986ab2e7:0"></span>
+</p>
+<p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:2-2"></p><h3 class="sectionHead" id="syncing" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:2-2"><span class="titlemark">6   </span>   <a id="x1-370006"></a>Syncing</h3><p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:2-2"><!-- l. 4 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:4-9">Thoughts clients sync with the Thoughts Server: they upload pending local changes and
+download newly rendered PDFs. The Sync button synchronizes the whole Library, including
+every project. Each client shows the Sync status and keeps a log of every Sync. When
+synchronization completes successfully, Thoughts reports <span class="ec-lmri-10x-x-109">Up to date</span>, meaning that all required
+uploads, document builds, downloads, and local installations for the synchronized reading
+state have finished. Thoughts reports <span class="ec-lmri-10x-x-109">Changes pending </span>when a local change has not been
+synced.</p><!-- l. 10 --><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:10-15">If changes were uploaded but a document failed to build, Thoughts reports <span class="ec-lmri-10x-x-109">PDF build failed</span>, confirms
+that the changes are synced, and keeps the last successfully published PDF. If the Sync step fails,
+Thoughts reports <span class="ec-lmri-10x-x-109">Sync failed </span>and identifies the failed step. In either case, <span class="ec-lmri-10x-x-109">Show logs </span>opens the log of
+that Sync. If a source file needs a merge, Thoughts reports <span class="ec-lmri-10x-x-109">Merge needed </span>and offers <span class="ec-lmri-10x-x-109">Show
+merge</span>.</p><!-- l. 15 --><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:15-15">
+</p>
+<p></p><h4 class="subsectionHead" id="thoughts-sync-and-git" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:15-15"><span class="titlemark">6.1   </span>   <a id="x1-380006.1"></a>Thoughts Sync and Git</h4><p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:15-15"><!-- l. 16 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:16-21">Thoughts Sync includes every saved file, whether Git tracks or ignores it, except files excluded by
+<span class="path"><span class="ec-lmtt-10x-x-109">.ThoughtIgnore</span></span>. You do not need to stage, commit, or push an edit before Thoughts can synchronize
+it. Synchronization with an external Git repository separately handles commits, pulls, pushes, and
+conflicts with that service. A failure in external Git synchronization does not prevent Thoughts from
+synchronizing independent saved changes.</p><!-- l. 21 --><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:21-21">
+</p>
+<p></p><h4 class="subsectionHead" id="keeping-the-latest-pdfs" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:21-21"><span class="titlemark">6.2   </span>   <a id="x1-390006.2"></a>Keeping the latest PDFs</h4><p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:21-53"><!-- l. 22 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:22-53">When Sync downloads a newer PDF, that PDF replaces the previous reading version on the device. A
+document whose PDF has not changed reuses its current verified file. Temporary files exist only
+while an update or its recovery is in progress and are removed when that work finishes. If
+downloading or installing a new PDF fails, the current one stays available until a newer one is
+installed.</p><!-- l. 28 --><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:28-29"><span class="tm" data-tm="end" data-key="card:c8ed3614-30ba-51c3-9cb7-9dc8986ab2e7:0"></span></p><!-- l. 30 --><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:30-31"><span class="tm" data-tm="start" data-key="card:c25bf47a-9f2d-4870-b31a-a4c243982c9a:0"></span>
+</p>
+<p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:31-31"></p><h4 class="subsectionHead" id="what-sync-rebuilds" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:31-31"><span class="titlemark">6.3   </span>   <a id="x1-400006.3"></a>What Sync rebuilds</h4><p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:31-31"><!-- l. 32 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:32-36">Sync rebuilds only documents whose sources changed. Changing a shared style, figure, or other file
+rebuilds every document that uses it. Edits saved before a Sync are built together; an edit saved while
+a Sync is already building goes into the next Sync.</p><!-- l. 36 --><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:36-36">
+</p>
+<p></p><h4 class="subsectionHead" id="when-sync-runs" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:36-36"><span class="titlemark">6.4   </span>   <a id="x1-410006.4"></a>When Sync runs</h4><p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:36-36"><!-- l. 37 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:37-41">Sync runs when you press <span class="ec-lmbx-10x-x-109">Sync</span>. On desktop it also runs before and after an agent creates proposals
+and after you save a conflict resolution. On Android, app start resumes an interrupted
+Sync.</p><!-- l. 41 --><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:41-41">
+</p>
+<p></p><h4 class="subsectionHead" id="error-handling" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:41-41"><span class="titlemark">6.5   </span>   <a id="x1-420006.5"></a>Error handling</h4><p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:41-42"><!-- l. 42 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:42-48"><span class="paragraphHead" id="document-errors"> <a id="x1-43000"></a><span class="ec-lmbx-10x-x-109">Document errors</span></span>Projects sync and build independently, so a failure in one project does not prevent other projects from
+syncing and building. The project’s report records the problem, and Thoughts shows a warning sign
+beside the affected project. Its documents keep their last successfully built PDF, so you can go on
+reading, commenting on, and reviewing them. Review progress, such as marks, tags, and
+review intervals, syncs even when a PDF fails to build, because it does not depend on the
+PDF.
+</p>
+<p data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:48-48"><!-- l. 48 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:48-53"><span class="paragraphHead" id="comments-review-cards"> <a id="x1-44000"></a><span class="ec-lmbx-10x-x-109">Comments, review cards</span></span>The Sync log window shows separate clickable counts, such as <span class="ec-lmri-10x-x-109">2 comments have issues</span>, <span class="ec-lmri-10x-x-109">1 review card
+has an issue</span>, and <span class="ec-lmri-10x-x-109">1 source file needs a merge</span>. Clicking a comment or review card count opens the
+corresponding view, filtered to the affected items. Clicking a source file count opens the affected source
+files and shows why each file needs a merge.
+</p>
+<p data-src-lines="docs-template/tex/source/thoughts_manual.tex:35-35"><!-- l. 53 --></p><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:53-57"><span class="paragraphHead" id="a-pdf-looks-older-than-its-source"> <a id="x1-45000"></a><span class="ec-lmbx-10x-x-109">A PDF looks older than its source</span></span>Check the build status before repeating the edit. On desktop, the Sync status in the toolbar shows
+<span class="ec-lmri-10x-x-109">Build needed </span>or the build error (hover for the message). On Android, <span class="ec-lmbx-10x-x-109">Document status </span>in the reader
+menu shows the PDF’s status, when it was built, and the build error, and <span class="ec-lmbx-10x-x-109">Show last log </span>opens the
+log of its last Sync.</p><!-- l. 58 --><p class="noindent" data-src-lines="tex/fragments/manual/06_sync_troubleshooting.tex:58-58"><span class="tm" data-tm="end" data-key="card:c25bf47a-9f2d-4870-b31a-a4c243982c9a:0"></span></p><!-- l. 17 --><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:17-17">
+</p>
+<p></p><h3 class="sectionHead" id="working-with-agents" data-src-lines="docs-template/tex/source/thoughts_manual.tex:17-17"><span class="titlemark">7   </span>   <a id="x1-460007"></a>Working with agents</h3><p data-src-lines="docs-template/tex/source/thoughts_manual.tex:17-17"><!-- l. 19 --></p><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:19-25">Coding agents such as Claude Code and Codex can work with your Library on the Mac through the
+Thoughts MCP server. An agent can open a document at a page, create, revise, and remove proposals,
+create review cards, look up your review cards and what they show you know, and start a Sync. An
+agent never accepts or rejects a proposal; it stays pending until you decide in Thoughts. A
+proposal or card made by an agent behaves like one you made and reaches your other
+devices with the next Sync. Besides you and your agents, the VS Code <span class="ec-lmbx-10x-x-109">Thoughts: Create
+Card </span>action is the only other way to create a card; Thoughts never creates cards on its
+own.</p><!-- l. 25 --><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:25-25">
+</p>
+<p></p><h4 class="subsectionHead" id="connecting-an-agent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:25-25"><span class="titlemark">7.1   </span>   <a id="x1-470007.1"></a>Connecting an agent</h4><p data-src-lines="docs-template/tex/source/thoughts_manual.tex:25-25"><!-- l. 26 --></p><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:26-29">The MCP server runs on the Mac and is started by the agent itself; it does not listen on the network.
+Claude Code lists it under <span class="ec-lmtt-10x-x-109">mcpServers </span>in <span class="path"><span class="ec-lmtt-10x-x-109">~/.claude.json</span></span>, and Codex loads it as the <span class="ec-lmtt-10x-x-109">thoughts</span>
+plugin.</p><!-- l. 29 --><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:29-29">
+</p>
+<p></p><h4 class="subsectionHead" id="thoughtsctl" data-src-lines="docs-template/tex/source/thoughts_manual.tex:29-29"><span class="titlemark">7.2   </span>   <a id="x1-480007.2"></a>thoughtsctl</h4><p data-src-lines="docs-template/tex/source/thoughts_manual.tex:29-34"><span class="ec-lmtt-10x-x-109">thoughtsctl </span>is the desktop app’s command-line tool: the same actions from a terminal or a script,
+such as <span class="ec-lmtt-10x-x-109">thoughtsctlsync--wait </span>or <span class="ec-lmtt-10x-x-109">thoughtsctlopen--page3&lt;file&gt;</span>. It is inside the app at
+<span class="path"><span class="ec-lmtt-10x-x-109">/Applications/Thoughts.app/Contents/MacOS/thoughtsctl</span></span>; <span class="ec-lmtt-10x-x-109">thoughtsctl--help </span>lists its
+commands, and <span class="ec-lmtt-10x-x-109">--json </span>prints results for scripts. The MCP server works by running these commands
+for the agent.<!-- l. 34 --></p><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:34-40">
+                                                                                      
+</p>
+<p data-src-lines="docs-template/tex/source/thoughts_manual.tex:40-40"></p><h4 class="subsectionHead" id="on-the-phone" data-src-lines="docs-template/tex/source/thoughts_manual.tex:34-34"><span class="titlemark">7.3   </span>   <a id="x1-490007.3"></a>On the phone</h4><p data-src-lines="docs-template/tex/source/thoughts_manual.tex:34-34"><!-- l. 35 --></p><p class="noindent" data-src-lines="docs-template/tex/source/thoughts_manual.tex:35-39">The phone has no MCP server. In a review, <span class="ec-lmbx-10x-x-109">Copy for agent </span>in the card’s menu copies the card and
+its document as a prompt to paste into an agent, without the answer by default. <span class="ec-lmbx-10x-x-109">Copy for physical
+studying </span>adds how to follow answers written on paper and photographed with a camera. <span class="ec-lmbx-10x-x-109">Settings
+&gt; Agent prompts </span>edits both prompts.
+</p>
+<p data-src-lines="docs-template/tex/source/thoughts_manual.tex:40-40"> 
+</p> 
+</body></html>

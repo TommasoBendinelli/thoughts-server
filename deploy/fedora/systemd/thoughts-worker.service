@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+[Unit]
+Description=Thoughts build worker
+After=network-online.target postgresql.service thoughts-api.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=thoughts
+Group=thoughts
+WorkingDirectory=/srv/thoughts/app
+EnvironmentFile=/etc/thoughts/server.env
+Environment=XDG_DATA_HOME=/srv/thoughts/state/xdg-data
+ExecStart=/srv/thoughts/venv/bin/thoughts-worker
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+ReadWritePaths=/srv/thoughts/objects /srv/thoughts/state /srv/thoughts/worktree -/srv/thoughts/libraries
+# Resource limits (see thoughts-api.service). Builds of every Library run in this
+# service: one renderer per Library, each with up to THOUGHTS_BUILD_PARALLEL_JOBS
+# TeX runs.
+# - CPUWeight: builds give way to the API, PostgreSQL and the proxy.
+# - MemoryHigh / MemoryMax: sized for a 15 GB host from a measured peak of about
+#   4.7 GB for one Library's builds (file cache included). Above MemoryHigh the
+#   kernel reclaims and slows the builds; only above MemoryMax is a process
+#   ended, and then a document that needs more fails its own build instead of
+#   exhausting the host. Raise both on a larger host.
+# - OOMPolicy=continue: the build whose process was ended fails, and the workers
+#   of the other Libraries keep running.
+CPUWeight=50
+MemoryHigh=8G
+MemoryMax=10G
+MemorySwapMax=1G
+OOMPolicy=continue
+TasksMax=2048
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+# Validate exact names with dnf on the target Fedora Asahi release before installation.
+cmake
+extra-cmake-modules
+gcc-c++
+git
+kf6-karchive-devel
+kf6-kconfig-devel
+kf6-kcoreaddons-devel
+kf6-kcrash-devel
+kf6-ki18n-devel
+kf6-kio-devel
+kf6-kparts-devel
+kf6-threadweaver-devel
+ninja-build
+poppler-qt6-devel
+qt6-qtbase-devel
+qt6-qtsvg-devel
+zstd

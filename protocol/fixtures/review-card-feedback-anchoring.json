@@ -1,0 +1,186 @@
+{
+  "spec": "protocol/review-card-feedback.md section 4",
+  "offsets": "UTF-16 code units, end exclusive",
+  "cases": [
+    {
+      "name": "same_pdf_draws_stored_regions",
+      "answer_text": "In practice, the KL term keeps the policy close.",
+      "quote": {
+        "exact": "the KL term",
+        "prefix": "In practice, ",
+        "suffix": " keeps"
+      },
+      "same_pdf": true,
+      "expected": {
+        "state": "exact",
+        "start": null,
+        "end": null
+      }
+    },
+    {
+      "name": "shifted_unique_quote",
+      "answer_text": "New first sentence. In practice, the KL term keeps the policy close.",
+      "quote": {
+        "exact": "the KL term keeps the policy close",
+        "prefix": "In practice, ",
+        "suffix": "."
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 33,
+        "end": 67
+      }
+    },
+    {
+      "name": "duplicate_quote_context_picks_second",
+      "answer_text": "The reward is clipped.\nLater, the reward is clipped again.",
+      "quote": {
+        "exact": "reward is clipped",
+        "prefix": "Later, the ",
+        "suffix": " again."
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 34,
+        "end": 51
+      }
+    },
+    {
+      "name": "duplicate_quote_without_context_picks_first",
+      "answer_text": "the loss falls; the loss falls",
+      "quote": {
+        "exact": "the loss falls",
+        "prefix": "",
+        "suffix": ""
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 0,
+        "end": 14
+      }
+    },
+    {
+      "name": "whitespace_linebreak_and_soft_hyphen_differences",
+      "answer_text": "We use a refer­ence\n  model   to regularize.",
+      "quote": {
+        "exact": "reference model to regularize",
+        "prefix": "We use a ",
+        "suffix": "."
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 9,
+        "end": 43
+      }
+    },
+    {
+      "name": "hyphenated_at_line_end_only_in_new_pdf",
+      "answer_text": "keeps the policy close to the refer-\nence model.",
+      "quote": {
+        "exact": "the reference model",
+        "prefix": "close to ",
+        "suffix": "."
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 26,
+        "end": 47
+      }
+    },
+    {
+      "name": "ligature_matches_plain_letters",
+      "answer_text": "We ﬁne-tune the model.",
+      "quote": {
+        "exact": "fine-tune",
+        "prefix": "We ",
+        "suffix": " the"
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 3,
+        "end": 11
+      }
+    },
+    {
+      "name": "no_break_space_matches_space",
+      "answer_text": "about 10 GB of memory",
+      "quote": {
+        "exact": "10 GB",
+        "prefix": "about ",
+        "suffix": " of"
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 6,
+        "end": 11
+      }
+    },
+    {
+      "name": "decomposed_accent_matches_precomposed",
+      "answer_text": "the résumé of the paper",
+      "quote": {
+        "exact": "résumé",
+        "prefix": "the ",
+        "suffix": " of"
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 4,
+        "end": 12
+      }
+    },
+    {
+      "name": "astral_character_counts_two_utf16_units",
+      "answer_text": "𝒫(x) is the prior over x.",
+      "quote": {
+        "exact": "is the prior",
+        "prefix": "(x) ",
+        "suffix": " over"
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "relocated",
+        "start": 6,
+        "end": 18
+      }
+    },
+    {
+      "name": "edited_quote_is_orphaned",
+      "answer_text": "In practice, the entropy bonus keeps the policy close.",
+      "quote": {
+        "exact": "the KL term keeps the policy close",
+        "prefix": "In practice, ",
+        "suffix": "."
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "orphaned",
+        "start": null,
+        "end": null
+      }
+    },
+    {
+      "name": "case_differences_do_not_match",
+      "answer_text": "THE KL TERM keeps it close.",
+      "quote": {
+        "exact": "the KL term",
+        "prefix": "",
+        "suffix": ""
+      },
+      "same_pdf": false,
+      "expected": {
+        "state": "orphaned",
+        "start": null,
+        "end": null
+      }
+    }
+  ]
+}

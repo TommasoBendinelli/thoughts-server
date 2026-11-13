@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "delete_descendants": true,
+  "location_required": false,
+  "preserve_content_on_restore": true,
+  "delete_reason": "user_deleted",
+  "projection_fields": ["locations", "source_file", "source_line", "source_sha256"]
+}

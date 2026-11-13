@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+# Thoughts public HTTPS (installed by deploy/fedora/configure-public-https.sh).
+#
+# The relay VPS forwards raw TCP for ports 80 and 443 over WireGuard and
+# prefixes HTTPS connections with a PROXY protocol v2 header.  Caddy terminates
+# TLS here, obtains and renews the Let's Encrypt certificate itself (HTTP-01
+# and TLS-ALPN-01 both work through the relay), and proxies to the API on
+# loopback.  @PUBLIC_HOST@ is replaced by the installer.
+{
+	# No admin endpoint. By default Caddy serves an unauthenticated admin API on
+	# 127.0.0.1:2019, through which any local process can replace the whole
+	# configuration (and so read every request, bearer tokens included). Nothing
+	# here uses it: configuration changes are applied by restarting Caddy
+	# ("systemctl restart caddy"; "systemctl reload caddy" no longer works).
+	admin off
+
+	# Listen only on the WireGuard address, never on the LAN or tailnet.
+	default_bind 10.77.0.2
+
+	servers {
+		listener_wrappers {
+			# Must precede tls: the PROXY header arrives before the TLS
+			# handshake.  Only the relay may set the client address; other
+			# sources (such as a local verification request) keep their own.
+			proxy_protocol {
+				timeout 5s
+				allow 10.77.0.1/32
+			}
+			tls
+		}
+		# The relay forwards TCP only, so do not offer HTTP/3 over UDP.
+		protocols h1 h2
+		# Bound slow header delivery; request bodies and responses have no
+		# deadline because uploads reach 512 MiB and renders run for minutes.
+		timeouts {
+			read_header 30s
+			idle 5m
+		}
+	}
+}
+
+@PUBLIC_HOST@ {
+	header Strict-Transport-Security "max-age=31536000"
+
+	# No request_body limit: the API enforces THOUGHTS_MAX_OBJECT_BYTES itself.
+	# WebSockets (/v1/notifications) are proxied without extra configuration.
+	reverse_proxy 127.0.0.1:8080 {
+		# Caddy sets X-Forwarded-For/-Proto/-Host and discards client-supplied
+		# values because the client is not a trusted proxy.  The API trusts
+		# forwarded headers only from 127.0.0.1.
+		header_up X-Real-IP {remote_host}
+		# Stream build logs and downloads without buffering.
+		flush_interval -1
+	}
+}

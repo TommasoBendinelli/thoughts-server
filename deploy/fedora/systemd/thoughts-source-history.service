@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+[Unit]
+Description=Checkpoint committed Thoughts sources in Git
+After=postgresql.service thoughts-api.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=thoughts
+Group=thoughts
+WorkingDirectory=/srv/thoughts/app
+EnvironmentFile=/etc/thoughts/server.env
+# -P: never import from the working directory.
+ExecStart=/srv/thoughts/venv/bin/python -P -m thoughts_server.source_history
+UMask=0077
+TimeoutStartSec=15min
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/thoughts/state /srv/thoughts/worktree
+# Resource limits (see thoughts-api.service): a background Git checkpoint.
+CPUWeight=20
+MemoryMax=1G
+MemorySwapMax=256M
+TasksMax=256

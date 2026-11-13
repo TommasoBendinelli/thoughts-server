@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "remote edit with empty upload queue",
+      "decision": "sourceDecision",
+      "facts": {
+        "same_contents": false,
+        "base_known": true,
+        "local_exists": true,
+        "local_matches_base": true,
+        "remote_matches_base": false,
+        "absence_is_deletion": true
+      },
+      "action": "install_remote",
+      "reason": "remote_only_change"
+    },
+    {
+      "name": "both devices edited",
+      "decision": "sourceDecision",
+      "facts": {
+        "same_contents": false,
+        "base_known": true,
+        "local_exists": true,
+        "local_matches_base": false,
+        "remote_matches_base": false,
+        "absence_is_deletion": true
+      },
+      "action": "merge",
+      "reason": "both_sides_changed"
+    },
+    {
+      "name": "local edit after checked server head",
+      "decision": "sourceDecision",
+      "facts": {
+        "same_contents": false,
+        "base_known": true,
+        "local_exists": true,
+        "local_matches_base": false,
+        "remote_matches_base": true,
+        "absence_is_deletion": true
+      },
+      "action": "publish_local",
+      "reason": "local_only_change"
+    },
+    {
+      "name": "missing authoring base",
+      "decision": "sourceDecision",
+      "facts": {
+        "same_contents": false,
+        "base_known": false,
+        "local_exists": true,
+        "local_matches_base": false,
+        "remote_matches_base": false,
+        "absence_is_deletion": true
+      },
+      "action": "needs_attention",
+      "reason": "missing_merge_base"
+    },
+    {
+      "name": "crash after installing before acknowledging",
+      "decision": "sourceDecision",
+      "facts": {
+        "same_contents": true,
+        "base_known": true,
+        "local_exists": true,
+        "local_matches_base": false,
+        "remote_matches_base": false,
+        "absence_is_deletion": true
+      },
+      "action": "acknowledge",
+      "reason": "local_matches_remote"
+    },
+    {
+      "name": "first remote file",
+      "decision": "sourceDecision",
+      "facts": {
+        "same_contents": false,
+        "base_known": false,
+        "local_exists": false,
+        "local_matches_base": false,
+        "remote_matches_base": false,
+        "absence_is_deletion": true
+      },
+      "action": "install_remote",
+      "reason": "new_remote_source"
+    },
+    {
+      "name": "PDF cached but source not installed",
+      "decision": "nextAction",
+      "facts": {
+        "authoring_checked": false,
+        "logical_pending": false,
+        "sources_pending": false,
+        "build_needed": false,
+        "artifacts_current": true,
+        "documents_blocked": false
+      },
+      "action": "reconcile_sources",
+      "reason": "editable_source_checkpoint_behind"
+    },
+    {
+      "name": "one conflict and another document download",
+      "decision": "nextAction",
+      "facts": {
+        "authoring_checked": true,
+        "logical_pending": false,
+        "sources_pending": false,
+        "build_needed": false,
+        "artifacts_current": false,
+        "documents_blocked": true
+      },
+      "action": "activate_artifacts",
+      "reason": "reader_publication_behind"
+    },
+    {
+      "name": "conflict remains after other work",
+      "decision": "nextAction",
+      "facts": {
+        "authoring_checked": true,
+        "logical_pending": false,
+        "sources_pending": false,
+        "build_needed": false,
+        "artifacts_current": true,
+        "documents_blocked": true
+      },
+      "action": "needs_attention",
+      "reason": "some_documents_blocked"
+    },
+    {
+      "name": "all captured work complete",
+      "decision": "nextAction",
+      "facts": {
+        "authoring_checked": true,
+        "logical_pending": false,
+        "sources_pending": false,
+        "build_needed": false,
+        "artifacts_current": true,
+        "documents_blocked": false
+      },
+      "action": "complete",
+      "reason": "captured_state_acknowledged"
+    },
+    {
+      "name": "new source requires affected build",
+      "decision": "nextAction",
+      "facts": {
+        "authoring_checked": true,
+        "logical_pending": false,
+        "sources_pending": false,
+        "build_needed": true,
+        "artifacts_current": true,
+        "documents_blocked": false
+      },
+      "action": "build_affected",
+      "reason": "render_inputs_changed"
+    },
+    {
+      "name": "local operation still pending",
+      "decision": "nextAction",
+      "facts": {
+        "authoring_checked": true,
+        "logical_pending": true,
+        "sources_pending": false,
+        "build_needed": false,
+        "artifacts_current": true,
+        "documents_blocked": false
+      },
+      "action": "upload_operations",
+      "reason": "local_operations_pending"
+    },
+    {
+      "name": "missing facts cannot mean success",
+      "decision": "nextAction",
+      "facts": {},
+      "action": "needs_attention",
+      "reason": "missing_policy_facts"
+    },
+    {
+      "name": "evicted phone working copy",
+      "decision": "sourceDecision",
+      "facts": {
+        "same_contents": false,
+        "base_known": true,
+        "local_exists": false,
+        "local_matches_base": false,
+        "remote_matches_base": false,
+        "absence_is_deletion": false
+      },
+      "action": "install_remote",
+      "reason": "restore_evicted_source"
+    }
+  ]
+}

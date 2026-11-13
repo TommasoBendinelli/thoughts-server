@@ -1,0 +1,774 @@
+{
+  "schema_version": 1,
+  "description": "Shared test vectors for the source-folder naming standard (thoughts-source-folder-names-SPEC.md). Copy this file verbatim into the desktop and Android tests.",
+  "token_characters": "A-Za-z0-9_.-",
+  "valid_folder_regex": "^docs-[A-Za-z0-9][A-Za-z0-9_.-]*$",
+  "rule_n_name_regex": "^docs-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{6,32}$ and not ^docs-import-[0-9a-f]{32}$",
+  "rule_p": [
+    {
+      "map": [
+        {
+          "old": "docs-template",
+          "new": "docs-template-c8ee33"
+        },
+        {
+          "old": "docs-Benchmark",
+          "new": "docs-benchmark-f9d64d"
+        },
+        {
+          "old": "docs-Benchmark-Conf",
+          "new": "docs-benchmark-conf-086044"
+        },
+        {
+          "old": "docs-import-194018d8e2b74c1a9f0e5d6c7b8a9012",
+          "new": "docs-probabilisticbenchmark-194018"
+        },
+        {
+          "old": "docs-reading_list",
+          "new": "docs-reading-list-db8ab0"
+        }
+      ],
+      "cases": [
+        {
+          "input": "docs-template/tex/source/a.tex",
+          "output": "docs-template-c8ee33/tex/source/a.tex",
+          "note": "path in the folder"
+        },
+        {
+          "input": "docs-template",
+          "output": "docs-template-c8ee33",
+          "note": "the folder itself"
+        },
+        {
+          "input": "docs-template/",
+          "output": "docs-template-c8ee33/",
+          "note": "trailing slash"
+        },
+        {
+          "input": "docs-templates/a.tex",
+          "output": "docs-templates/a.tex",
+          "note": "longer token: docs-template inside docs-templates"
+        },
+        {
+          "input": "docs-template.bak/a.tex",
+          "output": "docs-template.bak/a.tex",
+          "note": "'.' continues the token"
+        },
+        {
+          "input": "docs-template_old",
+          "output": "docs-template_old",
+          "note": "'_' continues the token"
+        },
+        {
+          "input": "mydocs-template/a.tex",
+          "output": "mydocs-template/a.tex",
+          "note": "a token character before"
+        },
+        {
+          "input": "docs-Template/a.tex",
+          "output": "docs-Template/a.tex",
+          "note": "case-sensitive"
+        },
+        {
+          "input": "../../docs-template/notes/x.md#source-label:intro",
+          "output": "../../docs-template-c8ee33/notes/x.md#source-label:intro",
+          "note": "Markdown cross-folder link"
+        },
+        {
+          "input": "project:docs-template",
+          "output": "project:docs-template-c8ee33",
+          "note": "comment scope key"
+        },
+        {
+          "input": "/Users/alex/Thoughts/docs/docs-template/tex/source/a.tex",
+          "output": "/Users/alex/Thoughts/docs/docs-template-c8ee33/tex/source/a.tex",
+          "note": "absolute POSIX path"
+        },
+        {
+          "input": "C:\\Users\\alex\\Thoughts\\docs\\docs-template\\tex\\a.tex",
+          "output": "C:\\Users\\alex\\Thoughts\\docs\\docs-template-c8ee33\\tex\\a.tex",
+          "note": "absolute Windows path"
+        },
+        {
+          "input": "\"docs-template\"",
+          "output": "\"docs-template-c8ee33\"",
+          "note": "double quotes"
+        },
+        {
+          "input": "'docs-template'",
+          "output": "'docs-template-c8ee33'",
+          "note": "single quotes"
+        },
+        {
+          "input": "{docs-template/key}",
+          "output": "{docs-template-c8ee33/key}",
+          "note": "braces"
+        },
+        {
+          "input": "\\CrossPdfLink{docs-template/template_intro}{document-start}{Intro}",
+          "output": "\\CrossPdfLink{docs-template-c8ee33/template_intro}{document-start}{Intro}",
+          "note": "LaTeX link argument; the PDF key keeps its old prefix"
+        },
+        {
+          "input": "thoughts-html:docs-template/tex/support/html/plot.html",
+          "output": "thoughts-html:docs-template-c8ee33/tex/support/html/plot.html",
+          "note": "thoughts-html link"
+        },
+        {
+          "input": "docs-template, docs-template;docs-template docs-template",
+          "output": "docs-template-c8ee33, docs-template-c8ee33;docs-template-c8ee33 docs-template-c8ee33",
+          "note": "several occurrences in one pass"
+        },
+        {
+          "input": "docs-Benchmark-Conf/a.tex docs-Benchmark/b.tex",
+          "output": "docs-benchmark-conf-086044/a.tex docs-benchmark-f9d64d/b.tex",
+          "note": "longest old first; a prefix old never matches inside a longer token"
+        },
+        {
+          "input": "docs-import-194018d8e2b74c1a9f0e5d6c7b8a9012/markdown/source/a.md",
+          "output": "docs-probabilisticbenchmark-194018/markdown/source/a.md",
+          "note": "Import-sources folder"
+        },
+        {
+          "input": "docs-reading_list/tex/source/q.tex",
+          "output": "docs-reading-list-db8ab0/tex/source/q.tex",
+          "note": "underscore in the old name"
+        },
+        {
+          "input": "docs-template-c8ee33/tex/source/a.tex",
+          "output": "docs-template-c8ee33/tex/source/a.tex",
+          "note": "a new name is never rewritten again (idempotent)"
+        },
+        {
+          "input": "a%2Fdocs-template",
+          "output": "a%2Fdocs-template",
+          "note": "percent-encoded separator: decode before rewriting"
+        },
+        {
+          "input": "",
+          "output": "",
+          "note": "empty"
+        },
+        {
+          "input": "see docs-template-old/a.tex",
+          "output": "see docs-template-old/a.tex",
+          "note": "'-' continues the token"
+        },
+        {
+          "input": "source:docs-template",
+          "output": "source:docs-template",
+          "note": "a legacy Project id source:docs-<folder> is never rewritten"
+        },
+        {
+          "input": "source:docs-template/a.tex",
+          "output": "source:docs-template/a.tex",
+          "note": "a token right after the literal source: is never rewritten"
+        },
+        {
+          "input": "resource:docs-template",
+          "output": "resource:docs-template",
+          "note": "the rule is the literal 'source:' immediately before the token"
+        },
+        {
+          "input": "{\"project_id\": \"source:docs-template\", \"project\": \"docs-template\"}",
+          "output": "{\"project_id\": \"source:docs-template\", \"project\": \"docs-template-c8ee33\"}",
+          "note": "Project id kept, folder renamed, in one pass"
+        },
+        {
+          "input": "source: docs-template",
+          "output": "source: docs-template-c8ee33",
+          "note": "only an immediately preceding source: protects"
+        }
+      ]
+    },
+    {
+      "map": [
+        {
+          "old": "docs-a",
+          "new": "docs-b"
+        },
+        {
+          "old": "docs-b",
+          "new": "docs-c"
+        }
+      ],
+      "cases": [
+        {
+          "input": "docs-a/x docs-b/y",
+          "output": "docs-b/x docs-c/y",
+          "note": "one pass: output is never re-scanned"
+        }
+      ]
+    }
+  ],
+  "rule_p_values": [
+    {
+      "map": [
+        {
+          "old": "docs-template",
+          "new": "docs-template-c8ee33"
+        },
+        {
+          "old": "docs-Benchmark",
+          "new": "docs-benchmark-f9d64d"
+        },
+        {
+          "old": "docs-Benchmark-Conf",
+          "new": "docs-benchmark-conf-086044"
+        },
+        {
+          "old": "docs-import-194018d8e2b74c1a9f0e5d6c7b8a9012",
+          "new": "docs-probabilisticbenchmark-194018"
+        },
+        {
+          "old": "docs-reading_list",
+          "new": "docs-reading-list-db8ab0"
+        }
+      ],
+      "cases": [
+        {
+          "input": {
+            "source_file": "docs-template/a.tex",
+            "project:docs-template": [
+              "docs-Benchmark/b.md"
+            ],
+            "contents": "free text docs-template/a.tex",
+            "body_contents": "docs-template",
+            "note": "line one\ndocs-template/a.tex",
+            "nested": {
+              "path": "../../docs-template/x.md",
+              "count": 3,
+              "flag": true,
+              "none": null
+            }
+          },
+          "output": {
+            "source_file": "docs-template-c8ee33/a.tex",
+            "project:docs-template-c8ee33": [
+              "docs-benchmark-f9d64d/b.md"
+            ],
+            "contents": "free text docs-template/a.tex",
+            "body_contents": "docs-template",
+            "note": "line one\ndocs-template/a.tex",
+            "nested": {
+              "path": "../../docs-template-c8ee33/x.md",
+              "count": 3,
+              "flag": true,
+              "none": null
+            }
+          },
+          "note": "keys and values; contents/*_contents fields and multi-line strings are free text and stay"
+        }
+      ]
+    }
+  ],
+  "slug": [
+    {
+      "name": "docs-template",
+      "slug": "template"
+    },
+    {
+      "name": "Docs-WorkingDraft-paper",
+      "slug": "workingdraft-paper"
+    },
+    {
+      "name": "DOCS-Foo",
+      "slug": "foo"
+    },
+    {
+      "name": "reading_list",
+      "slug": "reading-list"
+    },
+    {
+      "name": "Release 1.5 report",
+      "slug": "release-1-5-report"
+    },
+    {
+      "name": "  --Hello,  World!--  ",
+      "slug": "hello-world"
+    },
+    {
+      "name": "",
+      "slug": "folder"
+    },
+    {
+      "name": "!!!",
+      "slug": "folder"
+    },
+    {
+      "name": "docs-",
+      "slug": "folder"
+    },
+    {
+      "name": "docs-docs-x",
+      "slug": "docs-x"
+    },
+    {
+      "name": "Café Notes",
+      "slug": "caf-notes"
+    },
+    {
+      "name": "ÄBC",
+      "slug": "bc"
+    },
+    {
+      "name": "Kelvin",
+      "slug": "elvin"
+    },
+    {
+      "name": "İstanbul",
+      "slug": "stanbul"
+    },
+    {
+      "name": "Open benchmarks grant",
+      "slug": "open-benchmarks-grant"
+    },
+    {
+      "name": "abcdefghij abcdefghij abcdefghij abcdefghij",
+      "slug": "abcdefghij-abcdefghij-abcdefghij"
+    },
+    {
+      "name": "abcdefghij abcdefghij abcdefghijkl more",
+      "slug": "abcdefghij-abcdefghij"
+    },
+    {
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "slug": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "x-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "slug": "x"
+    },
+    {
+      "name": "2025 Alex",
+      "slug": "2025-alex"
+    }
+  ],
+  "folder_name": [
+    {
+      "display": null,
+      "old": "docs-template",
+      "folder_id": "c8ee3300-0000-5000-8000-000000000015",
+      "taken": [],
+      "new": "docs-template-c8ee33"
+    },
+    {
+      "display": "",
+      "old": "docs-real_life",
+      "folder_id": "8DA2AA00-0000-5000-8000-000000000011",
+      "taken": [],
+      "new": "docs-real-life-8da2aa",
+      "note": "blank display -> old name; folder_id hex is lowercased"
+    },
+    {
+      "display": "ProbabilisticBenchmark",
+      "old": "docs-import-194018d8e2b74c1a9f0e5d6c7b8a9012",
+      "folder_id": "f0000001-0000-5000-8000-000000000001",
+      "taken": [],
+      "new": "docs-probabilisticbenchmark-194018",
+      "note": "import folders take the import hex, not folder_id"
+    },
+    {
+      "display": "Notes",
+      "old": "docs-notes",
+      "folder_id": "abcdef12-3456-5789-8abc-def012345678",
+      "taken": [
+        "DOCS-NOTES-ABCDEF",
+        "docs-notes"
+      ],
+      "new": "docs-notes-abcdef12",
+      "note": "case-insensitive clash lengthens the hex; the folder's own old name never clashes"
+    },
+    {
+      "display": "Notes",
+      "old": "docs-notes",
+      "folder_id": "abcdef12-3456-5789-8abc-def012345678",
+      "taken": [
+        "docs-notes-abcdef",
+        "docs-notes-abcdef12",
+        "docs-notes-abcdef1234"
+      ],
+      "new": "docs-notes-abcdef123456"
+    }
+  ],
+  "compute_map": [
+    {
+      "note": "the expected map of an example Library (spec table) with synthetic folder ids; unmanaged Mac folders are taken",
+      "folders": [
+        {
+          "folder_id": "a29b6b00-0000-5000-8000-000000000001",
+          "old": "docs-WorkingDraft-paper",
+          "display": null
+        },
+        {
+          "folder_id": "f9d64d00-0000-5000-8000-000000000002",
+          "old": "docs-Benchmark",
+          "display": null
+        },
+        {
+          "folder_id": "08604400-0000-5000-8000-000000000003",
+          "old": "docs-Benchmark-Conf",
+          "display": null
+        },
+        {
+          "folder_id": "ec29be00-0000-5000-8000-000000000004",
+          "old": "docs-Benchmark-followup",
+          "display": null
+        },
+        {
+          "folder_id": "322ded00-0000-5000-8000-000000000005",
+          "old": "docs-applications",
+          "display": null
+        },
+        {
+          "folder_id": "a6fe5d00-0000-5000-8000-000000000006",
+          "old": "docs-concepts",
+          "display": null
+        },
+        {
+          "folder_id": "f7d73500-0000-5000-8000-000000000007",
+          "old": "docs-ideas",
+          "display": null
+        },
+        {
+          "folder_id": "e0000008-0000-5000-8000-000000000008",
+          "old": "docs-import-194018d8e2b74c1a9f0e5d6c7b8a9012",
+          "display": "ProbabilisticBenchmark"
+        },
+        {
+          "folder_id": "e0000009-0000-5000-8000-000000000009",
+          "old": "docs-import-1ed79cc6a0b1c2d3e4f5061728394a5b",
+          "display": "Benchmarks"
+        },
+        {
+          "folder_id": "e0000010-0000-5000-8000-000000000010",
+          "old": "docs-import-324e78cc0f1e2d3c4b5a69788796a5b4",
+          "display": "Open benchmarks grant"
+        },
+        {
+          "folder_id": "e0000011-0000-5000-8000-000000000011",
+          "old": "docs-import-60b11d1c5e4f3a2b1c0d9e8f7a6b5c4d",
+          "display": "Release 1.5 report"
+        },
+        {
+          "folder_id": "e0000012-0000-5000-8000-000000000012",
+          "old": "docs-import-6ea1ba8a00112233445566778899aabb",
+          "display": "Lab meeting notes"
+        },
+        {
+          "folder_id": "e0000013-0000-5000-8000-000000000013",
+          "old": "docs-import-b807f6ad99887766554433221100ffee",
+          "display": "Models"
+        },
+        {
+          "folder_id": "e0000014-0000-5000-8000-000000000014",
+          "old": "docs-import-d15b71540a0b0c0d0e0f101112131415",
+          "display": "2025 Alex"
+        },
+        {
+          "folder_id": "db8ab000-0000-5000-8000-000000000015",
+          "old": "docs-reading_list",
+          "display": null
+        },
+        {
+          "folder_id": "ba01a900-0000-5000-8000-000000000016",
+          "old": "docs-playlists",
+          "display": null
+        },
+        {
+          "folder_id": "f8c47000-0000-5000-8000-000000000017",
+          "old": "docs-problems",
+          "display": null
+        },
+        {
+          "folder_id": "a1358700-0000-5000-8000-000000000018",
+          "old": "docs-process",
+          "display": null
+        },
+        {
+          "folder_id": "8da2aa00-0000-5000-8000-000000000019",
+          "old": "docs-real_life",
+          "display": null
+        },
+        {
+          "folder_id": "719f3300-0000-5000-8000-000000000020",
+          "old": "docs-course-notes",
+          "display": null
+        },
+        {
+          "folder_id": "c8ee3300-0000-5000-8000-000000000021",
+          "old": "docs-template",
+          "display": null
+        },
+        {
+          "folder_id": "4c70e500-0000-5000-8000-000000000022",
+          "old": "docs-data-preprocessing",
+          "display": null
+        },
+        {
+          "folder_id": "8fc00e00-0000-5000-8000-000000000023",
+          "old": "docs-thoughts",
+          "display": null
+        },
+        {
+          "folder_id": "0c961e00-0000-5000-8000-000000000024",
+          "old": "docs-ts-prompt",
+          "display": null
+        }
+      ],
+      "taken": [
+        "docs-models",
+        "docs-reviews",
+        "docs-clips",
+        "docs-parsing",
+        "docs-ProbabilisticBenchmark"
+      ],
+      "expected": [
+        {
+          "folder_id": "08604400-0000-5000-8000-000000000003",
+          "old": "docs-Benchmark-Conf",
+          "new": "docs-benchmark-conf-086044"
+        },
+        {
+          "folder_id": "0c961e00-0000-5000-8000-000000000024",
+          "old": "docs-ts-prompt",
+          "new": "docs-ts-prompt-0c961e"
+        },
+        {
+          "folder_id": "322ded00-0000-5000-8000-000000000005",
+          "old": "docs-applications",
+          "new": "docs-applications-322ded"
+        },
+        {
+          "folder_id": "4c70e500-0000-5000-8000-000000000022",
+          "old": "docs-data-preprocessing",
+          "new": "docs-data-preprocessing-4c70e5"
+        },
+        {
+          "folder_id": "719f3300-0000-5000-8000-000000000020",
+          "old": "docs-course-notes",
+          "new": "docs-course-notes-719f33"
+        },
+        {
+          "folder_id": "8da2aa00-0000-5000-8000-000000000019",
+          "old": "docs-real_life",
+          "new": "docs-real-life-8da2aa"
+        },
+        {
+          "folder_id": "8fc00e00-0000-5000-8000-000000000023",
+          "old": "docs-thoughts",
+          "new": "docs-thoughts-8fc00e"
+        },
+        {
+          "folder_id": "a1358700-0000-5000-8000-000000000018",
+          "old": "docs-process",
+          "new": "docs-process-a13587"
+        },
+        {
+          "folder_id": "a29b6b00-0000-5000-8000-000000000001",
+          "old": "docs-WorkingDraft-paper",
+          "new": "docs-workingdraft-paper-a29b6b"
+        },
+        {
+          "folder_id": "a6fe5d00-0000-5000-8000-000000000006",
+          "old": "docs-concepts",
+          "new": "docs-concepts-a6fe5d"
+        },
+        {
+          "folder_id": "ba01a900-0000-5000-8000-000000000016",
+          "old": "docs-playlists",
+          "new": "docs-playlists-ba01a9"
+        },
+        {
+          "folder_id": "c8ee3300-0000-5000-8000-000000000021",
+          "old": "docs-template",
+          "new": "docs-template-c8ee33"
+        },
+        {
+          "folder_id": "db8ab000-0000-5000-8000-000000000015",
+          "old": "docs-reading_list",
+          "new": "docs-reading-list-db8ab0"
+        },
+        {
+          "folder_id": "e0000008-0000-5000-8000-000000000008",
+          "old": "docs-import-194018d8e2b74c1a9f0e5d6c7b8a9012",
+          "new": "docs-probabilisticbenchmark-194018"
+        },
+        {
+          "folder_id": "e0000009-0000-5000-8000-000000000009",
+          "old": "docs-import-1ed79cc6a0b1c2d3e4f5061728394a5b",
+          "new": "docs-benchmarks-1ed79c"
+        },
+        {
+          "folder_id": "e0000010-0000-5000-8000-000000000010",
+          "old": "docs-import-324e78cc0f1e2d3c4b5a69788796a5b4",
+          "new": "docs-open-benchmarks-grant-324e78"
+        },
+        {
+          "folder_id": "e0000011-0000-5000-8000-000000000011",
+          "old": "docs-import-60b11d1c5e4f3a2b1c0d9e8f7a6b5c4d",
+          "new": "docs-release-1-5-report-60b11d"
+        },
+        {
+          "folder_id": "e0000012-0000-5000-8000-000000000012",
+          "old": "docs-import-6ea1ba8a00112233445566778899aabb",
+          "new": "docs-lab-meeting-notes-6ea1ba"
+        },
+        {
+          "folder_id": "e0000013-0000-5000-8000-000000000013",
+          "old": "docs-import-b807f6ad99887766554433221100ffee",
+          "new": "docs-models-b807f6"
+        },
+        {
+          "folder_id": "e0000014-0000-5000-8000-000000000014",
+          "old": "docs-import-d15b71540a0b0c0d0e0f101112131415",
+          "new": "docs-2025-alex-d15b71"
+        },
+        {
+          "folder_id": "ec29be00-0000-5000-8000-000000000004",
+          "old": "docs-Benchmark-followup",
+          "new": "docs-benchmark-followup-ec29be"
+        },
+        {
+          "folder_id": "f7d73500-0000-5000-8000-000000000007",
+          "old": "docs-ideas",
+          "new": "docs-ideas-f7d735"
+        },
+        {
+          "folder_id": "f8c47000-0000-5000-8000-000000000017",
+          "old": "docs-problems",
+          "new": "docs-problems-f8c470"
+        },
+        {
+          "folder_id": "f9d64d00-0000-5000-8000-000000000002",
+          "old": "docs-Benchmark",
+          "new": "docs-benchmark-f9d64d"
+        }
+      ]
+    },
+    {
+      "note": "two folders with one slug and one hex prefix, processed sorted by folder_id; a folder already following the standard keeps its name",
+      "folders": [
+        {
+          "folder_id": "abcdef34-0000-5000-8000-000000000002",
+          "old": "docs-Notes",
+          "display": null
+        },
+        {
+          "folder_id": "abcdef12-0000-5000-8000-000000000001",
+          "old": "docs-notes_2",
+          "display": "Notes"
+        },
+        {
+          "folder_id": "00000000-0000-5000-8000-000000000003",
+          "old": "docs-already-done-123abc",
+          "display": "Something else"
+        }
+      ],
+      "taken": [
+        "docs-notes-abcdef34"
+      ],
+      "expected": [
+        {
+          "folder_id": "abcdef12-0000-5000-8000-000000000001",
+          "old": "docs-notes_2",
+          "new": "docs-notes-abcdef"
+        },
+        {
+          "folder_id": "abcdef34-0000-5000-8000-000000000002",
+          "old": "docs-Notes",
+          "new": "docs-notes-abcdef3400"
+        }
+      ]
+    }
+  ],
+  "import_folder_name": [
+    {
+      "display": "Knowledge",
+      "operation_id": "0f1e2d3c-4b5a-4968-8776-655443322110",
+      "taken": [],
+      "new": "docs-knowledge-0f1e2d"
+    },
+    {
+      "display": "Knowledge",
+      "operation_id": "0f1e2d3c-4b5a-4968-8776-655443322110",
+      "taken": [
+        "docs-Knowledge-0F1E2D"
+      ],
+      "new": "docs-knowledge-0f1e2d3c"
+    },
+    {
+      "display": "📚 ",
+      "operation_id": "99999999-4b5a-4968-8776-655443322110",
+      "taken": [],
+      "new": "docs-folder-999999"
+    }
+  ],
+  "is_rule_n_name": [
+    {
+      "name": "docs-template-c8ee33",
+      "result": true
+    },
+    {
+      "name": "docs-template",
+      "result": false
+    },
+    {
+      "name": "docs-import-194018d8e2b74c1a9f0e5d6c7b8a9012",
+      "result": false
+    },
+    {
+      "name": "docs-Template-c8ee33",
+      "result": false
+    },
+    {
+      "name": "docs-template-c8ee3",
+      "result": false
+    },
+    {
+      "name": "docs-a-b-0123456789abcdef0123456789abcdef",
+      "result": true
+    },
+    {
+      "name": "docs-open-benchmarks-grant-324e78",
+      "result": true
+    },
+    {
+      "name": "docs--x-abcdef",
+      "result": false
+    }
+  ],
+  "rule_p_manifests": [
+    {
+      "map": [
+        {
+          "old": "docs-template",
+          "new": "docs-template-c8ee33"
+        },
+        {
+          "old": "docs-Benchmark",
+          "new": "docs-benchmark-f9d64d"
+        },
+        {
+          "old": "docs-Benchmark-Conf",
+          "new": "docs-benchmark-conf-086044"
+        },
+        {
+          "old": "docs-import-194018d8e2b74c1a9f0e5d6c7b8a9012",
+          "new": "docs-probabilisticbenchmark-194018"
+        },
+        {
+          "old": "docs-reading_list",
+          "new": "docs-reading-list-db8ab0"
+        }
+      ],
+      "cases": [
+        {
+          "input": "{\n  \"schema_version\": 5,\n  \"kind\": \"thoughts-project\",\n  \"id\": \"source:docs-template\",\n  \"name\": \"template\",\n  \"default_folder_id\": \"11111111-1111-5111-8111-111111111111\",\n  \"source_folders\": [\n    {\n      \"folder_id\": \"11111111-1111-5111-8111-111111111111\",\n      \"path\": \".thoughts/projects/0f3c5e0a5cbd1c0c0d4b4e1a2f7f6b3b8e9d0c1a2b3c4d5e6f708192a3b4c5d6/default\",\n      \"document_id\": \"22222222-2222-5222-8222-222222222222\"\n    },\n    {\n      \"folder_id\": \"c8ee3300-0000-5000-8000-000000000021\",\n      \"path\": \"docs-template\",\n      \"document_id\": \"33333333-3333-4333-8333-333333333333\"\n    }\n  ],\n  \"documents\": [],\n  \"rendering\": {},\n  \"document_names\": {}\n}\n",
+          "output": "{\n  \"schema_version\": 5,\n  \"kind\": \"thoughts-project\",\n  \"id\": \"source:docs-template\",\n  \"name\": \"template\",\n  \"default_folder_id\": \"11111111-1111-5111-8111-111111111111\",\n  \"source_folders\": [\n    {\n      \"folder_id\": \"11111111-1111-5111-8111-111111111111\",\n      \"path\": \".thoughts/projects/0f3c5e0a5cbd1c0c0d4b4e1a2f7f6b3b8e9d0c1a2b3c4d5e6f708192a3b4c5d6/default\",\n      \"document_id\": \"22222222-2222-5222-8222-222222222222\"\n    },\n    {\n      \"folder_id\": \"c8ee3300-0000-5000-8000-000000000021\",\n      \"path\": \"docs-template-c8ee33\",\n      \"document_id\": \"33333333-3333-4333-8333-333333333333\"\n    }\n  ],\n  \"documents\": [],\n  \"rendering\": {},\n  \"document_names\": {}\n}\n",
+          "note": "a legacy Project (id source:docs-template) keeps its id, so its default folder sha256(id) stays; only the folder path is renamed"
+        }
+      ]
+    }
+  ]
+}

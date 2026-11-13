@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "generator": "tests/test_shipout_placements.py::CORPUS through native_renderer.render",
+  "filename": "manual.pdf",
+  "pdf_sha256": "e109fc287402f49a33ebce0e93fe848b83f8da9106ede5ff0e70b9f34b25529d",
+  "artifact_sha256": "756c0b3b15cc78aa1223c0eff3380a3ad0e359df26280d771b80ebd33e5d659c",
+  "source_sha256": "51c77225182668cbd225a4405c638777f0d21426d9585b65411091b414c67beb",
+  "point_pages": {
+    "point-a": 1,
+    "point-b": 1,
+    "float": 3,
+    "last": 2
+  },
+  "text_comments": [
+    "cell",
+    "math"
+  ],
+  "proposal": "p1",
+  "proposal_pages": [
+    1,
+    2,
+    3
+  ],
+  "required_proposal_text": [
+    "Target",
+    "C02",
+    "question.",
+    "answer.",
+    "Float",
+    "1.",
+    "2."
+  ],
+  "coincident_points": [
+    "point-a",
+    "point-b"
+  ]
+}

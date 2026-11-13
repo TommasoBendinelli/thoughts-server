@@ -1,0 +1,1554 @@
+{
+ "schema_version": 1,
+ "spec": "protocol/agent-proposals.md#10",
+ "scenarios": [
+  {
+   "id": "desktop-accept-with-claim",
+   "rules": [
+    "10.4.2",
+    "10.4.3"
+   ],
+   "note": "A local Accept uploaded with its claim retires the proposal as accepted.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "matched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "accepted",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "desktop-reject-with-claim",
+   "rules": [
+    "10.4.3"
+   ],
+   "note": "",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nOld line.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "reject",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "matched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "rejected",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "hand-edit-exact-accept-strict",
+   "rules": [
+    "10.2",
+    "10.3"
+   ],
+   "note": "Exact accept text without a claim is not a decision in strict mode.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false,
+        "looks_like": "accept"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "hand-edit-exact-accept-compatible",
+   "rules": [
+    "10.7.1",
+    "10.9"
+   ],
+   "note": "Compatible mode (rollout step 1) keeps today's exact-text classification.",
+   "strict": false,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "accepted",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "hand-edit-other-text-compatible",
+   "rules": [
+    "10.2",
+    "10.9"
+   ],
+   "note": "What used to be deleted_from_source is removed_outside even in compatible mode.",
+   "strict": false,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nSomething else.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false,
+        "looks_like": "edited"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "claim-with-later-edits-in-same-upload",
+   "rules": [
+    "10.4.3"
+   ],
+   "note": "The decided text is not compared with section 7: the user edited after accepting, before Sync.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line, then edited.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "matched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "accepted",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "claim-but-wrapper-still-present",
+   "rules": [
+    "10.4.3"
+   ],
+   "note": "A client should have dropped this claim (10.4.2); the server ignores it.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\nMore.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "unmatched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "late-claim-after-hand-removal-elsewhere",
+   "rules": [
+    "10.4.3",
+    "10.8"
+   ],
+   "note": "Another device removed the wrapper first; the offline desktop's decision on the same version settles it.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "mac-b",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false,
+        "looks_like": "accept"
+       }
+      }
+     }
+    },
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "initial",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "merged",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "matched_late"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "accepted",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "late-claim-for-other-version",
+   "rules": [
+    "10.4.3",
+    "10.8"
+   ],
+   "note": "desktop-a accepted the first version offline while mac-b revised and then hand-removed it. The upload conflicts (nothing applied, claims kept); the conflict resolution carries the claim, which names a version that is not the one that vanished, so it does not settle the row.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "mac-b",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{Newer line.\n}Outro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    },
+    {
+     "do": "upload",
+     "device": "mac-b",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nSomething else.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false,
+        "looks_like": "edited"
+       }
+      }
+     }
+    },
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "initial",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "conflict",
+      "claims": {},
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false
+       }
+      }
+     }
+    },
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "unmatched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "phone-resolution-then-desktop-claim",
+   "rules": [
+    "10.4.1",
+    "10.4.3",
+    "10.8"
+   ],
+   "note": "Both devices accepted; the second claim is settled.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "resolve",
+     "action": "accept",
+     "ids": [
+      "agent-1"
+     ],
+     "expect": {
+      "proposals": {
+       "agent-1": {
+        "status": "accepted",
+        "deleted": true
+       }
+      }
+     }
+    },
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "initial",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "merged",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "settled"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "accepted",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "agent-withdrawal",
+   "rules": [
+    "10.1",
+    "10.4.2"
+   ],
+   "note": "remove_proposal restores the original text and records a withdrawal, not a rejection.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nOld line.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "withdraw",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "mcp"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "matched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "withdrawn",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "partial-review-last-step",
+   "rules": [
+    "10.4.2",
+    "10.5"
+   ],
+   "note": "Only the phone source editor produces partial claims (VS Code decides whole proposals only).",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "partial",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "phone_editor"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "matched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "decided_in_parts",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "batch-hand-accept",
+   "rules": [
+    "10.3"
+   ],
+   "note": "Each vanished wrapper gets its own row; looks_like also recognises a whole-file batch decision.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Middle.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-2}{Shorten.\n}{Long words here.\n}{Short.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nMiddle.\nShort.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false,
+        "looks_like": "accept"
+       },
+       "agent-2": {
+        "status": "removed_outside",
+        "deleted": false,
+        "looks_like": "accept"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "one-claimed-one-hand-removed",
+   "rules": [
+    "10.4.3"
+   ],
+   "note": "",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Middle.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-2}{Shorten.\n}{Long words here.\n}{Short.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nNew line.\nMiddle.\nShort.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "matched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "accepted",
+        "deleted": true
+       },
+       "agent-2": {
+        "status": "removed_outside",
+        "deleted": false,
+        "looks_like": "accept"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "restore-makes-pending",
+   "rules": [
+    "10.2",
+    "10.6"
+   ],
+   "note": "Any upload that brings the wrapper back makes it pending; Restore sends no proposal operation.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nSomething else.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false
+       }
+      }
+     }
+    },
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "dismiss",
+   "rules": [
+    "10.6"
+   ],
+   "note": "A dismissed proposal that reappears is pending again.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nSomething else.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false
+       }
+      }
+     }
+    },
+    {
+     "do": "dismiss",
+     "id": "agent-1",
+     "base_revision": "current",
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "dismissed",
+        "deleted": true
+       }
+      }
+     }
+    },
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "dismiss-after-restore-conflicts",
+   "rules": [
+    "10.6"
+   ],
+   "note": "Dismiss queued offline on one device after another device restored the proposal.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nSomething else.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false
+       }
+      }
+     }
+    },
+    {
+     "do": "upload",
+     "device": "phone",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    },
+    {
+     "do": "dismiss",
+     "id": "agent-1",
+     "base_revision": "stale",
+     "expect": {
+      "outcome": "conflict",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "dismiss-pending-refused",
+   "rules": [
+    "10.6"
+   ],
+   "note": "Only removed_outside rows can be dismissed.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "dismiss",
+     "id": "agent-1",
+     "base_revision": "current",
+     "expect": {
+      "outcome": "conflict",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "broken-wrapper-is-not-removal",
+   "rules": [
+    "10.2"
+   ],
+   "note": "An unclosed wrapper is an issue (section 6) that still carries the ID; it has not vanished.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "commented-wrapper-is-not-removal",
+   "rules": [
+    "10.2"
+   ],
+   "note": "The ID text is still in the tree; today's conservative rule keeps the row unchanged.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\n% \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}\nOutro.\n"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "atomic-move",
+   "rules": [
+    "10.2"
+   ],
+   "note": "A wrapper moved to another file in one publication is the same pending proposal.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n",
+    "docs-x/tex/source/b.tex": "Other.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": "Intro.\nOutro.\n",
+      "docs-x/tex/source/b.tex": "Other.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}"
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "pending",
+        "deleted": false
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "source-file-deleted",
+   "rules": [
+    "10.2",
+    "10.3"
+   ],
+   "note": "Deleting an included file (not the document's entry source) is an ordinary disappearance.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n",
+    "docs-x/tex/source/b.tex": "\\documentclass{article}\n\\begin{document}\n\\input{a}\n\\end{document}\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": null
+     },
+     "claims": [],
+     "expect": {
+      "outcome": "applied",
+      "proposals": {
+       "agent-1": {
+        "status": "removed_outside",
+        "deleted": false,
+        "looks_like": "file_deleted"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "claim-survives-rename",
+   "rules": [
+    "10.4.2"
+   ],
+   "note": "Accept, then rename the file before Sync: the publication-level claim still matches.",
+   "strict": true,
+   "initial": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "steps": [
+    {
+     "do": "upload",
+     "device": "desktop-a",
+     "base": "current",
+     "sources": {
+      "docs-x/tex/source/a.tex": null,
+      "docs-x/tex/source/b.tex": "Intro.\nNew line.\nOutro.\n"
+     },
+     "claims": [
+      {
+       "decision_id": "00000000-0000-4000-8000-000000000001",
+       "proposal_id": "agent-1",
+       "action": "accept",
+       "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+       "source_file": "docs-x/tex/source/a.tex",
+       "decided_at": "2026-10-11T08:59:12.345Z",
+       "origin": "desktop"
+      }
+     ],
+     "expect": {
+      "outcome": "applied",
+      "claims": {
+       "00000000-0000-4000-8000-000000000001": "matched"
+      },
+      "proposals": {
+       "agent-1": {
+        "status": "accepted",
+        "deleted": true
+       }
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "attach": [
+  {
+   "id": "attach-decided",
+   "claims": [
+    {
+     "decision_id": "00000000-0000-4000-8000-000000000001",
+     "proposal_id": "agent-1",
+     "action": "accept",
+     "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+     "source_file": "docs-x/tex/source/a.tex",
+     "decided_at": "2026-10-11T08:59:12.345Z",
+     "origin": "desktop"
+    }
+   ],
+   "upload": {
+    "docs-x/tex/source/a.tex": "Intro.\nNew line.\nOutro.\n"
+   },
+   "expect": {
+    "sent": [
+     "00000000-0000-4000-8000-000000000001"
+    ],
+    "dropped": []
+   }
+  },
+  {
+   "id": "attach-undone-locally",
+   "claims": [
+    {
+     "decision_id": "00000000-0000-4000-8000-000000000001",
+     "proposal_id": "agent-1",
+     "action": "accept",
+     "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+     "source_file": "docs-x/tex/source/a.tex",
+     "decided_at": "2026-10-11T08:59:12.345Z",
+     "origin": "desktop"
+    }
+   ],
+   "upload": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "expect": {
+    "sent": [],
+    "dropped": [
+     "00000000-0000-4000-8000-000000000001"
+    ]
+   },
+   "note": "Undo brought the wrapper back before Sync; the claim is dropped, not sent."
+  },
+  {
+   "id": "attach-other-path-not-uploaded",
+   "claims": [
+    {
+     "decision_id": "00000000-0000-4000-8000-000000000001",
+     "proposal_id": "agent-1",
+     "action": "accept",
+     "wrapper_sha256": "252bfd0570e87e771344faa0a2033f6d46454250eaf6f11d2ea7e8644f76dd8e",
+     "source_file": "docs-x/tex/source/a.tex",
+     "decided_at": "2026-10-11T08:59:12.345Z",
+     "origin": "desktop"
+    }
+   ],
+   "upload": {
+    "docs-x/tex/source/b.tex": "Other.\n"
+   },
+   "expect": {
+    "sent": [],
+    "dropped": []
+   },
+   "note": "Claims wait for an upload that includes their source (or its deletion/rename)."
+  },
+  {
+   "id": "attach-broken-after-decision",
+   "claims": [
+    {
+     "decision_id": "00000000-0000-4000-8000-000000000001",
+     "proposal_id": "agent-2",
+     "action": "accept",
+     "wrapper_sha256": "4b78f1e26560e57610a8d550f558bb846571e2b1c2f86f0b9e4a1a1a6c70f2c3",
+     "source_file": "docs-x/tex/source/a.tex",
+     "decided_at": "2026-10-11T08:59:12.345Z",
+     "origin": "desktop"
+    }
+   ],
+   "upload": {
+    "docs-x/tex/source/a.tex": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\nShort.\nOutro.\n"
+   },
+   "expect": {
+    "sent": [
+     "00000000-0000-4000-8000-000000000001"
+    ],
+    "dropped": []
+   },
+   "note": "Only the claimed wrapper's presence matters; an unrelated broken wrapper does not hold a claim back."
+  }
+ ],
+ "restore": [
+  {
+   "id": "restore-accepted-text",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nNew line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   }
+  },
+  {
+   "id": "restore-rejected-text",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nOld line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   }
+  },
+  {
+   "id": "restore-text-changed",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nSomething else.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "refused": "text_changed"
+   }
+  },
+  {
+   "id": "restore-nearest-candidate",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "New line.\nA\nB\nC\nD\nNew line.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 5,
+   "expect": {
+    "output": "New line.\nA\nB\nC\nD\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}"
+   },
+   "note": "Candidates on lines 1 and 6; line 6 is nearer to L=5."
+  },
+  {
+   "id": "restore-tie-ambiguous",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "New line.\nA\nNew line.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "refused": "ambiguous"
+   }
+  },
+  {
+   "id": "restore-mixed-tie-ambiguous",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Old line.\nA\nNew line.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "refused": "ambiguous"
+   },
+   "note": "Accepted and original text are equally near: Thoughts cannot tell which one the proposal covered."
+  },
+  {
+   "id": "restore-not-whole-line",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nSee New line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "refused": "text_changed"
+   },
+   "note": "A candidate must start and end at line boundaries."
+  },
+  {
+   "id": "restore-already-present",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "already_present": true
+   }
+  },
+  {
+   "id": "restore-id-in-comment",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\n% agent-1 was here\nNew line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 3,
+   "expect": {
+    "refused": "id_in_source"
+   }
+  },
+  {
+   "id": "restore-source-missing",
+   "path": "docs-x/tex/source/a.tex",
+   "source": null,
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "refused": "source_missing"
+   }
+  },
+  {
+   "id": "restore-overlaps-wrapper",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-9}{Other.\n}{Old.\n}{Changed.\nNew line.\n}\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 3,
+   "expect": {
+    "refused": "text_changed"
+   },
+   "note": "A whole line inside another proposal is not a candidate."
+  },
+  {
+   "id": "restore-legacy-without-metadata",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nNew line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n"
+   },
+   "line": 2,
+   "expect": {
+    "refused": "not_restorable"
+   },
+   "note": "LaTeX metadata is mandatory (section 4.3): a snapshot without it would write an invalid_metadata wrapper."
+  },
+  {
+   "id": "restore-created-only",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nNew line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z"
+   },
+   "line": 2,
+   "expect": {
+    "refused": "not_restorable"
+   },
+   "note": "Both created and conversation_id are required."
+  },
+  {
+   "id": "restore-tex-explanation-not-reescaped",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nNew line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "50\\% done.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{50\\% done.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "note": "The LaTeX explanation is stored as written (section 3.4) and written back unchanged."
+  },
+  {
+   "id": "restore-insertion-accepted",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nAdded.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Add.\n",
+    "before": "",
+    "after": "Added.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Add.\n}{}{Added.\n}Outro.\n"
+   }
+  },
+  {
+   "id": "restore-insertion-rejected",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Add.\n",
+    "before": "",
+    "after": "Added.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Add.\n}{}{Added.\n}Outro.\n"
+   },
+   "note": "The empty original's only candidate is the start of line L."
+  },
+  {
+   "id": "restore-deletion-prefers-text",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nGone.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Drop.\n",
+    "before": "Gone.\n",
+    "after": "",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Drop.\n}{Gone.\n}{}Outro.\n"
+   },
+   "note": "A non-empty candidate wins over an empty text's candidate."
+  },
+  {
+   "id": "restore-markdown",
+   "path": "docs-x/notes/a.md",
+   "source": "Intro.\nNew line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/notes/a.md",
+    "comment": "Clarify.",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n<!-- thoughts:agent-proposal:v2:start\nid: agent-1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| Clarify.\noriginal_text:\n| Old line.\n| \n-->\nNew line.\n<!-- thoughts:agent-proposal:v2:end agent-1 -->\nOutro.\n"
+   }
+  },
+  {
+   "id": "restore-markdown-escapes",
+   "path": "docs-x/notes/a.md",
+   "source": "Intro.\nOld --> &amp;\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/notes/a.md",
+    "comment": "a --> b & c",
+    "before": "Old --> &amp;\n",
+    "after": "New.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n<!-- thoughts:agent-proposal:v2:start\nid: agent-1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| a --&gt; b &amp; c\noriginal_text:\n| Old --&gt; &amp;amp;\n| \n-->\nNew.\n<!-- thoughts:agent-proposal:v2:end agent-1 -->\nOutro.\n"
+   }
+  },
+  {
+   "id": "restore-conversation-url",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "Intro.\nNew line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "conversation_url": "https://claude.ai/code/session_01ExampleSessionAbcdEfgh"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=https://claude.ai/code/session_01ExampleSessionAbcdEfgh]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n"
+   },
+   "note": "The stored conversation link is written back (section 3.6)."
+  },
+  {
+   "id": "restore-markdown-conversation-url",
+   "path": "docs-x/notes/a.md",
+   "source": "Intro.\nNew line.\nOutro.\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/notes/a.md",
+    "comment": "Clarify.",
+    "before": "Old line.\n",
+    "after": "New line.\n",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "conversation_url": "https://claude.ai/code/session_01ExampleSessionAbcdEfgh"
+   },
+   "line": 2,
+   "expect": {
+    "output": "Intro.\n<!-- thoughts:agent-proposal:v2:start\nid: agent-1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: https://claude.ai/code/session_01ExampleSessionAbcdEfgh\nexplanation:\n| Clarify.\noriginal_text:\n| Old line.\n| \n-->\nNew line.\n<!-- thoughts:agent-proposal:v2:end agent-1 -->\nOutro.\n"
+   }
+  }
+ ]
+}

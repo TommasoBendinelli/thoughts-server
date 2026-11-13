@@ -1,0 +1,50 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+# Show a source file's server revision and its recent source operations,
+# read-only. With --content, also print the server's current copy.
+#
+# Installed as /usr/local/sbin/thoughts-source-status and allowed for the
+# deploy account without a password (see deploy/fedora/README.md), so agents
+# can inspect sync state without database access.
+#
+# Usage: sudo thoughts-source-status PATH [--content]
+set -euo pipefail
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "Run with sudo" >&2
+  exit 1
+fi
+if [[ $# -lt 1 || $# -gt 2 || ( $# -eq 2 && ${2} != --content ) ]]; then
+  echo "Usage: sudo thoughts-source-status PATH [--content]" >&2
+  exit 2
+fi
+path=$1
+if [[ ! ${path} =~ ^[A-Za-z0-9][A-Za-z0-9._\ /+-]*$ || ${path} == *..* ]]; then
+  echo "Not a source path: ${path}" >&2
+  exit 2
+fi
+
+cd /
+runuser -u thoughts -- psql -d thoughts -X -q -P pager=off -v ON_ERROR_STOP=1 -v path="${path}" <<'SQL'
+BEGIN READ ONLY;
+SELECT revision, sha256, deleted, updated_at FROM source_files WHERE path = :'path';
+SELECT server_sequence, outcome, device_id, client_timestamp,
+       payload->>'base_sha256' AS base, payload->>'incoming_sha256' AS incoming,
+       payload->>'result_sha256' AS result
+FROM operations
+WHERE entity_type = 'source' AND entity_id = :'path'
+ORDER BY server_sequence DESC LIMIT 8;
+ROLLBACK;
+SQL
+
+if [[ $# -eq 2 ]]; then
+  root=/srv/thoughts/worktree
+  file=$(realpath -e -- "${root}/${path}")
+  if [[ ${file} != "${root}/"* ]]; then
+    echo "Outside the worktree: ${path}" >&2
+    exit 2
+  fi
+  echo "--- ${file} ($(sha256sum -- "${file}" | cut -c1-64))"
+  cat -- "${file}"
+fi

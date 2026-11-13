@@ -1,0 +1,712 @@
+{
+  "spec": "protocol/review-card-retire.md section 4",
+  "how_to_use": "For each case, fold the events of card_id and compare with expected. The result must not depend on the order of events: test the given order and its reverse.",
+  "states": [
+    "active",
+    "retired",
+    "deleted"
+  ],
+  "cases": [
+    {
+      "name": "no_events_active",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "answers_only_active",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "rating": "good",
+          "reviewed_at": "2026-10-27T09:00:00Z",
+          "origin_id": "fixture",
+          "review_tags": [
+            "Correct"
+          ]
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "retire",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "rating": "good",
+          "reviewed_at": "2026-10-27T09:00:00Z",
+          "origin_id": "fixture",
+          "review_tags": [
+            "Correct"
+          ]
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000002"
+      }
+    },
+    {
+      "name": "retire_then_restore",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "restore_arrives_first",
+      "note": "arrival order differs from action order; the later action wins",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "restore_then_retire_again",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T12:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T12:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000003"
+      }
+    },
+    {
+      "name": "retire_undone",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "undo_retire",
+          "reviewed_at": "2026-10-27T10:01:00Z",
+          "origin_id": "fixture",
+          "undone_event_id": "a0000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "undo_arrives_before_retire",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "undo_retire",
+          "reviewed_at": "2026-10-27T10:01:00Z",
+          "origin_id": "fixture",
+          "undone_event_id": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "undo_of_restore_keeps_retired",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "undo_retire",
+          "reviewed_at": "2026-10-27T11:01:00Z",
+          "origin_id": "fixture",
+          "undone_event_id": "a0000000-0000-4000-8000-000000000002"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "name": "two_devices_retire_one_undone",
+      "note": "the undo cancels only the event it names",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T12:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "undo_retire",
+          "reviewed_at": "2026-10-27T12:01:00Z",
+          "origin_id": "fixture",
+          "undone_event_id": "a0000000-0000-4000-8000-000000000002"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "name": "same_time_tie_by_event_id",
+      "note": "equal reviewed_at: ordered by event_id, the larger one is later",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000005",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000004",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000005"
+      }
+    },
+    {
+      "name": "same_time_tie_restore_wins",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000004",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000005",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "restore_without_retire",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "retire_twice_keeps_latest_time",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T11:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000002"
+      }
+    },
+    {
+      "name": "answer_after_retire_stays_retired",
+      "note": "an older client may answer a retired card; that does not restore it",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "rating": "good",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture",
+          "review_tags": [
+            "Correct"
+          ]
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "name": "delete_after_retire",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "rating": "delete",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture",
+          "review_tags": [
+            "Correct"
+          ]
+        }
+      ],
+      "expected": {
+        "state": "deleted",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "delete_before_retire",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "rating": "delete",
+          "reviewed_at": "2026-10-27T09:00:00Z",
+          "origin_id": "fixture",
+          "review_tags": [
+            "Correct"
+          ]
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "deleted",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "inferred_source_deletion_is_not_a_tombstone",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "rating": "delete",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "thoughts-source-review",
+          "review_tags": [
+            "Correct"
+          ],
+          "reason": "source_markers_removed"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "name": "undo_naming_other_card_ignored",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "22222222-2222-4222-8222-222222222222",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "22222222-2222-4222-8222-222222222222",
+          "queue_action": "undo_retire",
+          "reviewed_at": "2026-10-27T10:01:00Z",
+          "origin_id": "fixture",
+          "undone_event_id": "a0000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "name": "undo_naming_an_answer_ignored",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "rating": "good",
+          "reviewed_at": "2026-10-27T09:00:00Z",
+          "origin_id": "fixture",
+          "review_tags": [
+            "Correct"
+          ]
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "undo_retire",
+          "reviewed_at": "2026-10-27T10:01:00Z",
+          "origin_id": "fixture",
+          "undone_event_id": "a0000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000002"
+      }
+    },
+    {
+      "name": "other_cards_events_ignored",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "22222222-2222-4222-8222-222222222222",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "skip_and_undo_skip_do_not_change_retirement",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "skip",
+          "skip_id": "b0000000-0000-4000-8000-000000000001",
+          "skip_until": "2026-10-27T20:00:00Z",
+          "reviewed_at": "2026-10-27T11:00:00Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "name": "unparseable_time_ignored",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "not a time",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "active",
+        "retired_at": null,
+        "retire_event_id": null
+      }
+    },
+    {
+      "name": "fractional_seconds_order",
+      "note": "",
+      "card_id": "11111111-1111-4111-8111-111111111111",
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000009",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "retire",
+          "reviewed_at": "2026-10-27T10:00:00.500Z",
+          "origin_id": "fixture"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "queue_action": "restore",
+          "reviewed_at": "2026-10-27T10:00:00.250Z",
+          "origin_id": "fixture"
+        }
+      ],
+      "expected": {
+        "state": "retired",
+        "retired_at": "2026-10-27T10:00:00.500Z",
+        "retire_event_id": "a0000000-0000-4000-8000-000000000009"
+      }
+    }
+  ]
+}

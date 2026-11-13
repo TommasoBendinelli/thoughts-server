@@ -1,0 +1,37 @@
+% SPDX-License-Identifier: GPL-2.0-or-later
+% SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+% Generated-build layer of the Thoughts HTML edition (html_edition/latex.py); never
+% copied into authored sources. Replaces the PDF build's review instrumentation:
+% every marker becomes an empty anchor element at its exact position, with the
+% canonical key of the build's staging scanner (card:<card>:<segment>, comment:<id>).
+% Links keep the authored manual-* hrefs; the bundle step rewrites them.
+\makeatletter
+\def\thoughtsHtmlTm#1#2{\ifdefined\HCode\HCode{<span class="tm" data-tm="#1" data-key="#2"></span>}\fi}
+\long\def\thoughtsLayerMaskStart#1#2{\thoughtsHtmlTm{start}{card:\detokenize{#1}:\detokenize{#2}}}
+\long\def\thoughtsLayerMaskEnd#1#2{\thoughtsHtmlTm{end}{card:\detokenize{#1}:\detokenize{#2}}}
+\long\def\thoughtsLayerAnchor#1#2{\thoughtsHtmlTm{point}{comment:\detokenize{#1}}}
+\long\def\thoughtsLayerHighlight#1#2#3{\thoughtsHtmlTm{start}{comment:\detokenize{#1}}{#3}\thoughtsHtmlTm{end}{comment:\detokenize{#1}}}
+\NewExpandableDocumentCommand{\thoughtsLayerProposal}{O{} +m +m +m +m}{#5}
+\global\let\agentProposedEdit\thoughtsLayerProposal
+% \SourceLabel targets: tex4ht's id filter rewrites ':' in ids, so the label travels in a
+% data attribute and the bundle step turns it into id="source-label:<label>".
+\def\thoughtsLayerSourceLabel#1{\ifdefined\HCode\HCode{<span class="tl-label" data-source-label="\detokenize{#1}"></span>}\fi}
+% Source lines: an empty span where each paragraph, heading and table starts and ends.
+\def\thoughtsHtmlLine#1{\ifdefined\HCode\HCode{<span class="sl" data-sl="#1:\CurrentFilePath/\CurrentFile:\the\inputlineno"></span>}\fi}
+\AtBeginDocument{%
+  \global\let\CommentHighlight\thoughtsLayerHighlight
+  \global\let\CommentStrikethrough\thoughtsLayerHighlight
+  \global\let\CommentAnchor\thoughtsLayerAnchor
+  \global\let\ReviewAnchor\thoughtsLayerAnchor
+  \global\let\ReviewCardMaskStart\thoughtsLayerMaskStart
+  \global\let\ReviewCardMaskEnd\thoughtsLayerMaskEnd
+  \global\let\agentProposedEdit\thoughtsLayerProposal
+  \global\let\SourceLabel\thoughtsLayerSourceLabel
+  \AddToHook{para/begin}{\thoughtsHtmlLine{b}}%
+  \AddToHook{para/end}{\thoughtsHtmlLine{e}}%
+  \AddToHook{cmd/@startsection/before}{\thoughtsHtmlLine{h}}%
+  \AddToHook{env/tabular/before}{\thoughtsHtmlLine{t}}%
+  \AddToHook{env/tabularx/before}{\thoughtsHtmlLine{t}}%
+  \AddToHook{env/longtable/before}{\thoughtsHtmlLine{t}}%
+}
+\makeatother

@@ -1,0 +1,66 @@
+{
+ "kind": "thoughts_html_edition",
+ "schema": 1,
+ "document_id": "thoughts-manual",
+ "source_format": "latex",
+ "source_snapshot_sha256": null,
+ "pdf_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+ "converter": {
+  "name": "make4ht",
+  "version": "v0.4e",
+  "math": "mathml+mathjax-4.1.3",
+  "edition": "1"
+ },
+ "entry": "index.html",
+ "files": {
+  "assets/0110cbb736127cc7.png": "0110cbb736127cc7e3b52a6ea0f8b63b86cb4f9fd2e5e1daced2e72ecef7ec15",
+  "assets/0ba2ff86554d60db.png": "0ba2ff86554d60db8aa63f5d25d956901859c29109d04a00ed5924bf0cbe61ba",
+  "index.html": "3a97680ffd32e907682b8279def1aee40876720ff0f43705e36472c0080e3012",
+  "style.css": "3346b456109909196d178d78bbbeb79704bd0fcc89797879d84a7f6cd3015eee"
+ },
+ "anchors": [
+  "card:bbb4a295-91f5-452d-a015-e9494adc1719:0",
+  "card:d644a493-def0-4033-a3a2-2ab6b2717f0f:0",
+  "card:63a9a932-acad-53d2-b732-8beba6a9f235:0",
+  "card:c8ed3614-30ba-51c3-9cb7-9dc8986ab2e7:0",
+  "card:c25bf47a-9f2d-4870-b31a-a4c243982c9a:0"
+ ],
+ "items": {
+  "cards": {
+   "bbb4a295-91f5-452d-a015-e9494adc1719": {
+    "anchors": [
+     "card:bbb4a295-91f5-452d-a015-e9494adc1719:0"
+    ],
+    "question_anchors": []
+   },
+   "d644a493-def0-4033-a3a2-2ab6b2717f0f": {
+    "anchors": [
+     "card:d644a493-def0-4033-a3a2-2ab6b2717f0f:0"
+    ],
+    "question_anchors": []
+   },
+   "63a9a932-acad-53d2-b732-8beba6a9f235": {
+    "anchors": [
+     "card:63a9a932-acad-53d2-b732-8beba6a9f235:0"
+    ],
+    "question_anchors": []
+   },
+   "c8ed3614-30ba-51c3-9cb7-9dc8986ab2e7": {
+    "anchors": [
+     "card:c8ed3614-30ba-51c3-9cb7-9dc8986ab2e7:0"
+    ],
+    "question_anchors": []
+   },
+   "c25bf47a-9f2d-4870-b31a-a4c243982c9a": {
+    "anchors": [
+     "card:c25bf47a-9f2d-4870-b31a-a4c243982c9a:0"
+    ],
+    "question_anchors": []
+   }
+  },
+  "comments": {}
+ },
+ "source_map": "lines",
+ "source_files": {},
+ "warnings": []
+}

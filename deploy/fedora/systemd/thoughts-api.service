@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+[Unit]
+Description=Thoughts repository API
+After=network-online.target postgresql.service tailscaled.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=thoughts
+Group=thoughts
+WorkingDirectory=/srv/thoughts/app
+EnvironmentFile=/etc/thoughts/server.env
+ExecStartPre=/srv/thoughts/venv/bin/alembic -c /srv/thoughts/app/alembic.ini upgrade head
+# Every further Library (THOUGHTS_LIBRARIES_FILE) gets the same schema before the API serves it.
+ExecStartPre=/srv/thoughts/venv/bin/thoughts-admin upgrade-library-databases --alembic-config /srv/thoughts/app/alembic.ini
+ExecStart=/srv/thoughts/venv/bin/thoughts-server
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+ReadWritePaths=/srv/thoughts/objects /srv/thoughts/state /srv/thoughts/worktree -/srv/thoughts/libraries
+# Resource limits, sized for a 10-core host with 15 GB of memory that several
+# people share. They are ceilings, not reservations: no single service can take
+# the machine from PostgreSQL, the proxy and the other services.
+# - CPUWeight: when the processors are contended, the API gets four times the
+#   share of a build (the default weight is 100), so requests stay responsive.
+# - MemoryMax: the API with the proposal previews and folder imports it
+#   compiles. Above it the kernel ends the largest process of this service,
+#   which is the runaway compile. MemorySwapMax keeps the limit from only moving
+#   the excess into swap.
+# - OOMPolicy=continue: ending that one process must not stop the API.
+# - TasksMax: request threads and compiler processes; it stops a fork bomb.
+CPUWeight=200
+MemoryMax=4G
+MemorySwapMax=1G
+OOMPolicy=continue
+TasksMax=1024
+
+[Install]
+WantedBy=multi-user.target

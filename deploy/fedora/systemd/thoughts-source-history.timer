@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+[Unit]
+Description=Keep Thoughts source Git history current
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=30s
+AccuracySec=5s
+Unit=thoughts-source-history.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,8 @@
+{
+  "name": "thoughts-markdown-math",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@mathjax/src": "4.1.3"
+  }
+}

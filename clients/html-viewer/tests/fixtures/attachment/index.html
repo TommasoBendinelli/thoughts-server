@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent paywall (test attachment)</title>
+<style>
+  body { font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: #fbfaf7; color: #222; }
+  header, main, footer { max-width: 720px; margin: 0 auto; padding: 8px 16px; }
+  nav a { margin-right: 1em; color: #1a5fb4; }
+  nav a.active { font-weight: bold; }
+  .panel { border: 1px solid #ddd; border-radius: 6px; padding: 8px 14px; margin: 12px 0; background: #fff; }
+  label { display: block; margin: 8px 0; }
+</style>
+</head>
+<body>
+<!-- A stand-in for an HTML attachment such as docs-ideas/tex/support/html/explainer.html: its text
+     is rendered by its own script after load, tabs are routed by location.hash, and the simulator
+     re-renders its results on every slider input. -->
+<header>
+  <h1>Agent paywall</h1>
+  <nav id="tabs">
+    <a href="#experiment" data-tab="experiment">The experiment</a>
+    <a href="#simulator" data-tab="simulator">Simulator</a>
+    <a href="#activity" data-tab="activity">My activity</a>
+  </nav>
+</header>
+<main id="app"><p>Loading the experiment.</p></main>
+<footer>
+  <p><a id="js-link" href="#">Count this click</a> and <a id="activity-link" href="#activity">see my activity</a>.</p>
+</footer>
+<script>
+(function () {
+  "use strict";
+  const page = { renders: 0, results: 0, agents: 40, clicks: 0, navClicks: 0, hashchanges: 0, contextmenus: 0,
+    contextmenuPrevented: null, drags: 0, refreshes: 0 };
+  window.__page = page;
+
+  const TABS = {
+    experiment: function () {
+      return "<section class=\"panel\"><h2>The experiment</h2>" +
+        "<p>Every crawler that wants to read this site has to pay first: agents pay a toll of one cent per page before the text is sent.</p>" +
+        "<p>People read for free, because the toll only applies to automated readers that announce themselves.</p>" +
+        "<p><button id=\"refresh\" type=\"button\">Shuffle the examples</button> Shown " + (page.refreshes + 1) + " times.</p></section>";
+    },
+    simulator: function () {
+      return "<section class=\"panel\"><h2>Simulator</h2>" +
+        "<label>Agents per hour <input id=\"agents\" type=\"range\" min=\"10\" max=\"100\" step=\"10\" value=\"" + page.agents + "\"></label>" +
+        "<div id=\"results\"></div></section>";
+    },
+    activity: function () {
+      return "<section class=\"panel\"><h2>My activity</h2>" +
+        "<p>You opened this page from a link in your notes and have not paid any toll yet.</p></section>";
+    }
+  };
+
+  function currentTab() {
+    const t = location.hash.slice(1);
+    return Object.prototype.hasOwnProperty.call(TABS, t) ? t : "experiment";
+  }
+
+  function renderResults() {
+    page.results++;
+    const n = page.agents;
+    // Rebuilt on every input: the same sentence comes back as new nodes.
+    let rows = "";
+    for (let i = 0; i < n / 10; ++i) { rows += "<li>Hour " + (i + 1) + ": " + n + " tolls</li>"; }
+    // One row per 10 agents: the sentence after the list moves down as the slider goes up.
+    document.getElementById("results").innerHTML =
+      "<p>With " + n + " agents per hour the site earns " + (n * 0.01).toFixed(2) + " dollars per hour.</p>" +
+      "<ul>" + rows + "</ul>" +
+      "<p>Every simulated agent pays the toll before it may read a single page of the site.</p>";
+  }
+
+  function render() {
+    page.renders++;
+    const tab = currentTab();
+    document.getElementById("app").innerHTML = TABS[tab]();
+    document.querySelectorAll("#tabs a").forEach(function (a) { a.classList.toggle("active", a.getAttribute("data-tab") === tab); });
+    if (tab === "simulator") {
+      renderResults();
+      document.getElementById("agents").addEventListener("input", function (e) {
+        page.agents = Number(e.target.value);
+        renderResults();
+      });
+    }
+    if (tab === "experiment") {
+      document.getElementById("refresh").addEventListener("click", function () { page.refreshes++; render(); });
+    }
+  }
+  window.__render = render;
+
+  window.addEventListener("hashchange", function () { page.hashchanges++; render(); });
+  // Bubbling listeners: they only run when nothing above stops the event.
+  document.getElementById("js-link").addEventListener("click", function (e) { e.preventDefault(); page.clicks++; });
+  document.getElementById("tabs").addEventListener("click", function () { page.navClicks++; });
+  document.addEventListener("contextmenu", function (e) { page.contextmenus++; page.contextmenuPrevented = e.defaultPrevented; });
+  document.addEventListener("dragstart", function () { page.drags++; });
+  // The text appears after load, like a page that fetches or computes its content.
+  window.addEventListener("load", function () { setTimeout(render, 400); });
+})();
+</script>
+</body>
+</html>

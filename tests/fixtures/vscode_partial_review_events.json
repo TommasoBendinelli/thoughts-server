@@ -1,0 +1,273 @@
+[
+  {
+    "schema_version": 1,
+    "event_id": "3c41d7f6-1b0d-43a1-ac7c-b1dbb6448b83",
+    "proposal_id": "host-test",
+    "kind": "source_saved",
+    "observed_at": "2026-09-12T11:01:13.290Z",
+    "updated_at": "2026-09-12T11:01:13.290Z",
+    "authority": "local_source",
+    "source_operation_id": "",
+    "source_before_sha256": "c68f673827ec8246166f3b3b544e69ad8c5ee305610fc199211b5c6a127b31db",
+    "source_after_sha256": "c68f673827ec8246166f3b3b544e69ad8c5ee305610fc199211b5c6a127b31db",
+    "snapshot": {
+      "proposal_id": "host-test",
+      "source_file": "review-fixture.tex",
+      "comment": "Reason.",
+      "before": "",
+      "after": "Next."
+    },
+    "revision": 1,
+    "deleted": false,
+    "producer": "vscode-proposal-review",
+    "related_event_id": "8d7c0021-1c23-42a3-b6b1-c7adf3aad888",
+    "source_state": "saved_file"
+  },
+  {
+    "schema_version": 1,
+    "event_id": "60fcab8d-faa1-4e49-927e-88683d8ef20c",
+    "proposal_id": "host-test",
+    "kind": "partially_accepted",
+    "observed_at": "2026-09-12T11:01:13.089Z",
+    "updated_at": "2026-09-12T11:01:13.089Z",
+    "authority": "local_source",
+    "source_operation_id": "",
+    "source_before_sha256": "a80874ce6f7f0cb455d7d520c65ba268075c5140194b8c1c62abc559e9e33281",
+    "source_after_sha256": "2aec9f3f218304e001db7a0bd07de406949600d7bf6b9ac8d690dcc04818fd05",
+    "snapshot": {
+      "proposal_id": "host-test",
+      "source_file": "review-fixture.tex",
+      "comment": "Reason.",
+      "before": "",
+      "after": "Takes 3 minutes.\nNext."
+    },
+    "revision": 1,
+    "deleted": false,
+    "producer": "vscode-proposal-review",
+    "source_state": "editor_buffer",
+    "decision_at": "2026-09-12T11:01:13.089Z",
+    "review": {
+      "action": "accept",
+      "partial": true,
+      "offset_unit": "utf16",
+      "selected_new_range": [
+        0,
+        17
+      ],
+      "selected_old_range": [
+        0,
+        0
+      ],
+      "selected_proposed_text": "Takes 3 minutes.\n",
+      "selected_existing_text": "",
+      "accepted_text": "Takes 3 minutes.\n",
+      "rejected_text": null,
+      "retained_text": "Takes 3 minutes.\n",
+      "remaining": {
+        "before": "",
+        "after": "Next."
+      },
+      "baseline_event_id": "508586d8-3e05-4a29-aa66-151dd056265d",
+      "baseline_evidence": "first_observed",
+      "original_agent_output_verified": false,
+      "original_snapshot": {
+        "proposal_id": "host-test",
+        "source_file": "review-fixture.tex",
+        "comment": "Reason.",
+        "before": "",
+        "after": "Takes 4 minutes.\nNext."
+      },
+      "original_corresponding_text": "Takes 4 minutes.\n",
+      "correspondence": "unique_unchanged_suffix",
+      "differs_from_first_recorded": true,
+      "original_remaining_after": {
+        "before": "",
+        "after": "Next."
+      },
+      "context": {
+        "document_before_review": "Header.\n\\agentProposedEdit{host-test}{Reason.}{}{Takes 3 minutes.\nNext.}\nFooter.\n",
+        "generation_instruction": null,
+        "conversation_ids": [],
+        "proposal_rationale": "Reason."
+      },
+      "preference": {
+        "chosen": "Takes 3 minutes.\n",
+        "rejected": "Takes 4 minutes.\n",
+        "scope": "selected_passage",
+        "status": "candidate_requires_context_and_preference_validation",
+        "distinct_alternatives": true
+      }
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": "8d7c0021-1c23-42a3-b6b1-c7adf3aad888",
+    "proposal_id": "host-test",
+    "kind": "rejected",
+    "observed_at": "2026-09-12T11:01:13.173Z",
+    "updated_at": "2026-09-12T11:01:13.173Z",
+    "authority": "local_source",
+    "source_operation_id": "",
+    "source_before_sha256": "2aec9f3f218304e001db7a0bd07de406949600d7bf6b9ac8d690dcc04818fd05",
+    "source_after_sha256": "c68f673827ec8246166f3b3b544e69ad8c5ee305610fc199211b5c6a127b31db",
+    "snapshot": {
+      "proposal_id": "host-test",
+      "source_file": "review-fixture.tex",
+      "comment": "Reason.",
+      "before": "",
+      "after": "Next."
+    },
+    "revision": 1,
+    "deleted": false,
+    "producer": "vscode-proposal-review",
+    "source_state": "editor_buffer",
+    "decision_at": "2026-09-12T11:01:13.173Z",
+    "review": {
+      "action": "reject",
+      "partial": false,
+      "offset_unit": "utf16",
+      "selected_new_range": [
+        0,
+        5
+      ],
+      "selected_old_range": [
+        0,
+        0
+      ],
+      "selected_proposed_text": "Next.",
+      "selected_existing_text": "",
+      "accepted_text": null,
+      "rejected_text": "Next.",
+      "retained_text": "",
+      "remaining": null,
+      "baseline_event_id": "508586d8-3e05-4a29-aa66-151dd056265d",
+      "baseline_evidence": "first_observed",
+      "original_agent_output_verified": false,
+      "original_snapshot": {
+        "proposal_id": "host-test",
+        "source_file": "review-fixture.tex",
+        "comment": "Reason.",
+        "before": "",
+        "after": "Takes 4 minutes.\nNext."
+      },
+      "original_corresponding_text": "Next.",
+      "correspondence": "exact",
+      "differs_from_first_recorded": false,
+      "original_remaining_after": null,
+      "context": {
+        "document_before_review": "Header.\nTakes 3 minutes.\n\\agentProposedEdit{host-test}{Reason.}{}{Next.}\nFooter.\n",
+        "generation_instruction": null,
+        "conversation_ids": [],
+        "proposal_rationale": "Reason."
+      },
+      "preference": {
+        "chosen": "",
+        "rejected": "Next.",
+        "scope": "selected_passage",
+        "status": "candidate_requires_context_and_preference_validation",
+        "distinct_alternatives": true
+      }
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": "39d96449-caf3-4ef2-8977-2652dc99f7e9",
+    "proposal_id": "host-test",
+    "kind": "review_redone",
+    "observed_at": "2026-09-12T11:01:13.125Z",
+    "updated_at": "2026-09-12T11:01:13.125Z",
+    "authority": "local_source",
+    "source_operation_id": "",
+    "source_before_sha256": "2aec9f3f218304e001db7a0bd07de406949600d7bf6b9ac8d690dcc04818fd05",
+    "source_after_sha256": "2aec9f3f218304e001db7a0bd07de406949600d7bf6b9ac8d690dcc04818fd05",
+    "snapshot": {
+      "proposal_id": "host-test",
+      "source_file": "review-fixture.tex",
+      "comment": "Reason.",
+      "before": "",
+      "after": "Takes 3 minutes.\nNext."
+    },
+    "revision": 1,
+    "deleted": false,
+    "producer": "vscode-proposal-review",
+    "related_event_id": "60fcab8d-faa1-4e49-927e-88683d8ef20c",
+    "source_state": "editor_buffer"
+  },
+  {
+    "schema_version": 1,
+    "event_id": "9dc07c99-3dee-467a-b02e-996a1a8e985f",
+    "proposal_id": "host-test",
+    "kind": "source_saved",
+    "observed_at": "2026-09-12T11:01:13.166Z",
+    "updated_at": "2026-09-12T11:01:13.166Z",
+    "authority": "local_source",
+    "source_operation_id": "",
+    "source_before_sha256": "2aec9f3f218304e001db7a0bd07de406949600d7bf6b9ac8d690dcc04818fd05",
+    "source_after_sha256": "2aec9f3f218304e001db7a0bd07de406949600d7bf6b9ac8d690dcc04818fd05",
+    "snapshot": {
+      "proposal_id": "host-test",
+      "source_file": "review-fixture.tex",
+      "comment": "Reason.",
+      "before": "",
+      "after": "Takes 3 minutes.\nNext."
+    },
+    "revision": 1,
+    "deleted": false,
+    "producer": "vscode-proposal-review",
+    "related_event_id": "60fcab8d-faa1-4e49-927e-88683d8ef20c",
+    "source_state": "saved_file"
+  },
+  {
+    "schema_version": 1,
+    "event_id": "bc27ac31-a83a-4359-90c1-012fcafadbf0",
+    "proposal_id": "host-test",
+    "kind": "review_undone",
+    "observed_at": "2026-09-12T11:01:13.117Z",
+    "updated_at": "2026-09-12T11:01:13.117Z",
+    "authority": "local_source",
+    "source_operation_id": "",
+    "source_before_sha256": "a80874ce6f7f0cb455d7d520c65ba268075c5140194b8c1c62abc559e9e33281",
+    "source_after_sha256": "a80874ce6f7f0cb455d7d520c65ba268075c5140194b8c1c62abc559e9e33281",
+    "snapshot": {
+      "proposal_id": "host-test",
+      "source_file": "review-fixture.tex",
+      "comment": "Reason.",
+      "before": "",
+      "after": "Takes 3 minutes.\nNext."
+    },
+    "revision": 1,
+    "deleted": false,
+    "producer": "vscode-proposal-review",
+    "related_event_id": "60fcab8d-faa1-4e49-927e-88683d8ef20c",
+    "source_state": "editor_buffer"
+  },
+  {
+    "schema_version": 1,
+    "event_id": "508586d8-3e05-4a29-aa66-151dd056265d",
+    "proposal_id": "host-test",
+    "kind": "first_seen",
+    "observed_at": "2026-09-12T11:01:13.066Z",
+    "updated_at": "2026-09-12T11:01:13.066Z",
+    "authority": "local_source",
+    "source_operation_id": "",
+    "source_before_sha256": "0e5d2d6b9af5cd496e00d7f59519546a8ecce9b210dadc5888d6828422651f34",
+    "source_after_sha256": "0e5d2d6b9af5cd496e00d7f59519546a8ecce9b210dadc5888d6828422651f34",
+    "snapshot": {
+      "proposal_id": "host-test",
+      "source_file": "review-fixture.tex",
+      "comment": "Reason.",
+      "before": "",
+      "after": "Takes 4 minutes.\nNext."
+    },
+    "revision": 1,
+    "deleted": false,
+    "producer": "vscode-proposal-review",
+    "baseline_evidence": "first_observed",
+    "original_agent_output_verified": false,
+    "context": {
+      "document_at_observation": "Header.\n\\agentProposedEdit{host-test}{Reason.}{}{Takes 4 minutes.\nNext.}\nFooter.\n",
+      "generation_instruction": null,
+      "conversation_ids": []
+    }
+  }
+]

@@ -1,0 +1,6379 @@
+{
+ "schema_version": 2,
+ "spec": "protocol/agent-proposals.md",
+ "cases": [
+  {
+   "id": "tex-basic-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.3",
+    "4.4",
+    "7"
+   ],
+   "note": "Shape written by the desktop writer (explanation gets a trailing newline).",
+   "source": "Intro.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}Outro.\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "agent-1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Clarify.\n",
+      "original": "Old line.\n",
+      "replacement": "New line.\n",
+      "span": {
+       "start": 7,
+       "end": 156
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "agent-1"
+     ],
+     "expect": {
+      "output": "Intro.\nNew line.\nOutro.\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "agent-1"
+     ],
+     "expect": {
+      "output": "Intro.\nOld line.\nOutro.\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-no-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.3",
+    "6"
+   ],
+   "note": "Metadata is mandatory in LaTeX: a wrapper without it (the pre-2026-10-10 legacy form) is broken.",
+   "source": "x \\agentProposedEdit{p1}{Why}{a}{b} y\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 2,
+       "end": 35
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-legacy-conversation-sentence-no-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "The retired 'Prepared in Codex conversation' fallback no longer supplies metadata.",
+   "source": "\\agentProposedEdit{p1}{Why.\nPrepared in Codex conversation 0B6C5B7E-1D2A-4C3B-9F8E-112233445566.\n}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 104
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-legacy-conversation-sentence-created-only",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "The sentence does not complete created-only metadata either.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z]{p1}{Why.\nPrepared in Codex conversation 0b6c5b7e-1d2a-4c3b-9f8e-112233445566.\n}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 138
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-conversation-sentence-is-text",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.3"
+   ],
+   "note": "The sentence is ordinary explanation text; the conversation ID comes from the metadata only.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{Why.\nPrepared in Codex conversation 11111111-2222-3333-4444-555555555555.\n}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Why.\nPrepared in Codex conversation 11111111-2222-3333-4444-555555555555.\n",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 191
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-created-without-fraction",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "4.3"
+   ],
+   "note": "Fractional seconds are optional for readers.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 114
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-nested-braces",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1"
+   ],
+   "note": "",
+   "source": "A \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{\\textbf{old {x}}}{\\emph{new}{y}} B\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "\\textbf{old {x}}",
+      "replacement": "\\emph{new}{y}",
+      "span": {
+       "start": 2,
+       "end": 147
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "A \\emph{new}{y} B\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "A \\textbf{old {x}} B\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-escaped-braces",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a \\} b \\{ c}{d}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a \\} b \\{ c",
+      "replacement": "d",
+      "span": {
+       "start": 0,
+       "end": 128
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a \\} b \\{ c\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-double-backslash-before-brace",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{line one\\\\}{line two\\\\}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "line one\\\\",
+      "replacement": "line two\\\\",
+      "span": {
+       "start": 0,
+       "end": 136
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "line two\\\\\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-percent-comment-with-brace",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a % stray } brace\nb}{c}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a % stray } brace\nb",
+      "replacement": "c",
+      "span": {
+       "start": 0,
+       "end": 136
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a % stray } brace\nb\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-escaped-percent",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{50\\% done}{60\\% done}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "50\\% done",
+      "replacement": "60\\% done",
+      "span": {
+       "start": 0,
+       "end": 134
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "60\\% done\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-double-backslash-percent",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1"
+   ],
+   "note": "\\\\ (line break) followed by % starts a comment, so the } after it is commented out.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a\\\\% c }\nb}{d}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\\\\% c }\nb",
+      "replacement": "d",
+      "span": {
+       "start": 0,
+       "end": 127
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "d\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a\\\\% c }\nb\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-triple-backslash-percent",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1"
+   ],
+   "note": "\\\\\\% is a line break followed by a literal percent sign, so the wrapper's } closes the argument.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a\\\\\\% c}{d}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\\\\\\% c",
+      "replacement": "d",
+      "span": {
+       "start": 0,
+       "end": 124
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-whitespace-and-comments-between-args",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.3"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566] {p1} % note {\n {w}\n{a}   {b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 134
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "b\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-space-before-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.3"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit [created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 119
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-comment-before-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.3"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit%\n[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 120
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-real-multiline-arguments",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.3"
+   ],
+   "note": "Shape found in a real Library source (arguments on their own lines).",
+   "source": "Para.\n\\agentProposedEdit[created=2026-09-12T12:13:35.781Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]\n  {real-shape}\n  {Why.\n}\n  {Old.\n}\n  {New.\n}\nNext.\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "real-shape",
+      "created_at": "2026-09-12T12:13:35.781Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Why.\n",
+      "original": "Old.\n",
+      "replacement": "New.\n",
+      "span": {
+       "start": 6,
+       "end": 156
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "real-shape"
+     ],
+     "expect": {
+      "output": "Para.\nNew.\n\nNext.\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-padded",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.3"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[ created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566 ]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 120
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-id-whitespace",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.1"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{ p1 }{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 120
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "b\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-id-128-chars",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.1"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 244
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-id-punctuation",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.1"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{a1.b_c:d-e}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "a1.b_c:d-e",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 126
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-insertion",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "7"
+   ],
+   "note": "",
+   "source": "A\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{ins}{Add.\n}{}{New.\n}B\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "ins",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Add.\n",
+      "original": "",
+      "replacement": "New.\n",
+      "span": {
+       "start": 2,
+       "end": 128
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "ins"
+     ],
+     "expect": {
+      "output": "A\nNew.\nB\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "ins"
+     ],
+     "expect": {
+      "output": "A\nB\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-deletion",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "7"
+   ],
+   "note": "",
+   "source": "A\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{del}{Drop.\n}{Gone.\n}{}B\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "del",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Drop.\n",
+      "original": "Gone.\n",
+      "replacement": "",
+      "span": {
+       "start": 2,
+       "end": 130
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "del"
+     ],
+     "expect": {
+      "output": "A\nB\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "del"
+     ],
+     "expect": {
+      "output": "A\nGone.\nB\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-two-proposals",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "7"
+   ],
+   "note": "",
+   "source": "S \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{one}{w}{a1}{b1} M \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{two}{w}{a2}{b2} E\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "one",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a1",
+      "replacement": "b1",
+      "span": {
+       "start": 2,
+       "end": 123
+      }
+     },
+     {
+      "id": "two",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a2",
+      "replacement": "b2",
+      "span": {
+       "start": 126,
+       "end": 247
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "one"
+     ],
+     "expect": {
+      "output": "S b1 M \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{two}{w}{a2}{b2} E\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "two"
+     ],
+     "expect": {
+      "output": "S \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{one}{w}{a1}{b1} M a2 E\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "one",
+      "two"
+     ],
+     "expect": {
+      "output": "S b1 M b2 E\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "two",
+      "one"
+     ],
+     "expect": {
+      "output": "S b1 M b2 E\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "one",
+      "missing"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-non-bmp",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.5"
+   ],
+   "note": "Spans are code points: each emoji counts 1 (2 UTF-16 units, 4 UTF-8 bytes).",
+   "source": "A😀 \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{e1}{w 😀}{smile 😀 old}{smile 😀 new} B😀 \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{e2}{w}{x}{y}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "e1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w 😀",
+      "original": "smile 😀 old",
+      "replacement": "smile 😀 new",
+      "span": {
+       "start": 3,
+       "end": 143
+      }
+     },
+     {
+      "id": "e2",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "x",
+      "replacement": "y",
+      "span": {
+       "start": 147,
+       "end": 265
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "e2"
+     ],
+     "expect": {
+      "output": "A😀 \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{e1}{w 😀}{smile 😀 old}{smile 😀 new} B😀 y\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "e1"
+     ],
+     "expect": {
+      "output": "A😀 smile 😀 new B😀 \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{e2}{w}{x}{y}\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-crlf",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.5"
+   ],
+   "note": "",
+   "source": "Intro.\r\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{Why.\r\n}{Old.\r\n}{New.\r\n}Outro.\r\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Why.\r\n",
+      "original": "Old.\r\n",
+      "replacement": "New.\r\n",
+      "span": {
+       "start": 8,
+       "end": 141
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "Intro.\r\nNew.\r\nOutro.\r\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "Intro.\r\nOld.\r\nOutro.\r\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-crlf-comment",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.5",
+    "4.1"
+   ],
+   "note": "A comment ends at LF; the CR before it belongs to the comment.",
+   "source": "% intro }\r\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a % stray }\r\nb\r\n}{c\r\n}",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a % stray }\r\nb\r\n",
+      "replacement": "c\r\n",
+      "span": {
+       "start": 11,
+       "end": 146
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-explanation-escaped",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.4"
+   ],
+   "note": "Readers return the explanation exactly as written; they do not undo the writer's TeX escaping.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{50\\% of \\{x\\} costs \\$5 \\& \\#1 a\\_b \\textbackslash{} \\textasciicircum{} \\textasciitilde{}\n}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "50\\% of \\{x\\} costs \\$5 \\& \\#1 a\\_b \\textbackslash{} \\textasciicircum{} \\textasciitilde{}\n",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 207
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-empty-explanation",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.4",
+    "6"
+   ],
+   "note": "The explanation must not be blank in either format (no real proposal has a blank one).",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 117
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-blank-explanation",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.4",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{ \n }{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 120
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-commented-out",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "A wrapper inside a % comment is not live.",
+   "source": "Text.\n% \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-c}{w}{a}{b}\nMore.\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "agent-c"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-escaped-command",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1",
+    "4.2"
+   ],
+   "note": "\\\\ is a line break; the following 'agentProposedEdit' is text.",
+   "source": "a\\\\agentProposedEdit{p1}{w}{x}{y}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-triple-backslash-command",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.1",
+    "4.2"
+   ],
+   "note": "Three backslashes: a line break followed by a live command.",
+   "source": "a\\\\\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{x}{y}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "x",
+      "replacement": "y",
+      "span": {
+       "start": 3,
+       "end": 121
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a\\\\y\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-letter-suffix",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "A longer control word ([A-Za-z@]) is a different macro.",
+   "source": "\\agentProposedEditX{p1}{w}{a}{b}\n\\agentProposedEdit@impl{p2}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-mention",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "A command not followed by [ or { is a mention, not a wrapper and not an issue.",
+   "source": "The \\agentProposedEdit macro wraps an edit; see \\agentProposedEdit.\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-command-definition-braced",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "",
+   "source": "\\providecommand{\\agentProposedEdit}[5][]{#5}\nBody.\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-command-definition-unbraced",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "An unbraced definition looks like a metadata argument; definition commands are recognised first.",
+   "source": "\\providecommand\\agentProposedEdit[5][]{#5}\nBody.\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-let-definition",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "",
+   "source": "\\let\\agentProposedEdit\\relax\nBody.\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-definition-forms",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "",
+   "source": "\\def\\agentProposedEdit#1#2#3#4{#4}\n\\gdef\\agentProposedEdit[#1]#2#3#4#5{#5}\n\\renewcommand*\\agentProposedEdit[5][]{#5}\n\\renewcommand*{\\agentProposedEdit}[5][]{#5}\n\\NewDocumentCommand\\agentProposedEdit{o m m m m}{#5}\n\\DeclareRobustCommand{\\agentProposedEdit}[5][]{#5}\n\\let\\agentProposedEdit=\\relax\n\\global\\let\\agentProposedEdit\\relax\n\\providecommand {\\agentProposedEdit} [5][]{#5}\n\\renewcommand *\\agentProposedEdit[5][]{#5}\nBody.\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-real-preamble-definitions",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "Real shape: docs-reading_list/tex/source/main.tex lines 48-104 (\\let at line 99).",
+   "source": "\\providecommand{\\agentProposedEditAfter}[1]{%\n  #1}\n\\providecommand{\\agentProposedEdit}[5][]{%\n  \\agentProposedEditAfter{#5}}\n\\ifdefined\\pdfstringdefDisableCommands\n  \\pdfstringdefDisableCommands{%\n    \\def\\CommentAnchor#1#2{}%\n    \\def\\agentEditProposalAnchor#1#2{}%\n    \\def\\agentProposalRegion#1#2#3{#3}%\n    \\let\\agentProposedEdit\\agentProposalPdfText%\n  }\n\\fi\n\\begin{document}\n\\agentProposedEdit[created=2026-09-12T12:13:35.915Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{after-preamble}{Why.\n}{Old.\n}{New.\n}\\end{document}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "after-preamble",
+      "created_at": "2026-09-12T12:13:35.915Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Why.\n",
+      "original": "Old.\n",
+      "replacement": "New.\n",
+      "span": {
+       "start": 382,
+       "end": 524
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-in-verbatim",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "",
+   "source": "\\begin{verbatim}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n\\end{verbatim}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-in-doccode",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "DocCode is the user's fancyvrb Verbatim environment (1037 uses in real sources).",
+   "source": "\\begin{DocCode}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n\\end{DocCode}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-in-lstlisting",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "",
+   "source": "\\begin{lstlisting}[language=TeX]\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n\\end{lstlisting}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-in-minted",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "",
+   "source": "\\begin{minted}{latex}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n\\end{minted}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-in-Verbatim-star",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "Inside verbatim, % and braces are literal.",
+   "source": "\\begin{Verbatim*}\n% } {\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n\\end{Verbatim*}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-in-verb",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "",
+   "source": "Write \\verb|\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}| or \\verb*+\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}+ or \\lstinline!\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}!.\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-after-verbatim",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "",
+   "source": "\\begin{verbatim}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n\\end{verbatim}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{live}{w}{c}{d}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "live",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "c",
+      "replacement": "d",
+      "span": {
+       "start": 151,
+       "end": 271
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "live"
+     ],
+     "expect": {
+      "output": "\\begin{verbatim}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n\\end{verbatim}\nd\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-verbatim-unclosed",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "An unclosed verbatim environment hides the rest of the file; that is not an issue.",
+   "source": "\\begin{verbatim}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-commented-verbatim-begin",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "A \\begin{verbatim} inside a comment does not start verbatim.",
+   "source": "% \\begin{verbatim}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{live}{w}{c}{d}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "live",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "c",
+      "replacement": "d",
+      "span": {
+       "start": 19,
+       "end": 139
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-in-linkeddoccode",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2"
+   ],
+   "note": "LinkedDocCode sets commandchars=\\\\\\{\\}, so commands inside it run; it is not on the verbatim list.",
+   "source": "\\begin{LinkedDocCode}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{live}{w}{c}{d}\n\\end{LinkedDocCode}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "live",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "c",
+      "replacement": "d",
+      "span": {
+       "start": 22,
+       "end": 142
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-fancyvrb-commandchars-form",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.6"
+   ],
+   "note": "Real shape from a Library source. Not part of the format.",
+   "source": "\\begingroup\n\\fvset{commandchars=|\\(\\)}\n\\begin{DocCode}\nTMPDIR=... \\\n|agentProposedEdit(bench-matlab-memory-log-env)(Use the MATLAB namespace.)(BENCH_MEMORY_LOG_PATH=... \\)(BENCH_MATLAB_MEMORY_LOG_PATH=... \\)\n|agentProposedEdit(agent-remove-8eb72aae-668b-50fa-97ac-f2e6f1afd4c8)(removed option)(  [--reuse-family-baselines] \\)()\n\\end{DocCode}\n\\endgroup\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "bench-matlab-memory-log-env"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-example-in-markdown-file",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "2"
+   ],
+   "note": "A TeX wrapper in a .md file is text.",
+   "source": "# Notes\n\n```tex\n\\agentProposedEdit{p1}{w}{a}{b}\n```\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-real-readme-tex-wrapper",
+   "path": "library/README.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "2"
+   ],
+   "note": "Real shape: ~/Thoughts/docs/library/README.md line 10.",
+   "source": "# Docs Library\n\n| Folder | Git remote | Combined PDF outputs |\n| --- | --- | --- |\n\\agentProposedEdit\n  {library-readme-fedora-builder-20260824}\n  {Replace the obsolete Mac renderer entry.}\n  {| `docs/` | none | none |}\n  {| `docs/` | none | Fedora builds the Library. |}\n| `docs-agent/` | x | y |\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "library-readme-fedora-builder-20260824"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-mentions-markdown-marker",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "2"
+   ],
+   "note": "",
+   "source": "% Markdown form uses <!-- thoughts:agent-proposal:v2:start ... -->\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 67,
+       "end": 185
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "% Markdown form uses <!-- thoughts:agent-proposal:v2:start ... -->\nb\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-contains-markdown-block",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "2"
+   ],
+   "note": "A complete Markdown block in a .tex file is text.",
+   "source": "Text.\n<!-- thoughts:agent-proposal:v2:start\nid: md-in-tex\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n-->\nb\n<!-- thoughts:agent-proposal:v2:end md-in-tex -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "md-in-tex"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-uppercase-extension",
+   "path": "Doc.TEX",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "2"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 118
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-other-extension",
+   "path": "doc.txt",
+   "format": null,
+   "status": "normative",
+   "rules": [
+    "2"
+   ],
+   "note": "Files that are neither LaTeX nor Markdown have no proposals.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-invalid-id-uppercase",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.1",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{Agent-X}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_id",
+      "span": {
+       "start": 0,
+       "end": 123
+      },
+      "id": "Agent-X"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "Agent-X"
+     ],
+     "expect": {
+      "refused": "invalid_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-invalid-id-empty",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.1",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_id",
+      "span": {
+       "start": 0,
+       "end": 116
+      },
+      "id": ""
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-invalid-id-too-long",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.1",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_id",
+      "span": {
+       "start": 0,
+       "end": 245
+      },
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-invalid-id-leading-dash",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.1",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{-p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_id",
+      "span": {
+       "start": 0,
+       "end": 119
+      },
+      "id": "-p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-duplicate-id",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{dup}{w}{a}{b}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{dup}{w}{c}{d}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{other}{w}{e}{f}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "other",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "e",
+      "replacement": "f",
+      "span": {
+       "start": 240,
+       "end": 361
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "duplicate_id",
+      "span": {
+       "start": 0,
+       "end": 119
+      },
+      "id": "dup"
+     },
+     {
+      "code": "duplicate_id",
+      "span": {
+       "start": 120,
+       "end": 239
+      },
+      "id": "dup"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "dup"
+     ],
+     "expect": {
+      "refused": "duplicate_id"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "dup"
+     ],
+     "expect": {
+      "refused": "duplicate_id"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "other"
+     ],
+     "expect": {
+      "output": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{dup}{w}{a}{b}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{dup}{w}{c}{d}\nf\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "other",
+      "dup"
+     ],
+     "expect": {
+      "refused": "duplicate_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-duplicate-with-broken",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "Every wrapper whose id was read counts for duplicates, including broken ones.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{c}{d}\n\\agentProposedEdit{p1}{w}{a} x\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "duplicate_id",
+      "span": {
+       "start": 0,
+       "end": 118
+      },
+      "id": "p1"
+     },
+     {
+      "code": "missing_argument",
+      "span": {
+       "start": 119,
+       "end": 147
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "duplicate_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-nested",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "Only the outermost wrapper is reported; wrappers inside it are not proposals.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{outer}{w}{a \\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{inner}{w2}{b}{c} d}{e}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "nested_proposal",
+      "span": {
+       "start": 0,
+       "end": 246
+      },
+      "id": "outer"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "outer"
+     ],
+     "expect": {
+      "refused": "nested_proposal"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "inner"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-agent-remove-inside-argument",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.5",
+    "6"
+   ],
+   "note": "\\agentRemove inside an argument is ordinary text, so the wrapper is not nested.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{outer}{w}{a \\agentRemove{agent-remove-x}{why}{b}}{e}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "outer",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a \\agentRemove{agent-remove-x}{why}{b}",
+      "replacement": "e",
+      "span": {
+       "start": 0,
+       "end": 158
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "reject",
+     "ids": [
+      "outer"
+     ],
+     "expect": {
+      "output": "a \\agentRemove{agent-remove-x}{why}{b}\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-commented-nested",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2",
+    "6"
+   ],
+   "note": "A commented-out wrapper inside an argument is not a nested proposal.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a\n% old note \\agentProposedEdit{x}{y}{z}{w}\nb}{c}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\n% old note \\agentProposedEdit{x}{y}{z}{w}\nb",
+      "replacement": "c",
+      "span": {
+       "start": 0,
+       "end": 162
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a\n% old note \\agentProposedEdit{x}{y}{z}{w}\nb\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-mention-inside-argument",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.2",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{Use \\agentProposedEdit to wrap.}{c}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "Use \\agentProposedEdit to wrap.",
+      "replacement": "c",
+      "span": {
+       "start": 0,
+       "end": 148
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-missing-argument",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "Span: the command through its last complete argument.",
+   "source": "\\agentProposedEdit{p1}{w}{a} trailing\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "missing_argument",
+      "span": {
+       "start": 0,
+       "end": 28
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "missing_argument"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-only",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566] text\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "missing_argument",
+      "span": {
+       "start": 0,
+       "end": 105
+      }
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-one-bad-one-good",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "A broken wrapper does not block decisions on its valid neighbours.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{good}{w}{a}{b}\n\\agentProposedEdit{bad}{w}{a} trailing\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "good",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 120
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "missing_argument",
+      "span": {
+       "start": 121,
+       "end": 150
+      },
+      "id": "bad"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "good"
+     ],
+     "expect": {
+      "output": "b\n\\agentProposedEdit{bad}{w}{a} trailing\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "good"
+     ],
+     "expect": {
+      "output": "a\n\\agentProposedEdit{bad}{w}{a} trailing\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "bad"
+     ],
+     "expect": {
+      "refused": "missing_argument"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "good",
+      "bad"
+     ],
+     "expect": {
+      "refused": "missing_argument"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-missing-argument-then-wrapper",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit{p1}{w}{a}\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p2}{w}{c}{d}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p2",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "c",
+      "replacement": "d",
+      "span": {
+       "start": 28,
+       "end": 146
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "missing_argument",
+      "span": {
+       "start": 0,
+       "end": 28
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p2"
+     ],
+     "expect": {
+      "output": "\\agentProposedEdit{p1}{w}{a}d\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-unclosed-brace",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit{p1}{w}{a}{b\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "unclosed_group",
+      "span": {
+       "start": 0,
+       "end": 31
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "unclosed_group"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-unclosed-swallows-rest",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "Everything after an unclosed argument belongs to it: one issue, later wrappers are not seen.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{before}{w}{a}{b}\n\\agentProposedEdit{broken}{w}{c}{d\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{after}{w}{e}{f}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "before",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 122
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "unclosed_group",
+      "span": {
+       "start": 123,
+       "end": 280
+      },
+      "id": "broken"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "before"
+     ],
+     "expect": {
+      "output": "b\n\\agentProposedEdit{broken}{w}{c}{d\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{after}{w}{e}{f}\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "after"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "broken"
+     ],
+     "expect": {
+      "refused": "unclosed_group"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-unclosed-comment-at-eof",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit{p1}{w % comment at end of file without newline",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "unclosed_group",
+      "span": {
+       "start": 0,
+       "end": 65
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-metadata-unclosed-bracket",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{before}{w}{a}{b}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "before",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 122
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "unclosed_group",
+      "span": {
+       "start": 123,
+       "end": 188
+      }
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-bad-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=yesterday]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 50
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-no-timezone",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 60
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-date-only",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 51
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-space-after-comma",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "No whitespace inside the metadata list.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z, conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 119
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-invalid-date",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Must be a real calendar date.",
+   "source": "\\agentProposedEdit[created=2026-02-30T00:00:00Z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 61
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-not-leap-year",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-02-29T00:00:00Z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 61
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-hour-24",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T24:00:00Z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 61
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-lowercase-z",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "T and Z are uppercase.",
+   "source": "\\agentProposedEdit[created=2026-10-10t12:00:00z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 61
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-ten-fraction-digits",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "At most nine fractional digits.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.1234567890Z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 72
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-empty-fraction",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.Z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 62
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-conversation-only",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Both created and conversation_id are required.",
+   "source": "\\agentProposedEdit[conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 85
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-created-only",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Both created and conversation_id are required (writers always emit both).",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 65
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-created-only-no-fraction",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Real legacy shape: created only.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00Z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 61
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-conversation-first",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Fixed order: created first.",
+   "source": "\\agentProposedEdit[conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,created=2026-10-10T12:00:00.000Z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 118
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-empty-conversation",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 82
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-uppercase-conversation-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Structured conversation IDs are lowercase.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0B6C5B7E-1D2A-4C3B-9F8E-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 118
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-bad-uuid",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=not-a-uuid]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 92
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-unknown-key",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,author=me]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 75
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-empty",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "An empty link is not an absent one.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 136
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-http",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Only the two link forms of 3.6.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=http://claude.ai/code/session_01ab]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 170
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-other-host",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=https://example.com/code/session_01ab]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 173
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-session-punctuation",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Session IDs are letters and digits.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=https://claude.ai/code/session_01-ab]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 172
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-session-too-long",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "At most 64 characters after session_.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=https://claude.ai/code/session_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 232
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-codex-uppercase",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Codex thread UUIDs are lowercase.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=codex://threads/0B6C5B7E-1D2A-4C3B-9F8E-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 188
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-before-conversation",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "Fixed order: the link comes last.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_url=https://claude.ai/code/session_01ExampleSessionAbcdEfgh,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 191
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-without-conversation",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "The link does not replace the conversation ID.",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_url=https://claude.ai/code/session_01ExampleSessionAbcdEfgh]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 138
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-space-after-comma",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566, conversation_url=https://claude.ai/code/session_01ExampleSessionAbcdEfgh]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 192
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-unknown-key-after",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=https://claude.ai/code/session_01ExampleSessionAbcdEfgh,author=me]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 201
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-empty",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 33
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-offset",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "4.3",
+    "6"
+   ],
+   "note": "UTC with Z only; all 99 timestamps in real sources use Z.",
+   "source": "\\agentProposedEdit[created=2026-10-10T17:30:00+05:30]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 66
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-metadata-six-fraction-digits",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.123456Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.123456Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 121
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-metadata-nine-fraction-digits",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.123456789Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.123456789Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 124
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-metadata-leap-day",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.2"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2028-02-29T23:59:59.999Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2028-02-29T23:59:59.999Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 118
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-url-claude",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.6",
+    "4.3",
+    "4.4"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=https://claude.ai/code/session_01ExampleSessionAbcdEfgh]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "conversation_url": "https://claude.ai/code/session_01ExampleSessionAbcdEfgh",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 191
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "b\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-codex",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.6",
+    "4.3",
+    "4.4"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=codex://threads/01900000-0000-7000-8000-000000000001]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "conversation_url": "codex://threads/01900000-0000-7000-8000-000000000001",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 188
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "b\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-session-64",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.6",
+    "4.3",
+    "4.4"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=https://claude.ai/code/session_Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9z]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "conversation_url": "https://claude.ai/code/session_Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9Ab9z",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 231
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "b\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-url-trimmed-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "3.6",
+    "4.3"
+   ],
+   "note": "The metadata is trimmed of ASCII whitespace as a whole, as without a link.",
+   "source": "\\agentProposedEdit[ created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=https://claude.ai/code/session_01ExampleSessionAbcdEfgh\n]{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "conversation_url": "https://claude.ai/code/session_01ExampleSessionAbcdEfgh",
+      "explanation": "w",
+      "original": "a",
+      "replacement": "b",
+      "span": {
+       "start": 0,
+       "end": 193
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "tex-one-bad-metadata-one-good",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "\\agentProposedEdit[created=2026-02-30T00:00:00Z]{bad}{w}{a}{b}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{good}{w}{c}{d}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "good",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "c",
+      "replacement": "d",
+      "span": {
+       "start": 63,
+       "end": 183
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 62
+      },
+      "id": "bad"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "good"
+     ],
+     "expect": {
+      "output": "\\agentProposedEdit[created=2026-02-30T00:00:00Z]{bad}{w}{a}{b}\nd\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-duplicate-with-missing-metadata",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "A wrapper without metadata still counts for duplicates: the valid one is duplicate_id, the bare one reports invalid_metadata (first in table order).",
+   "source": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{w}{c}{d}\n\\agentProposedEdit{p1}{w}{a}{b}\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "duplicate_id",
+      "span": {
+       "start": 0,
+       "end": 118
+      },
+      "id": "p1"
+     },
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 119,
+       "end": 150
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "duplicate_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-no-metadata-before-invalid-id",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "invalid_metadata precedes invalid_id; other proposals in the file stay decidable.",
+   "source": "\\agentProposedEdit{Bad-ID}{w}{a}{b}\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{good}{w}{c}{d}\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "good",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "c",
+      "replacement": "d",
+      "span": {
+       "start": 36,
+       "end": 156
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 35
+      },
+      "id": "Bad-ID"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "Bad-ID"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "good"
+     ],
+     "expect": {
+      "output": "\\agentProposedEdit{Bad-ID}{w}{a}{b}\nd\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-agent-remove-is-text",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.5"
+   ],
+   "note": "The retired \\agentRemove wrapper is an unknown command: neither a proposal nor an issue.",
+   "source": "A \\agentRemove{agent-remove-0b6c5b7e-1d2a-4c3b-9f8e-112233445566}{why}{body} B\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "agent-remove-0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "tex-agent-remove-broken-is-text",
+   "path": "doc.tex",
+   "format": "tex",
+   "status": "normative",
+   "rules": [
+    "4.5"
+   ],
+   "note": "Broken \\agentRemove text produces no issue either.",
+   "source": "\\agentRemove{p1}{why} x\n\\agentRemove{p2}{why}{unclosed\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-basic",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.2",
+    "7"
+   ],
+   "note": "",
+   "source": "# Title\n\n<!-- thoughts:agent-proposal:v2:start\nid: agent-1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| Clarify.\noriginal_text:\n| Old line.\n| \n-->\nNew line.\n<!-- thoughts:agent-proposal:v2:end agent-1 -->\nTail.\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "agent-1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Clarify.",
+      "original": "Old line.\n",
+      "replacement": "New line.\n",
+      "span": {
+       "start": 9,
+       "end": 266
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "agent-1"
+     ],
+     "expect": {
+      "output": "# Title\n\nNew line.\nTail.\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "agent-1"
+     ],
+     "expect": {
+      "output": "# Title\n\nOld line.\nTail.\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-escapes",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.2"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| Use a --&gt; b &amp; c\noriginal_text:\n| x --&gt; y &amp;amp; z --&amp;gt; w\n| \n-->\nx -> y\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Use a --> b & c",
+      "original": "x --> y &amp; z --&gt; w\n",
+      "replacement": "x -> y\n",
+      "span": {
+       "start": 0,
+       "end": 284
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "x --> y &amp; z --&gt; w\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-insertion",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.2",
+    "7"
+   ],
+   "note": "",
+   "source": "A\n<!-- thoughts:agent-proposal:v2:start\nid: ins\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| Add.\noriginal_text:\n-->\nInserted.\n<!-- thoughts:agent-proposal:v2:end ins -->\nB\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "ins",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Add.",
+      "original": "",
+      "replacement": "Inserted.\n",
+      "span": {
+       "start": 2,
+       "end": 232
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "ins"
+     ],
+     "expect": {
+      "output": "A\nInserted.\nB\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "ins"
+     ],
+     "expect": {
+      "output": "A\nB\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-deletion",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.2",
+    "7"
+   ],
+   "note": "",
+   "source": "A\n<!-- thoughts:agent-proposal:v2:start\nid: del\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| Drop.\noriginal_text:\n| Gone.\n| \n-->\n<!-- thoughts:agent-proposal:v2:end del -->\nB\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "del",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Drop.",
+      "original": "Gone.\n",
+      "replacement": "",
+      "span": {
+       "start": 2,
+       "end": 234
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "del"
+     ],
+     "expect": {
+      "output": "A\nB\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "del"
+     ],
+     "expect": {
+      "output": "A\nGone.\nB\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-replacement-length",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.2"
+   ],
+   "note": "The obsolete replacement_length line is ignored.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nreplacement_length: 99\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 0,
+       "end": 247
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-url-claude",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.6",
+    "5.2"
+   ],
+   "note": "",
+   "source": "A\n<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: https://claude.ai/code/session_01ExampleSessionAbcdEfgh\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "conversation_url": "https://claude.ai/code/session_01ExampleSessionAbcdEfgh",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 2,
+       "end": 300
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "A\nb\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "A\na\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-url-codex",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.6",
+    "5.2"
+   ],
+   "note": "",
+   "source": "A\n<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: codex://threads/01900000-0000-7000-8000-000000000001\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "conversation_url": "codex://threads/01900000-0000-7000-8000-000000000001",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 2,
+       "end": 297
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "A\nb\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "A\na\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-url-then-replacement-length",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.6",
+    "5.2"
+   ],
+   "note": "The link line comes before the obsolete replacement_length line.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: https://claude.ai/code/session_01ExampleSessionAbcdEfgh\nreplacement_length: 9\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "conversation_url": "https://claude.ai/code/session_01ExampleSessionAbcdEfgh",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 0,
+       "end": 320
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-multiline",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.2"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| Line one.\n| \n| Line three.\noriginal_text:\n| a\n| \n| b\n| \n-->\nc\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Line one.\n\nLine three.",
+      "original": "a\n\nb\n",
+      "replacement": "c\n",
+      "span": {
+       "start": 0,
+       "end": 256
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "a\n\nb\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-created-seven-fraction-digits",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2"
+   ],
+   "note": "One timestamp rule for both formats: 0-9 fractional digits.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.1234567Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.1234567Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 0,
+       "end": 228
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-created-no-fraction",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 0,
+       "end": 220
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-created-no-timezone",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 219
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-created-date-only",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 210
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-created-invalid-date",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-02-30T00:00:00Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 220
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-created-ten-fraction-digits",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.1234567890Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 231
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-created-offset",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "UTC with Z only, as in LaTeX.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T14:00:00+02:00\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 225
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-uppercase-conversation",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "Structured conversation IDs are lowercase in both formats.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0B6C5B7E-1D2A-4C3B-9F8E-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 224
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-blank-explanation",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n|    \noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 226
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-unknown-field",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nauthor: x\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 234
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-url-empty",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: \nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 243
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-url-invalid",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: https://example.com/x\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 264
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-url-after-replacement-length",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "Fixed order: the link directly follows conversation_id.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nreplacement_length: 9\nconversation_url: https://claude.ai/code/session_01ExampleSessionAbcdEfgh\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 320
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-url-twice",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.2",
+    "3.3",
+    "5.2",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: https://claude.ai/code/session_01ExampleSessionAbcdEfgh\nconversation_url: https://claude.ai/code/session_01ExampleSessionAbcdEfgh\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 372
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "invalid_metadata"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-stripped-trailing-space",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.2",
+    "6"
+   ],
+   "note": "An editor that strips trailing spaces turns '| ' into '|' and breaks the header.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| One.\n|\n| Three.\noriginal_text:\n| a\n|\n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 237
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-invalid-id",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.1",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: Agent-X\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end Agent-X -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_id",
+      "span": {
+       "start": 0,
+       "end": 234
+      },
+      "id": "Agent-X"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "Agent-X"
+     ],
+     "expect": {
+      "refused": "invalid_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-duplicate-id",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: dup\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end dup -->\n<!-- thoughts:agent-proposal:v2:start\nid: dup\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| c\n| \n-->\nd\n<!-- thoughts:agent-proposal:v2:end dup -->\n<!-- thoughts:agent-proposal:v2:start\nid: other\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| e\n| \n-->\nf\n<!-- thoughts:agent-proposal:v2:end other -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "other",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "e\n",
+      "replacement": "f\n",
+      "span": {
+       "start": 452,
+       "end": 682
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "duplicate_id",
+      "span": {
+       "start": 0,
+       "end": 226
+      },
+      "id": "dup"
+     },
+     {
+      "code": "duplicate_id",
+      "span": {
+       "start": 226,
+       "end": 452
+      },
+      "id": "dup"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "dup"
+     ],
+     "expect": {
+      "refused": "duplicate_id"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "other"
+     ],
+     "expect": {
+      "output": "<!-- thoughts:agent-proposal:v2:start\nid: dup\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end dup -->\n<!-- thoughts:agent-proposal:v2:start\nid: dup\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| c\n| \n-->\nd\n<!-- thoughts:agent-proposal:v2:end dup -->\nf\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-end-at-eof-no-newline",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.1",
+    "6"
+   ],
+   "note": "Marker lines end with LF; an unterminated end line is malformed, so the start is unmatched.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 0,
+       "end": 179
+      },
+      "id": "p1"
+     },
+     {
+      "code": "malformed_marker",
+      "span": {
+       "start": 181,
+       "end": 223
+      }
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "unmatched_marker"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-not-line-start",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.1",
+    "6"
+   ],
+   "note": "A start marker that does not begin a line is text; its end marker line is then unmatched.",
+   "source": "Text <!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 186,
+       "end": 229
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-orphan-end",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.1",
+    "6"
+   ],
+   "note": "",
+   "source": "Text\n<!-- thoughts:agent-proposal:v2:end agent-x -->\nMore.\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 5,
+       "end": 53
+      },
+      "id": "agent-x"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v1-orphan-end",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "5.3",
+    "6"
+   ],
+   "note": "",
+   "source": "Text\n<!-- thoughts:agent-proposal:v1:end agent-x -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 5,
+       "end": 53
+      },
+      "id": "agent-x"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-nested",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: outer\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\n<!-- thoughts:agent-proposal:v2:start\nid: inner\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| b\n| \n-->\nc\n<!-- thoughts:agent-proposal:v2:end inner -->\n<!-- thoughts:agent-proposal:v2:end outer -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "nested_proposal",
+      "span": {
+       "start": 0,
+       "end": 458
+      },
+      "id": "outer"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "outer"
+     ],
+     "expect": {
+      "refused": "nested_proposal"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "inner"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-crlf",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.4",
+    "6"
+   ],
+   "note": "Marker lines are LF-terminated; a file converted to CRLF reports issues instead of silently losing proposals.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\r\nid: p1\r\ncreated_at: 2026-10-10T12:00:00.000Z\r\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\r\nexplanation:\r\n| w\r\noriginal_text:\r\n| a\r\n| \r\n-->\r\nb\r\n<!-- thoughts:agent-proposal:v2:end p1 -->\r\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "malformed_marker",
+      "span": {
+       "start": 0,
+       "end": 39
+      }
+     },
+     {
+      "code": "malformed_marker",
+      "span": {
+       "start": 192,
+       "end": 236
+      }
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-crlf-content",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.4"
+   ],
+   "note": "LF marker lines around CRLF content (what the desktop writer produces in a CRLF file): CR is content.",
+   "source": "Intro\r\n<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\r\n| \n-->\nb\r\n<!-- thoughts:agent-proposal:v2:end p1 -->\nTail\r\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\r\n",
+      "replacement": "b\r\n",
+      "span": {
+       "start": 7,
+       "end": 233
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "Intro\r\nb\r\nTail\r\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "Intro\r\na\r\nTail\r\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-two-proposals",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "7"
+   ],
+   "note": "",
+   "source": "S\n<!-- thoughts:agent-proposal:v2:start\nid: one\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a1\n| \n-->\nb1\n<!-- thoughts:agent-proposal:v2:end one -->\nM\n<!-- thoughts:agent-proposal:v2:start\nid: two\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a2\n| \n-->\nb2\n<!-- thoughts:agent-proposal:v2:end two -->\nE\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "one",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a1\n",
+      "replacement": "b1\n",
+      "span": {
+       "start": 2,
+       "end": 230
+      }
+     },
+     {
+      "id": "two",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a2\n",
+      "replacement": "b2\n",
+      "span": {
+       "start": 232,
+       "end": 460
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "two"
+     ],
+     "expect": {
+      "output": "S\n<!-- thoughts:agent-proposal:v2:start\nid: one\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a1\n| \n-->\nb1\n<!-- thoughts:agent-proposal:v2:end one -->\nM\nb2\nE\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "one"
+     ],
+     "expect": {
+      "output": "S\na1\nM\n<!-- thoughts:agent-proposal:v2:start\nid: two\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a2\n| \n-->\nb2\n<!-- thoughts:agent-proposal:v2:end two -->\nE\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "one",
+      "two"
+     ],
+     "expect": {
+      "output": "S\nb1\nM\nb2\nE\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "one",
+      "missing"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-non-bmp",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "3.5"
+   ],
+   "note": "",
+   "source": "😀\n<!-- thoughts:agent-proposal:v2:start\nid: e1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w 😀\noriginal_text:\n| smile 😀\n| \n-->\ngrin 😀\n<!-- thoughts:agent-proposal:v2:end e1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "e1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w 😀",
+      "original": "smile 😀\n",
+      "replacement": "grin 😀\n",
+      "span": {
+       "start": 2,
+       "end": 239
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "e1"
+     ],
+     "expect": {
+      "output": "😀\ngrin 😀\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-after-tex-example",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "2"
+   ],
+   "note": "",
+   "source": "```tex\n\\agentProposedEdit{x}{w}{a}{b}\n```\n<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 42,
+       "end": 266
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "```tex\n\\agentProposedEdit{x}{w}{a}{b}\n```\nb\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-in-fenced-code",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.5"
+   ],
+   "note": "Writers wrap arbitrary line ranges, including lines of a code block, so markers there are live.",
+   "source": "```python\n<!-- thoughts:agent-proposal:v2:start\nid: code\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| Fix the call.\noriginal_text:\n| print(x)\n| \n-->\nprint(y)\n<!-- thoughts:agent-proposal:v2:end code -->\n```\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "code",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Fix the call.",
+      "original": "print(x)\n",
+      "replacement": "print(y)\n",
+      "span": {
+       "start": 10,
+       "end": 264
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "code"
+     ],
+     "expect": {
+      "output": "```python\nprint(y)\n```\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-indented-example",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.1",
+    "5.5"
+   ],
+   "note": "A marker that does not start at column 0 is text; documentation shows markers indented.",
+   "source": "Example:\n\n    <!-- thoughts:agent-proposal:v2:start\n    id: doc-example\n    created_at: 2026-10-10T12:00:00.000Z\n    conversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\n    explanation:\n    | w\n    original_text:\n    | a\n    | \n    -->\n    b\n    <!-- thoughts:agent-proposal:v2:end doc-example -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "doc-example"
+     ],
+     "expect": {
+      "refused": "unknown_id"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-one-bad-one-good",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: good\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end good -->\nx <!-- thoughts:agent-proposal:v2:start\nid: bad\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| c\n| \n-->\nd\n<!-- thoughts:agent-proposal:v2:end bad -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "good",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 0,
+       "end": 228
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 412,
+       "end": 456
+      },
+      "id": "bad"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "good"
+     ],
+     "expect": {
+      "output": "b\nx <!-- thoughts:agent-proposal:v2:start\nid: bad\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| c\n| \n-->\nd\n<!-- thoughts:agent-proposal:v2:end bad -->\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-missing-end-then-good",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "Span of an unmatched start: the start marker through its header.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: lost\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nreplacement\n<!-- thoughts:agent-proposal:v2:start\nid: good\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| c\n| \n-->\nd\n<!-- thoughts:agent-proposal:v2:end good -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "good",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "c\n",
+      "replacement": "d\n",
+      "span": {
+       "start": 193,
+       "end": 421
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 0,
+       "end": 181
+      },
+      "id": "lost"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "good"
+     ],
+     "expect": {
+      "output": "<!-- thoughts:agent-proposal:v2:start\nid: lost\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nreplacement\nd\n"
+     }
+    },
+    {
+     "action": "accept",
+     "ids": [
+      "lost"
+     ],
+     "expect": {
+      "refused": "unmatched_marker"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v2-header-unclosed",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "6"
+   ],
+   "note": "A header without its --> line is an HTML comment that runs to the end of the file.",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: good\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end good -->\n<!-- thoughts:agent-proposal:v2:start\nid: open\ncreated_at: 2026-10-10T12:00:00.000Z\nmore text\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "good",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 0,
+       "end": 228
+      }
+     }
+    ],
+    "issues": [
+     {
+      "code": "unclosed_group",
+      "span": {
+       "start": 228,
+       "end": 322
+      }
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v2-end-id-mismatch",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.1",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end other -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 0,
+       "end": 179
+      },
+      "id": "p1"
+     },
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 181,
+       "end": 227
+      },
+      "id": "other"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v3-marker",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "5.1",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v3:start\nid: p1\n-->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "malformed_marker",
+      "span": {
+       "start": 0,
+       "end": 38
+      }
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-markdown-extension",
+   "path": "Notes.Markdown",
+   "format": "markdown",
+   "status": "normative",
+   "rules": [
+    "2"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a\n",
+      "replacement": "b\n",
+      "span": {
+       "start": 0,
+       "end": 224
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v1-basic",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "5.3"
+   ],
+   "note": "",
+   "source": "A\n<!-- thoughts:agent-proposal:v1:start eyJpZCI6InAxIiwiY3JlYXRlZF9hdCI6IjIwMjYtMTAtMTBUMTI6MDA6MDAuMDAwWiIsImNvbnZlcnNhdGlvbl9pZCI6IjBiNmM1YjdlLTFkMmEtNGMzYi05ZjhlLTExMjIzMzQ0NTU2NiIsImV4cGxhbmF0aW9uIjoiV2h5LiIsIm9yaWdpbmFsX3RleHQiOiJPbGQuXG4ifQ -->\nNew.\n<!-- thoughts:agent-proposal:v1:end p1 -->\nB\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Why.",
+      "original": "Old.\n",
+      "replacement": "New.\n",
+      "span": {
+       "start": 2,
+       "end": 299
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "A\nNew.\nB\n"
+     }
+    },
+    {
+     "action": "reject",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "output": "A\nOld.\nB\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v1-extra-field",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "5.3"
+   ],
+   "note": "Unknown JSON members are ignored.",
+   "source": "<!-- thoughts:agent-proposal:v1:start eyJpZCI6InAxIiwiY3JlYXRlZF9hdCI6IjIwMjYtMTAtMTBUMTI6MDA6MDAuMDAwWiIsImNvbnZlcnNhdGlvbl9pZCI6IjBiNmM1YjdlLTFkMmEtNGMzYi05ZjhlLTExMjIzMzQ0NTU2NiIsImV4cGxhbmF0aW9uIjoiV2h5LiIsIm9yaWdpbmFsX3RleHQiOiJPbGQuXG4iLCJyZXBsYWNlbWVudF9sZW5ndGgiOjR9 -->\nNew.\n<!-- thoughts:agent-proposal:v1:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "Why.",
+      "original": "Old.\n",
+      "replacement": "New.\n",
+      "span": {
+       "start": 0,
+       "end": 327
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v1-url",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "3.6",
+    "5.3"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v1:start eyJpZCI6InAxIiwiY3JlYXRlZF9hdCI6IjIwMjYtMTAtMTBUMTI6MDA6MDAuMDAwWiIsImNvbnZlcnNhdGlvbl9pZCI6IjBiNmM1YjdlLTFkMmEtNGMzYi05ZjhlLTExMjIzMzQ0NTU2NiIsImV4cGxhbmF0aW9uIjoiV2h5LiIsIm9yaWdpbmFsX3RleHQiOiJPbGQuXG4iLCJjb252ZXJzYXRpb25fdXJsIjoiaHR0cHM6Ly9jbGF1ZGUuYWkvY29kZS9zZXNzaW9uXzAxRXhhbXBsZVNlc3Npb25BYmNkRWZnaCJ9 -->\nNew.\n<!-- thoughts:agent-proposal:v1:end p1 -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "p1",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "conversation_url": "https://claude.ai/code/session_01ExampleSessionAbcdEfgh",
+      "explanation": "Why.",
+      "original": "Old.\n",
+      "replacement": "New.\n",
+      "span": {
+       "start": 0,
+       "end": 399
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v1-url-invalid",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "3.6",
+    "5.3",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v1:start eyJpZCI6InAxIiwiY3JlYXRlZF9hdCI6IjIwMjYtMTAtMTBUMTI6MDA6MDAuMDAwWiIsImNvbnZlcnNhdGlvbl9pZCI6IjBiNmM1YjdlLTFkMmEtNGMzYi05ZjhlLTExMjIzMzQ0NTU2NiIsImV4cGxhbmF0aW9uIjoiV2h5LiIsIm9yaWdpbmFsX3RleHQiOiJPbGQuXG4iLCJjb252ZXJzYXRpb25fdXJsIjoiaHR0cHM6Ly9leGFtcGxlLmNvbS94In0 -->\nNew.\n<!-- thoughts:agent-proposal:v1:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 354
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v1-url-not-string",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "3.6",
+    "5.3",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v1:start eyJpZCI6InAxIiwiY3JlYXRlZF9hdCI6IjIwMjYtMTAtMTBUMTI6MDA6MDAuMDAwWiIsImNvbnZlcnNhdGlvbl9pZCI6IjBiNmM1YjdlLTFkMmEtNGMzYi05ZjhlLTExMjIzMzQ0NTU2NiIsImV4cGxhbmF0aW9uIjoiV2h5LiIsIm9yaWdpbmFsX3RleHQiOiJPbGQuXG4iLCJjb252ZXJzYXRpb25fdXJsIjo3fQ -->\nNew.\n<!-- thoughts:agent-proposal:v1:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 325
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v1-noncanonical-base64",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "5.3",
+    "6"
+   ],
+   "note": "Only canonical unpadded base64url is accepted. Without readable metadata the id is unknown, so the end marker is unmatched.",
+   "source": "<!-- thoughts:agent-proposal:v1:start eyJpZCI6InAxIiwiY3JlYXRlZF9hdCI6IjIwMjYtMTAtMTBUMTI6MDA6MDAuMDAwWiIsImNvbnZlcnNhdGlvbl9pZCI6IjBiNmM1YjdlLTFkMmEtNGMzYi05ZjhlLTExMjIzMzQ0NTU2NiIsImV4cGxhbmF0aW9uIjoiV2h5LiIsIm9yaWdpbmFsX3RleHQiOiJPbGQifR -->\nNew.\n<!-- thoughts:agent-proposal:v1:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 245
+      }
+     },
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 250,
+       "end": 293
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "p1"
+     ],
+     "expect": {
+      "refused": "unmatched_marker"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v1-invalid-json",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "5.3",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v1:start e25vdCBqc29u -->\nNew.\n<!-- thoughts:agent-proposal:v1:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 55
+      }
+     },
+     {
+      "code": "unmatched_marker",
+      "span": {
+       "start": 60,
+       "end": 103
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v1-invalid-date",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "3.2",
+    "5.3",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v1:start eyJpZCI6InAxIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDItMzBUMDA6MDA6MDBaIiwiY29udmVyc2F0aW9uX2lkIjoiMGI2YzViN2UtMWQyYS00YzNiLTlmOGUtMTEyMjMzNDQ1NTY2IiwiZXhwbGFuYXRpb24iOiJXaHkuIiwib3JpZ2luYWxfdGV4dCI6Ik9sZC5cbiJ9 -->\nNew.\n<!-- thoughts:agent-proposal:v1:end p1 -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "invalid_metadata",
+      "span": {
+       "start": 0,
+       "end": 291
+      },
+      "id": "p1"
+     }
+    ]
+   },
+   "decisions": []
+  },
+  {
+   "id": "md-v1-and-v2",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "5.3"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v1:start eyJpZCI6Im9uZSIsImNyZWF0ZWRfYXQiOiIyMDI2LTEwLTEwVDEyOjAwOjAwLjAwMFoiLCJjb252ZXJzYXRpb25faWQiOiIwYjZjNWI3ZS0xZDJhLTRjM2ItOWY4ZS0xMTIyMzM0NDU1NjYiLCJleHBsYW5hdGlvbiI6InciLCJvcmlnaW5hbF90ZXh0IjoiYTFcbiJ9 -->\nb1\n<!-- thoughts:agent-proposal:v1:end one -->\nM\n<!-- thoughts:agent-proposal:v2:start\nid: two\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a2\n| \n-->\nb2\n<!-- thoughts:agent-proposal:v2:end two -->\n",
+   "expect": {
+    "proposals": [
+     {
+      "id": "one",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a1\n",
+      "replacement": "b1\n",
+      "span": {
+       "start": 0,
+       "end": 290
+      }
+     },
+     {
+      "id": "two",
+      "created_at": "2026-10-10T12:00:00.000Z",
+      "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+      "explanation": "w",
+      "original": "a2\n",
+      "replacement": "b2\n",
+      "span": {
+       "start": 292,
+       "end": 520
+      }
+     }
+    ],
+    "issues": []
+   },
+   "decisions": [
+    {
+     "action": "accept",
+     "ids": [
+      "one",
+      "two"
+     ],
+     "expect": {
+      "output": "b1\nM\nb2\n"
+     }
+    }
+   ]
+  },
+  {
+   "id": "md-v1-v2-same-id",
+   "path": "notes.md",
+   "format": "markdown",
+   "status": "legacy",
+   "rules": [
+    "5.3",
+    "6"
+   ],
+   "note": "",
+   "source": "<!-- thoughts:agent-proposal:v1:start eyJpZCI6ImR1cCIsImNyZWF0ZWRfYXQiOiIyMDI2LTEwLTEwVDEyOjAwOjAwLjAwMFoiLCJjb252ZXJzYXRpb25faWQiOiIwYjZjNWI3ZS0xZDJhLTRjM2ItOWY4ZS0xMTIyMzM0NDU1NjYiLCJleHBsYW5hdGlvbiI6InciLCJvcmlnaW5hbF90ZXh0IjoiYVxuIn0 -->\nb\n<!-- thoughts:agent-proposal:v1:end dup -->\n<!-- thoughts:agent-proposal:v2:start\nid: dup\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| c\n| \n-->\nd\n<!-- thoughts:agent-proposal:v2:end dup -->\n",
+   "expect": {
+    "proposals": [],
+    "issues": [
+     {
+      "code": "duplicate_id",
+      "span": {
+       "start": 0,
+       "end": 288
+      },
+      "id": "dup"
+     },
+     {
+      "code": "duplicate_id",
+      "span": {
+       "start": 288,
+       "end": 514
+      },
+      "id": "dup"
+     }
+    ]
+   },
+   "decisions": []
+  }
+ ],
+ "writers": [
+  {
+   "id": "md-writer-basic",
+   "format": "markdown",
+   "fields": {
+    "id": "agent-1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "explanation": "Clarify.",
+    "original": "Old line.\n",
+    "replacement": "New line.\n"
+   },
+   "expect": "<!-- thoughts:agent-proposal:v2:start\nid: agent-1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| Clarify.\noriginal_text:\n| Old line.\n| \n-->\nNew line.\n<!-- thoughts:agent-proposal:v2:end agent-1 -->\n"
+  },
+  {
+   "id": "md-writer-replacement-without-newline",
+   "format": "markdown",
+   "fields": {
+    "id": "p1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "explanation": "w",
+    "original": "a\n",
+    "replacement": "b"
+   },
+   "expect": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n"
+  },
+  {
+   "id": "md-writer-empty-original",
+   "format": "markdown",
+   "fields": {
+    "id": "p1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "explanation": "w",
+    "original": "",
+    "replacement": "b\n"
+   },
+   "expect": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n"
+  },
+  {
+   "id": "md-writer-empty-replacement",
+   "format": "markdown",
+   "fields": {
+    "id": "p1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "explanation": "w",
+    "original": "a\n",
+    "replacement": ""
+   },
+   "expect": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\n<!-- thoughts:agent-proposal:v2:end p1 -->\n"
+  },
+  {
+   "id": "md-writer-escapes",
+   "format": "markdown",
+   "fields": {
+    "id": "p1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "explanation": "a --> b & c\n\nd",
+    "original": "x --> &amp;\n",
+    "replacement": "y\n"
+   },
+   "expect": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nexplanation:\n| a --&gt; b &amp; c\n| \n| d\noriginal_text:\n| x --&gt; &amp;amp;\n| \n-->\ny\n<!-- thoughts:agent-proposal:v2:end p1 -->\n"
+  },
+  {
+   "id": "md-writer-conversation-url",
+   "format": "markdown",
+   "fields": {
+    "id": "p1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "conversation_url": "https://claude.ai/code/session_01ExampleSessionAbcdEfgh",
+    "explanation": "w",
+    "original": "a\n",
+    "replacement": "b\n"
+   },
+   "expect": "<!-- thoughts:agent-proposal:v2:start\nid: p1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: https://claude.ai/code/session_01ExampleSessionAbcdEfgh\nexplanation:\n| w\noriginal_text:\n| a\n| \n-->\nb\n<!-- thoughts:agent-proposal:v2:end p1 -->\n"
+  },
+  {
+   "id": "tex-writer-basic",
+   "format": "tex",
+   "fields": {
+    "id": "agent-1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "explanation": "Clarify.",
+    "original": "Old line.\n",
+    "replacement": "New line.\n"
+   },
+   "expect": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old line.\n}{New line.\n}"
+  },
+  {
+   "id": "tex-writer-escapes",
+   "format": "tex",
+   "fields": {
+    "id": "p1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "explanation": "50% of {x} costs $5 & #1 a_b \\ ^ ~",
+    "original": "a\n",
+    "replacement": "b\n"
+   },
+   "expect": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{50\\% of \\{x\\} costs \\$5 \\& \\#1 a\\_b \\textbackslash{} \\textasciicircum{} \\textasciitilde{}\n}{a\n}{b\n}"
+  },
+  {
+   "id": "tex-writer-insertion",
+   "format": "tex",
+   "fields": {
+    "id": "p1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "explanation": "Add.",
+    "original": "",
+    "replacement": "New.\n"
+   },
+   "expect": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{p1}{Add.\n}{}{New.\n}"
+  },
+  {
+   "id": "tex-writer-conversation-url",
+   "format": "tex",
+   "fields": {
+    "id": "p1",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566",
+    "conversation_url": "codex://threads/01900000-0000-7000-8000-000000000001",
+    "explanation": "w",
+    "original": "a\n",
+    "replacement": "b\n"
+   },
+   "expect": "\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566,conversation_url=codex://threads/01900000-0000-7000-8000-000000000001]{p1}{w\n}{a\n}{b\n}"
+  }
+ ]
+}

@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "thoughts-server"
+version = "0.7.0"
+description = "Fedora repository and build authority for Thoughts clients"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-2.0-or-later" }
+authors = [{ name = "Tommaso Bendinelli" }]
+dependencies = [
+  "alembic>=1.14,<2",
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "pdfplumber>=0.11,<1",
+  "pillow>=11,<13",
+  "pikepdf>=9,<11",
+  "pypdf>=6,<7",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic>=2.10,<3",
+  "sqlalchemy>=2.0,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+markdown-renderer = [
+  "pypandoc-binary==1.17",
+  "weasyprint==70.0",
+]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<7",
+  "pyyaml>=6,<7",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+thoughts-server = "thoughts_server.cli:server_main"
+thoughts-worker = "thoughts_server.cli:worker_main"
+thoughts-export-worker = "thoughts_server.cli:export_worker_main"
+thoughts-anchor-worker = "thoughts_server.cli:anchor_worker_main"
+thoughts-review-worker = "thoughts_server.cli:review_worker_main"
+thoughts-admin = "thoughts_server.cli:admin_main"
+thoughts-migrate = "thoughts_server.cli:migrate_main"
+thoughts-render-markdown = "thoughts_server.markdown_renderer:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/thoughts_server"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/thoughts_server/api.py" = ["B008"]

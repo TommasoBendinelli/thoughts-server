@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<!-- SPDX-FileCopyrightText: 2026 Tommaso Bendinelli -->
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline interactive plot</title>
+<style>
+body { font: 18px system-ui; max-width: 650px; margin: 40px auto; padding: 0 20px; color: #183a46; background: #f4f8fa; }
+svg { width: 100%; background: white; border: 1px solid #cadce3; border-radius: 12px; }
+input { width: 100%; }
+output { font-weight: bold; }
+</style>
+<h1>Interactive plot</h1>
+<p>This page, including its graph and controls, works without an internet connection.</p>
+<label for="scale">Amplitude: <output id="value">1.0</output></label>
+<input id="scale" type="range" min="0" max="2" step="0.1" value="1">
+<svg viewBox="0 0 600 260" role="img" aria-label="A sine wave whose amplitude is controlled by the slider">
+<path d="M20 130H580M20 20V240" fill="none" stroke="#afc1c8"/>
+<path id="curve" fill="none" stroke="#167c91" stroke-width="3"/>
+</svg>
+<script>
+const slider = document.getElementById('scale');
+function draw() {
+ const a = Number(slider.value);
+ document.getElementById('value').textContent = a.toFixed(1);
+ const points = Array.from({length: 561}, (_,i) => `${i ? 'L' : 'M'}${20+i},${130-50*a*Math.sin(i/560*4*Math.PI)}`);
+ document.getElementById('curve').setAttribute('d', points.join(' '));
+}
+slider.addEventListener('input', draw); draw();
+</script>
+</html>

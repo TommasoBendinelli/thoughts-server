@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+"""A tiny systemctl for the library-test container, which has no systemd.
+
+start/stop/restart run a unit's ExecStartPre and ExecStart lines as its User,
+with its Environment, EnvironmentFile and WorkingDirectory; a target starts
+or stops the units that are PartOf it.  Sandboxing directives are ignored
+(systemd-analyze verify checks them separately).  Everything else (enable,
+daemon-reload, reload caddy, ...) is only logged to /run/stub-systemd/log.
+"""
+import os
+import shlex
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+UNITS = Path("/etc/systemd/system")
+STATE = Path("/run/stub-systemd")
+STATE.mkdir(parents=True, exist_ok=True)
+
+
+def log(line):
+    with open(STATE / "log", "a") as handle:
+        handle.write(line + "\n")
+
+
+def parse(unit):
+    values = {}
+    path = UNITS / unit
+    if not path.is_file():
+        return None
+    for line in path.read_text().splitlines():
+        if "=" in line and not line.startswith(("#", "[")):
+            key, value = line.split("=", 1)
+            values.setdefault(key, []).append(value)
+    return values
+
+
+def pid_of(unit):
+    path = STATE / (unit + ".pid")
+    if not path.is_file():
+        return None
+    pid = int(path.read_text())
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return None
+    return pid
+
+
+def members(target):
+    return sorted(path.name for path in UNITS.glob("*.service")
+                  if target in (parse(path.name) or {}).get("PartOf", []))
+
+
+def start(unit):
+    if unit.endswith(".target"):
+        for member in members(unit):
+            start(member)
+        return
+    if unit.endswith(".timer") or pid_of(unit):
+        return
+    values = parse(unit)
+    if values is None:
+        raise SystemExit(f"Unit {unit} not found.")
+    if values.get("Type", ["simple"])[0] == "oneshot":
+        return
+    environment = [item for line in values.get("Environment", []) for item in shlex.split(line)]
+    commands = [command.lstrip("-") for command in values.get("ExecStartPre", [])]
+    script = "set -a; " + "".join(f"source {shlex.quote(path.lstrip('-'))}; "
+                                  for path in values.get("EnvironmentFile", []))
+    script += "set +a; cd " + shlex.quote(values.get("WorkingDirectory", ["/"])[0]) + "; "
+    script += "".join(command + " && " for command in commands) + "exec " + values["ExecStart"][0]
+    output = open(STATE / (unit + ".log"), "ab")
+    process = subprocess.Popen(
+        ["runuser", "-u", values.get("User", ["root"])[0], "--", "env", "-i",
+         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin", "LANG=C.UTF-8", *environment,
+         "bash", "-c", script],
+        stdout=output, stderr=output, start_new_session=True)
+    (STATE / (unit + ".pid")).write_text(str(process.pid))
+    time.sleep(0.2)
+
+
+def stop(unit):
+    if unit.endswith(".target"):
+        for member in members(unit):
+            stop(member)
+        return
+    pid = pid_of(unit)
+    if pid:
+        os.killpg(pid, signal.SIGTERM)
+        for _ in range(100):
+            if not pid_of(unit):
+                break
+            time.sleep(0.1)
+    (STATE / (unit + ".pid")).unlink(missing_ok=True)
+
+
+def main(argv):
+    log(" ".join(argv))
+    args = [arg for arg in argv if not arg.startswith("-")]
+    if not args:
+        return 0
+    command, units = args[0], args[1:]
+    if command in {"start", "restart", "stop"} or (command in {"enable", "disable"} and "--now" in argv):
+        for unit in units:
+            if command in {"restart", "stop", "disable"}:
+                stop(unit)
+            if command in {"start", "restart", "enable"}:
+                start(unit)
+        return 0
+    if command == "is-active":
+        return 0 if all(pid_of(unit) for unit in units) else 3
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

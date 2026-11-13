@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+# gitleaks configuration: the default rules plus allowlists for known false positives.
+# Run: gitleaks git --config .gitleaks.toml .
+title = "Thoughts server"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "THOUGHTS_TOOLCHAIN_KEY names a cached TeX toolchain build (OS, release, revision hash), not a secret"
+regexTarget = "line"
+regexes = ['''THOUGHTS_TOOLCHAIN_KEY=fedora-[a-z0-9]+-f[0-9]+-r[0-9a-f]+''']

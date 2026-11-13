@@ -1,0 +1,69 @@
+\documentclass{article}
+\usepackage{amsmath,amsfonts,array,hyperref,fvextra,xspace,microtype}
+\DefineVerbatimEnvironment{DocCode}{Verbatim}{breaklines=true,breakanywhere=true,frame=single}
+\newcommand{\termSimulator}{\texttt{simulator}\xspace}
+\newcommand{\termSimulators}{\texttt{simulators}\xspace}
+\newcommand{\name}{TraceBench\xspace}
+\newcommand{\StudyCard}[3]{%
+\par\noindent\begin{minipage}{\linewidth}
+\textbf{#1 question.}\quad #2\par
+\noindent\textbf{#1 answer.}\quad #3\par
+\end{minipage}
+}
+\begin{document}
+\section{Test}
+\agentProposedEdit{p1}{Not rendered}{OLD}{
+\paragraph{Target heading.}
+\CommentAnchor{point-a}{one}{}%
+\CommentAnchor{point-b}{two}{}%
+First target paragraph with \emph{italic text}, \emph{a slanted end} and \textbf{bold text}.
+\StudyCard{C02}{What is rank?}{
+Rank identifies a process.
+}
+
+\begin{enumerate}
+\item First numbered item.
+\item Second numbered item.
+\begin{itemize}
+\item A nested bullet.
+\item[] An intentionally empty label.
+\end{itemize}
+\end{enumerate}
+\begin{tabular}{ll}
+\CommentAnchor{row}{note}\hline
+\multicolumn{2}{c}{\CommentHighlight{cell}{span}{Target cell}}\\
+\hline
+A&\CommentAnchor{second-cell}{note}{}Second cell\\
+
+\hline
+Last&row\\
+\hline
+\end{tabular}
+\[\CommentHighlight{math}{note}{x+y=z}\]
+\[
+\hat g_N=\frac{1}{N}\sum_{i=1}^{N}R_iZ_i.
+\]
+\[
+s_0 \xrightarrow[\,r_0=0\,]{a_0=\text{``The''}} s_1.
+\]
+\[
+\begin{aligned}
+\nabla_\theta J(\theta\mid q)&=\sum_y R(q,y)\nabla_\theta\pi_\theta(y\mid q)\\
+&=\mathbb{E}_{Y\sim\pi_\theta(\cdot\mid q)}[R(q,Y)\nabla_\theta\log\pi_\theta(Y\mid q)].
+\end{aligned}
+\]
+\begin{figure}[p]\centering
+\CommentAnchor{float}{note}{}Float target
+\caption{Caption target comparing a deliberately long description with enough words to force the caption package to measure and then typeset it across multiple lines.}\end{figure}
+\newpage
+Final target.
+}
+\CommentAnchor{code-first}{code point}{}%
+\begin{DocCode}
+first_code_line()
+% Code example: \end{document}
+second_code_line()
+\end{DocCode}
+\CommentHighlight{terms}{words}{Selected\_token \termSimulator. More \termSimulators work in \name{}.}
+\CommentAnchor{last}{note}{}%
+\end{document}

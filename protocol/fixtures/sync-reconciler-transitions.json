@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "phase_order": [
+    "queued",
+    "preflight",
+    "uploading",
+    "waiting_network",
+    "waiting_user",
+    "building",
+    "downloading",
+    "verifying",
+    "activating"
+  ],
+  "terminal_states": ["succeeded", "failed", "interrupted", "cancelled"],
+  "cases": [
+    {
+      "name": "new run starts preflight",
+      "facts": {},
+      "expected": "preflight"
+    },
+    {
+      "name": "captured outbox is uploaded after preflight",
+      "facts": {"preflight_complete": true},
+      "expected": "uploading"
+    },
+    {
+      "name": "lost upload response is reconciled from acknowledgement",
+      "facts": {"preflight_complete": true, "upload_acknowledged": true},
+      "expected": "downloading"
+    },
+    {
+      "name": "network wait does not consume an attempt",
+      "facts": {"preflight_complete": true, "network_available": false, "attempt": 2},
+      "expected": "waiting_network"
+    },
+    {
+      "name": "metered approval belongs to the same run",
+      "facts": {"preflight_complete": true, "waiting_for_user": true},
+      "expected": "waiting_user"
+    },
+    {
+      "name": "build waits after the same upload acknowledgement",
+      "facts": {"preflight_complete": true, "upload_acknowledged": true, "build_required": true},
+      "expected": "building"
+    },
+    {
+      "name": "duplicate download callback is idempotent",
+      "facts": {"preflight_complete": true, "upload_acknowledged": true, "download_complete": true, "download_callback_count": 2},
+      "expected": "verifying"
+    },
+    {
+      "name": "reordered verification waits for download fact",
+      "facts": {"preflight_complete": true, "upload_acknowledged": true, "verification_complete": true},
+      "expected": "downloading"
+    },
+    {
+      "name": "verified immutable generation activates",
+      "facts": {"preflight_complete": true, "upload_acknowledged": true, "download_complete": true, "verification_complete": true},
+      "expected": "activating"
+    },
+    {
+      "name": "activation callback may be delivered twice",
+      "facts": {"activation_complete": true, "activation_callback_count": 2},
+      "expected": "succeeded"
+    },
+    {
+      "name": "manual retry is a new linked trace",
+      "facts": {"retry_of": "11111111-1111-4111-8111-111111111111"},
+      "expected": "preflight"
+    },
+    {
+      "name": "failure is terminal",
+      "facts": {"terminal": "failed", "network_available": true},
+      "expected": "failed"
+    },
+    {
+      "name": "interruption is terminal",
+      "facts": {"terminal": "interrupted", "upload_acknowledged": true},
+      "expected": "interrupted"
+    },
+    {
+      "name": "cancellation is terminal",
+      "facts": {"terminal": "cancelled", "activation_complete": true},
+      "expected": "cancelled"
+    }
+  ]
+}

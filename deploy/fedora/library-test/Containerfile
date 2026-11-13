@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+# Fedora 44 image for deploy/fedora/library-test/run.sh: the packages that
+# create-library.sh call, PostgreSQL 18, Python 3.14
+# and Caddy as on the production host.  systemd is installed only for
+# systemd-analyze; library-test/systemctl stands in for the service manager.
+FROM registry.fedoraproject.org/fedora:44
+RUN dnf -y install --setopt=install_weak_deps=False \
+      postgresql-server postgresql caddy python3 python3-pip \
+      procps-ng iproute curl jq util-linux shadow-utils findutils diffutils \
+      coreutils sed gawk grep tar gzip which bind-utils systemd \
+    && dnf clean all

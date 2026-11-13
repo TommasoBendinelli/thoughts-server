@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thoughts-cli"
+version = "1.6.0"
+description = "Headless Thoughts sync client that creates, revises and withdraws agent proposals and creates new notes"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+thoughts-cli = "thoughts_cli.cli:main"
+
+[tool.setuptools]
+packages = ["thoughts_cli"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+# Copied unchanged from the server (tests/test_authoring.py checks they stay identical).
+extend-exclude = ["thoughts_cli/proposal_syntax.py", "thoughts_cli/markdown_proposals.py",
+                  "thoughts_cli/review_card_selection.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

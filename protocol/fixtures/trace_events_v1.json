@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "trace_id": "11111111-1111-4111-8111-111111111111",
+  "chunks": [
+    "retry: 1000\n\n: heart",
+    "beat\n\nevent: trace\nid: 1\ndata: {\"schema_version\":1,\"trace_id\":\"11111111-1111-4111-8111-111111111111\",\"sequence\":1,\"event_key\":\"queued\",\"timestamp\":\"2026-08-27T09:00:00Z\",\"component\":\"api\",\"phase\":\"build_queued\",\"state\":\"queued\",\"target\":\"demo.pdf\",\"message\":\"The server accepted the build.\",\"metadata\":{},\"terminal\":false}\n\nevent: trace\nid: 2\ndata: {\"schema_version\":1,\"trace_id\":\"11111111-1111-4111-8111-111111111111\",\"sequence\":2,\"event_key\":\"done\",\"timestamp\":\"2026-08-27T09:00:02Z\",\"component\":\"build_worker\",\"phase\":\"published\",\"state\":\"succeeded\",\"target\":\"demo.pdf\",\"message\":\"The server published café.\",\"metadata\":{},\"terminal\":true}\n",
+    "\n"
+  ],
+  "expected_sequences": [1, 2],
+  "expected_retry_ms": 1000,
+  "expected_heartbeat": "heartbeat",
+  "expected_terminal_message": "The server published café."
+}

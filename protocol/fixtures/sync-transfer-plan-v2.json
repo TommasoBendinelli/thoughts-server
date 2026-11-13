@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "contract_version": 2,
+    "source_profile": "reader-v1",
+    "include_voice_media": false,
+    "plan_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "latest_server_sequence": 7,
+    "library_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "metadata_download_bytes": 41,
+    "download_bytes": 140,
+    "objects": [
+      {
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "size_bytes": 17,
+        "kind": "pdf",
+        "roles": ["pdf"],
+        "publications": ["manual.pdf"]
+      },
+      {
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "size_bytes": 82,
+        "kind": "source",
+        "roles": ["reverse_lookup"],
+        "publications": ["manual.pdf"]
+      }
+    ]
+  },
+  "selected_object_identities": [
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd:pdf:pdf:manual.pdf:17",
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc:source:reverse_lookup:manual.pdf:82"
+  ]
+}

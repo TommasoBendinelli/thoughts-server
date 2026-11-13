@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.idea/
+.vscode/
+state/
+objects/
+worktree/
+*.db
+*.db-shm
+*.db-wal
+sdk/kotlin/.gradle/
+sdk/kotlin/build/
+sdk/cpp/build/
+
+# Local task artifacts
+/outputs/
+
+# Maintainer-only instructions (master copy kept outside the repository)
+/AGENTS.local.md

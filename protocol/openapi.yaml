@@ -1,0 +1,6792 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
+openapi: 3.1.0
+info:
+  title: Thoughts Server
+  description: Fedora authority for repository operations, explicit sources, artifacts,
+    and builds. Every endpoint accepts an optional UUID in X-Thoughts-Trace-Id and
+    echoes the validated or server-generated UUID in the response header.
+  version: 0.7.0
+paths:
+  /v1/standalone-validations:
+    post:
+      summary: Validate Standalone
+      operationId: validate_standalone_v1_standalone_validations_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StandaloneValidationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandaloneValidationRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/standalone-validations/{validation_id}:
+    get:
+      summary: Get Standalone Validation
+      operationId: get_standalone_validation_v1_standalone_validations__validation_id__get
+      parameters:
+      - name: validation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Validation Id
+      - name: wait_seconds
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 25
+          minimum: 0
+          default: 0
+          title: Wait Seconds
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandaloneValidationRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/health:
+    get:
+      summary: Health
+      operationId: health_v1_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/ready:
+    get:
+      summary: Ready
+      operationId: ready_v1_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/operations:
+    post:
+      summary: Post Operations
+      operationId: post_operations_v1_operations_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationBatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/device-sequence:
+    get:
+      summary: Device Sequence
+      operationId: device_sequence_v1_device_sequence_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceSequenceState'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/anchor-jobs/{job_id}:
+    get:
+      summary: Anchor Job
+      operationId: anchor_job_v1_anchor_jobs__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnotationAnchorJobRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/changes:
+    get:
+      summary: Changes
+      operationId: changes_v1_changes_get
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: After
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 200
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangePage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/projections:
+    get:
+      summary: Projections
+      operationId: projections_v1_projections_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectionSnapshot'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/objects:
+    post:
+      summary: Upload Object
+      operationId: upload_object_v1_objects_post
+      parameters:
+      - name: x-content-sha256
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Content-Sha256
+      - name: content-type
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Content-Type
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObjectMetadata'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/objects/{sha256}:
+    head:
+      summary: Head Object
+      operationId: head_object_v1_objects__sha256__head
+      parameters:
+      - name: sha256
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Sha256
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      summary: Get Object
+      operationId: get_object_v1_objects__sha256__get
+      parameters:
+      - name: sha256
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Sha256
+      - name: x-thoughts-sync-plan
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Thoughts-Sync-Plan
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/html-pages:
+    get:
+      summary: Get Html Pages
+      operationId: get_html_pages_v1_html_pages_get
+      parameters:
+      - name: folder
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Folder
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Html Pages V1 Html Pages Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: 'A docs folder''s HTML pages (protocol/html-pages.md): every folder''s listed pages,
+        or with folder one folder''s together with pages only its latest build inputs carry (unlisted_pages).'
+    post:
+      summary: Post Html Pages
+      operationId: post_html_pages_v1_html_pages_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Request
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Post Html Pages V1 Html Pages Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      description: Add, replace or remove pages of one folder in one change of its page list; each change
+        names the page's current object (base_sha256). 409 html_page_changed, html_page_object_unavailable;
+        422 invalid_folder, invalid_html_page_path, invalid_html_page, invalid_request (protocol/html-pages.md).
+  /v1/html-editions/{pdf_sha256}:
+    get:
+      summary: Get Html Edition
+      description: The HTML edition built beside one PDF version (current or older),
+        with its manifest.
+      operationId: get_html_edition_v1_html_editions__pdf_sha256__get
+      parameters:
+      - name: pdf_sha256
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Pdf Sha256
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HtmlEditionRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/library:
+    get:
+      summary: Library
+      operationId: library_v1_library_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibrarySnapshot'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/library:
+    get:
+      summary: Scoped Library
+      operationId: scoped_library_v2_library_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibrarySnapshot'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/document-sync:
+    get:
+      summary: Document Sync
+      operationId: document_sync_v1_document_sync_get
+      parameters:
+      - name: target
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Target
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentSyncSnapshot'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sync/preflight:
+    post:
+      summary: Retired Sync Preflight
+      description: Retired reader preflight endpoint. Authenticated callers receive
+        HTTP 426 and must use /v2/sync/plan with sync_transfer_plan_v2.
+      operationId: retired_sync_preflight_v1_sync_preflight_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '426':
+          description: Upgrade Required
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - detail
+                properties:
+                  detail:
+                    type: object
+                    required:
+                    - required_capability
+                    - endpoint
+                    properties:
+                      required_capability:
+                        type: string
+                        const: sync_transfer_plan_v2
+                      endpoint:
+                        type: string
+                        const: /v2/sync/plan
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/sync/plan:
+    post:
+      summary: Sync Plan
+      description: Resolve the exact immutable reader objects before synchronization
+        starts.
+      operationId: sync_plan_v2_sync_plan_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPlanRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPlan'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/sync/state:
+    get:
+      summary: Sync State
+      description: Return the authoritative cursors needed to decide whether sync
+        work exists.
+      operationId: sync_state_v2_sync_state_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncState'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/source-bundle:
+    get:
+      summary: Source Bundle
+      operationId: source_bundle_v1_source_bundle_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/source-bundle/objects/{sha256}:
+    get:
+      summary: Source Bundle Object
+      operationId: source_bundle_object_v1_source_bundle_objects__sha256__get
+      parameters:
+      - name: sha256
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Sha256
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/artifacts/{sha256}:
+    get:
+      summary: Immutable Artifact
+      operationId: immutable_artifact_v2_artifacts__sha256__get
+      parameters:
+      - name: sha256
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Sha256
+      - name: x-thoughts-sync-plan
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Thoughts-Sync-Plan
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/library/imports:
+    post:
+      summary: Import Library Pdf
+      operationId: import_library_pdf_v1_library_imports_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibraryImportRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImportResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/library/url-imports:
+    post:
+      summary: Import Library Pdf From Url
+      description: 'Download a PDF from an https URL and import it into a Library Project as the Mac''s
+        Import document does (protocol/library-url-imports.md). A PDF the Project already has changes nothing
+        and answers replayed: true.'
+      operationId: import_library_pdf_from_url_v1_library_url_imports_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project, name, url]
+              properties:
+                project:
+                  type: string
+                  maxLength: 2000
+                  description: The Project's id, or its name ignoring case.
+                name:
+                  type: string
+                  maxLength: 150
+                  description: The document name shown in the Library, e.g. the paper title.
+                url:
+                  type: string
+                  maxLength: 4096
+                  description: An https URL (port 443) on a public address that returns the PDF.
+              additionalProperties: true
+              title: Request
+      responses:
+        '200':
+          description: 'Imported, or replayed: true when the Project already has this PDF.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: {type: boolean}
+                  replayed: {type: boolean}
+                  project_id: {type: string}
+                  project: {type: string}
+                  document_id: {type: string}
+                  filename: {type: string}
+                  name: {type: string}
+                  sha256: {type: string}
+                  size_bytes: {type: integer}
+                  page_count: {type: integer}
+                  source_url: {type: string}
+        '404':
+          description: 'error_code project_not_found.'
+        '409':
+          description: 'error_code project_ambiguous, filename_taken or import_refused (the Project change
+            was refused, e.g. it changed on another device).'
+        '413':
+          description: 'error_code too_large (over 100 MiB).'
+        '422':
+          description: 'error_code invalid_url, invalid_name, address_refused, not_pdf or invalid_pdf.'
+        '502':
+          description: 'error_code download_failed (host not found, HTTP error, too many redirects, timeout).'
+  /v1/review-card-merges:
+    post:
+      summary: Merge Review Cards
+      description: "Merge 2 to 20 review cards of one document into one card, as the desktop's Merge cards\u2026
+        does, in one transaction on the canonical source (protocol/review-card-merge.md). A retry with the same
+        request_id answers the first result again."
+      operationId: merge_review_cards_v1_review_card_merges_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id, card_ids, source, expected_source_sha256]
+              properties:
+                request_id:
+                  type: string
+                  description: A fresh UUID for this merge; the same request answers its first result again.
+                card_ids:
+                  type: array
+                  minItems: 2
+                  maxItems: 20
+                  items: {type: string}
+                  description: Different card UUIDs of one document whose passages are marked in `source`.
+                keep_card_id:
+                  type: string
+                  description: The card that stays (one of card_ids). Default, the one with the most reviews.
+                question:
+                  type: string
+                  maxLength: 500
+                  description: The merged card's question. Default, the cards' questions joined in reading order.
+                source:
+                  type: string
+                  description: The source file holding every card's markers (its path as GET /v1/sources lists it).
+                expected_source_sha256:
+                  type: string
+                  description: The SHA-256 of the source version the caller read.
+              additionalProperties: false
+              title: Request
+      responses:
+        '200':
+          description: 'Merged, or replayed: true for a retry of the same request.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: {type: boolean}
+                  state: {type: string}
+                  replayed: {type: boolean}
+                  request_id: {type: string}
+                  kept_card_id: {type: string}
+                  deleted_card_ids: {type: array, items: {type: string}}
+                  delete_event_ids: {type: array, items: {type: string}}
+                  card_order: {type: array, items: {type: string}}
+                  question: {type: string}
+                  source: {type: string}
+                  source_sha256: {type: string}
+                  passages: {type: integer}
+                  card_revision: {type: integer}
+                  document: {type: string}
+        '409':
+          description: 'error_code merge_refused (with the reason), card_unavailable, source_conflict (with
+            current_source_sha256), invalid_source or request_conflict. Nothing changed.'
+        '413':
+          description: The request is too large.
+        '422':
+          description: 'error_code invalid_request.'
+  /v1/review-card-pending-moves:
+    post:
+      summary: Create Pending Card Move
+      description: "Move a review card onto lines of a pending agent proposal's proposed text: the move waits
+        for the proposal and is made when the user accepts it, dropped when it is rejected or withdrawn
+        (protocol/review-card-pending-moves.md). A retry with the same request_id answers the first result again."
+      operationId: create_pending_card_move_v1_review_card_pending_moves_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id, card_id, source, expected_source_sha256, start_line, end_line]
+              properties:
+                request_id:
+                  type: string
+                  description: A fresh UUID; it identifies the pending move, and the same request answers its first result again.
+                card_id:
+                  type: string
+                  description: The card to move (one without source markers, e.g. on an imported PDF).
+                source:
+                  type: string
+                  description: The note's main source (its path as GET /v1/sources lists it).
+                expected_source_sha256:
+                  type: string
+                  description: The SHA-256 of the source version the caller read.
+                start_line:
+                  type: integer
+                  description: One-based first line of the selection, in the version read; inside one pending proposal's proposed text.
+                end_line:
+                  type: integer
+                  description: Exclusive end line.
+              additionalProperties: false
+              title: Request
+      responses:
+        '200':
+          description: 'state waiting_for_proposal with the proposal_id; replayed: true (with pending_move, its
+            current state) for a retry of the same request.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: {type: boolean}
+                  terminal: {type: boolean}
+                  state: {type: string}
+                  replayed: {type: boolean}
+                  pending_move_id: {type: string}
+                  request_id: {type: string}
+                  card_id: {type: string}
+                  proposal_id: {type: string}
+                  source: {type: string}
+                  source_sha256: {type: string}
+                  document: {type: string}
+                  document_id: {type: string}
+                  from_document: {type: string}
+                  target_text: {type: string}
+                  message: {type: string}
+                  pending_move: {type: object}
+        '409':
+          description: 'error_code not_pending (use the ordinary move), invalid_selection, source_conflict (with
+            current_source_sha256), invalid_source, card_unavailable, card_deleted, unsupported_card, linked_card,
+            same_document, document_unavailable, pending_move_exists or target_taken (with pending_move_id) or
+            request_conflict. Nothing was recorded.'
+        '413':
+          description: The request is too large.
+        '422':
+          description: 'error_code invalid_request.'
+    get:
+      summary: List Pending Card Moves
+      description: Pending card moves, newest first, optionally for one card or proposal.
+      operationId: list_pending_card_moves_v1_review_card_pending_moves_get
+      parameters:
+      - name: card_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Card Id
+      - name: proposal_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Proposal Id
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [waiting_for_proposal, moved, dropped, cancelled, all]
+          default: waiting_for_proposal
+          title: State
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: '{"pending_moves": [...]}, each as GET /v1/review-card-pending-moves/{pending_move_id} answers.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending_moves: {type: array, items: {type: object}}
+        '422':
+          description: An unknown state.
+  /v1/review-card-pending-moves/{pending_move_id}:
+    get:
+      summary: Get Pending Card Move
+      operationId: get_pending_card_move_v1_review_card_pending_moves__pending_move_id__get
+      parameters:
+      - name: pending_move_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Pending Move Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: The pending move. A waiting move whose card was deleted, moved or linked reads as dropped.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending_move_id: {type: string}
+                  request_id: {type: string}
+                  card_id: {type: string}
+                  proposal_id: {type: string}
+                  source: {type: string}
+                  state: {type: string, enum: [waiting_for_proposal, moved, dropped, cancelled]}
+                  reason: {type: string}
+                  message: {type: string}
+                  document: {type: string}
+                  document_id: {type: string}
+                  from_document: {type: string}
+                  target_text: {type: string}
+                  created_at: {type: string}
+                  updated_at: {type: string}
+                  settled_at: {anyOf: [{type: string}, {type: 'null'}]}
+                  result: {type: object}
+        '404':
+          description: No pending card move has this ID.
+  /v1/review-card-pending-moves/{pending_move_id}/cancel:
+    post:
+      summary: Cancel Pending Card Move
+      description: Cancel a card move that waits for a proposal; the card stays where it is.
+      operationId: cancel_pending_card_move_v1_review_card_pending_moves__pending_move_id__cancel_post
+      parameters:
+      - name: pending_move_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Pending Move Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: 'Cancelled, or already_settled: true with the state of a move already dropped or cancelled.'
+        '404':
+          description: 'error_code not_found.'
+        '409':
+          description: 'error_code already_moved: the card was moved; nothing was cancelled.'
+  /v1/library/display-names:
+    post:
+      summary: Set Library Display Name
+      operationId: set_library_display_name_v1_library_display_names_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibraryDisplayNameRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryDisplayNameResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/library/archive-state:
+    post:
+      summary: Set Library Archive State
+      operationId: set_library_archive_state_v1_library_archive_state_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibraryArchiveStateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryArchiveStateResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/library/removals:
+    post:
+      summary: Remove Library Pdf
+      operationId: remove_library_pdf_v1_library_removals_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibraryRemovalRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryRemovalResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/source-selections/resolve:
+    post:
+      summary: Resolve Source Selection
+      operationId: resolve_source_selection_v1_source_selections_resolve_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceSelectionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceSelectionResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sources/apply:
+    post:
+      summary: Source Apply
+      operationId: source_apply_v1_sources_apply_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceApplyRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceApplyResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/source-publications:
+    post:
+      summary: Source Publication
+      operationId: source_publication_v1_source_publications_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcePublicationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcePublicationResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-proposal-resolutions:
+    post:
+      summary: Create Agent Proposal Resolution
+      operationId: create_agent_proposal_resolution_v1_agent_proposal_resolutions_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentProposalResolutionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentProposalResolutionRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/agent-proposal-previews/{artifact_sha256}/{proposal_id}:
+    get:
+      summary: Get Agent Proposal Preview
+      operationId: get_agent_proposal_preview_v2_agent_proposal_previews__artifact_sha256___proposal_id__get
+      parameters:
+      - name: artifact_sha256
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Artifact Sha256
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Proposal Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Agent Proposal Preview V2 Agent Proposal Previews
+                  Artifact Sha256 Proposal Id Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/agent-proposal-resolutions:
+    post:
+      summary: Create Artifact Proposal Resolution
+      operationId: create_artifact_proposal_resolution_v2_agent_proposal_resolutions_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtifactProposalResolutionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactProposalResolutionRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-proposal-resolutions/{operation_id}:
+    get:
+      summary: Get Agent Proposal Resolution
+      operationId: get_agent_proposal_resolution_v1_agent_proposal_resolutions__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Operation Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentProposalResolutionRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/agent-proposal-resolutions/{operation_id}:
+    get:
+      summary: Get Artifact Proposal Resolution
+      operationId: get_artifact_proposal_resolution_v2_agent_proposal_resolutions__operation_id__get
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Operation Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactProposalResolutionRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-proposal-resolutions/{operation_id}/undo:
+    post:
+      summary: Undo Agent Proposal Resolution
+      operationId: undo_agent_proposal_resolution_v1_agent_proposal_resolutions__operation_id__undo_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Operation Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentProposalUndoRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentProposalResolutionRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/agent-proposal-resolutions/{operation_id}/undo:
+    post:
+      summary: Undo Artifact Proposal Resolution
+      operationId: undo_artifact_proposal_resolution_v2_agent_proposal_resolutions__operation_id__undo_post
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Operation Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentProposalUndoRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactProposalResolutionRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/build-input-snapshots:
+    post:
+      summary: Create Build Input Snapshot
+      operationId: create_build_input_snapshot_v1_build_input_snapshots_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildInputSnapshotRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildInputSnapshotRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/build-input-snapshots/latest-identities:
+    get:
+      summary: Get Latest Build Input Identities
+      operationId: get_latest_build_input_identities_v1_build_input_snapshots_latest_identities_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Latest Build Input Identities V1 Build Input Snapshots
+                  Latest Identities Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/build-input-snapshots/latest:
+    get:
+      summary: Get Latest Build Input Snapshot
+      operationId: get_latest_build_input_snapshot_v1_build_input_snapshots_latest_get
+      parameters:
+      - name: target
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Target
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildInputSnapshotRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sources:
+    get:
+      summary: Source Tree
+      operationId: source_tree_v1_sources_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceTreeSnapshot'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/sources/{source_path}:
+    get:
+      summary: Source Snapshot
+      operationId: source_snapshot_v1_sources__source_path__get
+      parameters:
+      - name: source_path
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Source Path
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceSnapshot'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/conflicts:
+    get:
+      summary: Conflicts
+      operationId: conflicts_v1_conflicts_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          default: unresolved
+          title: Status
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConflictRecord'
+                title: Response Conflicts V1 Conflicts Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/conflicts/{conflict_id}/resolve:
+    post:
+      summary: Conflict Resolve
+      operationId: conflict_resolve_v1_conflicts__conflict_id__resolve_post
+      parameters:
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Conflict Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConflictResolveRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceApplyResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/conflicts/{conflict_id}/discard:
+    post:
+      summary: Conflict Discard
+      operationId: conflict_discard_v1_conflicts__conflict_id__discard_post
+      parameters:
+      - name: conflict_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Conflict Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConflictDiscardRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/builds:
+    post:
+      summary: Create Build
+      operationId: create_build_v1_builds_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/builds:
+    post:
+      summary: Create Scoped Build
+      operationId: create_scoped_build_v2_builds_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopedBuildRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/render-checks:
+    post:
+      summary: Check Render
+      operationId: check_render_v1_render_checks_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderCheckRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderCheckResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/render-state:
+    get:
+      summary: Get Render State
+      operationId: get_render_state_v1_render_state_get
+      parameters:
+      - name: target
+        in: query
+        required: false
+        schema:
+          type: string
+          default: all
+          title: Target
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderStateRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/render-status:
+    get:
+      summary: Get Render Status
+      operationId: get_render_status_v1_render_status_get
+      parameters:
+      - name: target
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Target
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderStatusRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/builds/{job_id}:
+    get:
+      summary: Get Build
+      operationId: get_build_v1_builds__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/traces/{trace_id}:
+    get:
+      summary: Get Trace Snapshot
+      operationId: get_trace_snapshot_v2_traces__trace_id__get
+      parameters:
+      - name: trace_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trace Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceSnapshot'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/traces/{trace_id}/events:
+    get:
+      summary: Get Trace Events
+      operationId: get_trace_events_v2_traces__trace_id__events_get
+      parameters:
+      - name: trace_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trace Id
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: After
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 500
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceEventPage'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/traces/{trace_id}/stream:
+    get:
+      summary: Stream Trace Events
+      operationId: stream_trace_events_v2_traces__trace_id__stream_get
+      parameters:
+      - name: trace_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trace Id
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: After
+      - name: Last-Event-ID
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last-Event-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/builds/{job_id}:
+    get:
+      summary: Get Scoped Build
+      operationId: get_scoped_build_v2_builds__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/builds/{job_id}/output:
+    get:
+      summary: Get Build Output
+      operationId: get_build_output_v1_builds__job_id__output_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildOutputChunk'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/builds/{job_id}/events:
+    get:
+      summary: Get Scoped Build Events
+      operationId: get_scoped_build_events_v2_builds__job_id__events_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Cursor
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildOutputChunk'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/builds/{job_id}/cancel:
+    post:
+      summary: Cancel Build
+      operationId: cancel_build_v1_builds__job_id__cancel_post
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildRecord'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/review-source-operations:
+    post:
+      summary: Post Review Source Operations
+      operationId: post_review_source_operations_v1_review_source_operations_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationBatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/library/projects:
+    get:
+      summary: Library Projects
+      operationId: library_projects_v1_library_projects_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Library Projects V1 Library Projects Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Edit Library Project
+      operationId: edit_library_project_v1_library_projects_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Request
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Edit Library Project V1 Library Projects Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/library/project-exports:
+    post:
+      summary: Create Project Export
+      operationId: create_project_export_v2_library_project_exports_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Request
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Create Project Export V2 Library Project Exports Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/library/project-exports/{export_id}:
+    get:
+      summary: Get Project Export
+      operationId: get_project_export_v2_library_project_exports__export_id__get
+      parameters:
+      - name: export_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Export Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Project Export V2 Library Project Exports  Export
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v2/library/project-exports/{export_id}/pdf:
+    get:
+      summary: Download Project Export
+      operationId: download_project_export_v2_library_project_exports__export_id__pdf_get
+      parameters:
+      - name: export_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Export Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/documents/register:
+    post:
+      summary: Register Library Document
+      operationId: register_library_document_v1_documents_register_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentRegistrationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Register Library Document V1 Documents Register Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/builds/{job_id}/source-diff:
+    get:
+      summary: Get Build Source Diff
+      operationId: get_build_source_diff_v1_builds__job_id__source_diff_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Build Source Diff V1 Builds  Job Id  Source Diff
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes:
+    post:
+      summary: Create Agent Note
+      description: Send a visual note to the phone (protocol/agent-notes.md). Idempotent
+        by note_id.
+      operationId: create_agent_note_v1_agent_notes_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteCreateResponse'
+        '200':
+          description: Identical retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteCreateResponse'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - note_id
+              - title
+              - image
+              properties:
+                note_id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  maxLength: 200
+                message:
+                  type: string
+                  maxLength: 4000
+                image:
+                  type: object
+                  required:
+                  - media_type
+                  - data_base64
+                  properties:
+                    media_type:
+                      type: string
+                      enum:
+                      - image/png
+                      - image/jpeg
+                    data_base64:
+                      type: string
+                      description: Standard base64; at most 20 MiB decoded, each side
+                        <= 8192 px, <= 40 megapixels.
+                document_id:
+                  type: string
+                  maxLength: 128
+                document_filename:
+                  type: string
+                  maxLength: 512
+                review_card_id:
+                  type: string
+                  maxLength: 128
+                origin:
+                  type: object
+    get:
+      summary: List Agent Notes
+      operationId: list_agent_notes_v1_agent_notes_get
+      parameters:
+      - name: document_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Id
+      - name: review_card_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Review Card Id
+      - name: sent_by_me
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Sent By Me
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteList'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/inbox:
+    get:
+      summary: Agent Note Inbox
+      description: The phone's long-poll for notes sent by other devices (wait 0..30
+        s).
+      operationId: agent_note_inbox_v1_agent_notes_inbox_get
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: After
+      - name: wait
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 0
+          title: Wait
+      - name: review_card_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Review Card Id
+      - name: document_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Document Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteInbox'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/replies:
+    get:
+      summary: Agent Note Replies
+      description: 'Replies to notes the caller sent, oldest first (long-poll, wait
+        0..60 s). conversation_id keeps notes whose origin.conversation_id is that conversation.
+        listen=true: the caller is an agent that will act on these replies; the phone
+        shows it as listening while it re-polls within 90 s.'
+      operationId: agent_note_replies_v1_agent_notes_replies_get
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: After
+      - name: wait
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 0
+          title: Wait
+      - name: note_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note Id
+      - name: conversation_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Conversation Id
+      - name: listen
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Listen
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteReplyFeed'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/replies/{reply_id}/image:
+    get:
+      summary: Agent Note Reply Image
+      operationId: agent_note_reply_image_v1_agent_notes_replies__reply_id__image_get
+      parameters:
+      - name: reply_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Reply Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Image bytes
+          content:
+            image/png: {}
+            image/jpeg: {}
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/replies/{reply_id}/photo:
+    get:
+      summary: Agent Note Reply Photo
+      description: The photo sent with the reply (404 when it has none).
+      operationId: agent_note_reply_photo_v1_agent_notes_replies__reply_id__photo_get
+      parameters:
+      - name: reply_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Reply Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Image bytes
+          content:
+            image/png: {}
+            image/jpeg: {}
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/replies/{reply_id}/strokes:
+    get:
+      summary: Agent Note Reply Strokes
+      operationId: agent_note_reply_strokes_v1_agent_notes_replies__reply_id__strokes_get
+      parameters:
+      - name: reply_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Reply Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Stroke document
+          content:
+            application/json: {}
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/{note_id}:
+    get:
+      summary: Get Agent Note
+      operationId: get_agent_note_v1_agent_notes__note_id__get
+      parameters:
+      - name: note_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Note Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteRecord'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Agent Note
+      operationId: delete_agent_note_v1_agent_notes__note_id__delete
+      parameters:
+      - name: note_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Note Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/{note_id}/image:
+    get:
+      summary: Agent Note Image
+      operationId: agent_note_image_v1_agent_notes__note_id__image_get
+      parameters:
+      - name: note_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Note Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Image bytes
+          content:
+            image/png: {}
+            image/jpeg: {}
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/{note_id}/listening:
+    get:
+      summary: Agent Note Listening
+      description: 'Whether an agent of the note''s sender waits to act on replies to
+        it right now: listening, not_listening, or unknown (its agents never announce
+        listening).'
+      operationId: agent_note_listening_v1_agent_notes__note_id__listening_get
+      parameters:
+      - name: note_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Note Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteListeningAnswer'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/{note_id}/receipt:
+    post:
+      summary: Agent Note Receipt
+      description: delivered or opened; the first stamp wins and opened also stamps
+        delivered.
+      operationId: agent_note_receipt_v1_agent_notes__note_id__receipt_post
+      parameters:
+      - name: note_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Note Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteRecord'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              properties:
+                state:
+                  type: string
+                  enum:
+                  - delivered
+                  - opened
+  /v1/agent-notes/{note_id}/replies:
+    post:
+      summary: Create Agent Note Reply
+      description: 'The phone''s annotated image and stroke document. Idempotent by
+        reply_id. listening: whether an agent hears it now.'
+      operationId: create_agent_note_reply_v1_agent_notes__note_id__replies_post
+      parameters:
+      - name: note_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Note Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteReplyCreateResponse'
+        '200':
+          description: Identical retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteReplyCreateResponse'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - reply_id
+              - image
+              properties:
+                reply_id:
+                  type: string
+                  format: uuid
+                image:
+                  type: object
+                  required:
+                  - media_type
+                  - data_base64
+                  properties:
+                    media_type:
+                      type: string
+                      enum:
+                      - image/png
+                      - image/jpeg
+                    data_base64:
+                      type: string
+                      description: Standard base64; at most 20 MiB decoded, each side
+                        <= 8192 px, <= 40 megapixels.
+                strokes:
+                  type: object
+                  description: Stroke document schema 1 (protocol/agent-notes.md); <=
+                    2 MiB, <= 5000 strokes, <= 200000 points.
+                message:
+                  type: string
+                  maxLength: 4000
+                photo:
+                  type: object
+                  required:
+                  - media_type
+                  - data_base64
+                  properties:
+                    media_type:
+                      type: string
+                      enum:
+                      - image/png
+                      - image/jpeg
+                    data_base64:
+                      type: string
+                      description: Standard base64; at most 20 MiB decoded, each side
+                        <= 8192 px, <= 40 megapixels.
+                    capture:
+                      type: string
+                      maxLength: 128
+                  description: A picture sent with the reply (e.g. from the glasses
+                    camera); same limits as image.
+components:
+  headers:
+    XThoughtsTraceId:
+      description: Cross-component trace UUID for the request and all resulting durable
+        work.
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    StandaloneValidationRequest:
+      properties:
+        bundle_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Bundle Sha256
+        source:
+          type: string
+          maxLength: 512
+          title: Source
+      type: object
+      required:
+      - bundle_sha256
+      - source
+      title: StandaloneValidationRequest
+    StandaloneValidationRecord:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - succeeded
+          - failed
+          title: Status
+        executor:
+          type: string
+          const: fedora
+          title: Executor
+          default: fedora
+        bundle_sha256:
+          type: string
+          title: Bundle Sha256
+        source:
+          type: string
+          title: Source
+        toolchain_sha256:
+          type: string
+          title: Toolchain Sha256
+        cache_hit:
+          type: boolean
+          title: Cache Hit
+          default: false
+        pdf_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pdf Sha256
+        log_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Log Sha256
+        pages:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pages
+        seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Seconds
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - id
+      - status
+      - bundle_sha256
+      - source
+      - toolchain_sha256
+      title: StandaloneValidationRecord
+    AgentProposalResolutionRecord:
+      properties:
+        operation_id:
+          type: string
+          title: Operation Id
+        device_sequence:
+          type: integer
+          title: Device Sequence
+        bundle_id:
+          type: string
+          title: Bundle Id
+        action:
+          type: string
+          enum:
+          - accept
+          - disregard
+          - undo
+          title: Action
+        proposal_ids:
+          items:
+            type: string
+          type: array
+          title: Proposal Ids
+        status:
+          type: string
+          enum:
+          - queued
+          - validating
+          - applied
+          - failed
+          - undone
+          title: Status
+        undo_of:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Undo Of
+        result:
+          additionalProperties: true
+          type: object
+          title: Result
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        attempts:
+          type: integer
+          title: Attempts
+          default: 0
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - operation_id
+      - device_sequence
+      - bundle_id
+      - action
+      - proposal_ids
+      - status
+      - created_at
+      - updated_at
+      title: AgentProposalResolutionRecord
+    AgentProposalResolutionRequest:
+      properties:
+        operation_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Operation Id
+        device_sequence:
+          type: integer
+          minimum: 1.0
+          title: Device Sequence
+        bundle_id:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Bundle Id
+        action:
+          type: string
+          enum:
+          - accept
+          - disregard
+          title: Action
+        proposal_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 500
+          minItems: 1
+          title: Proposal Ids
+      type: object
+      required:
+      - operation_id
+      - device_sequence
+      - bundle_id
+      - action
+      - proposal_ids
+      title: AgentProposalResolutionRequest
+    AgentProposalUndoRequest:
+      properties:
+        operation_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Operation Id
+        device_sequence:
+          type: integer
+          minimum: 1.0
+          title: Device Sequence
+      type: object
+      required:
+      - operation_id
+      - device_sequence
+      title: AgentProposalUndoRequest
+    AnnotationAnchorJobRecord:
+      properties:
+        id:
+          type: string
+          title: Id
+        input_operation_id:
+          type: string
+          title: Input Operation Id
+        annotation_id:
+          type: string
+          title: Annotation Id
+        collection:
+          type: string
+          title: Collection
+        input_revision:
+          type: integer
+          title: Input Revision
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - retry
+          - succeeded
+          - needs_attention
+          - stale
+          - failed
+          title: Status
+        attempts:
+          type: integer
+          title: Attempts
+        output_operation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Output Operation Id
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+        result:
+          additionalProperties: true
+          type: object
+          title: Result
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - id
+      - input_operation_id
+      - annotation_id
+      - collection
+      - input_revision
+      - status
+      - attempts
+      - updated_at
+      title: AnnotationAnchorJobRecord
+    ArtifactProposalResolutionRecord:
+      properties:
+        operation_id:
+          type: string
+          title: Operation Id
+        device_sequence:
+          type: integer
+          title: Device Sequence
+        artifact_sha256:
+          type: string
+          title: Artifact Sha256
+        action:
+          type: string
+          enum:
+          - accept
+          - disregard
+          - undo
+          title: Action
+        proposal_ids:
+          items:
+            type: string
+          type: array
+          title: Proposal Ids
+        status:
+          type: string
+          enum:
+          - queued
+          - validating
+          - applied
+          - failed
+          - undone
+          title: Status
+        undo_of:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Undo Of
+        result:
+          additionalProperties: true
+          type: object
+          title: Result
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        attempts:
+          type: integer
+          title: Attempts
+          default: 0
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - operation_id
+      - device_sequence
+      - artifact_sha256
+      - action
+      - proposal_ids
+      - status
+      - created_at
+      - updated_at
+      title: ArtifactProposalResolutionRecord
+    ArtifactProposalResolutionRequest:
+      properties:
+        operation_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Operation Id
+        device_sequence:
+          type: integer
+          minimum: 1.0
+          title: Device Sequence
+        artifact_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Artifact Sha256
+        action:
+          type: string
+          enum:
+          - accept
+          - disregard
+          title: Action
+        proposals:
+          items:
+            $ref: '#/components/schemas/ProposalObjectIdentity'
+          type: array
+          maxItems: 500
+          minItems: 1
+          title: Proposals
+      type: object
+      required:
+      - operation_id
+      - device_sequence
+      - artifact_sha256
+      - action
+      - proposals
+      title: ArtifactProposalResolutionRequest
+    BatchResult:
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/OperationResult'
+          type: array
+          title: Results
+        latest_server_sequence:
+          type: integer
+          title: Latest Server Sequence
+      type: object
+      required:
+      - results
+      - latest_server_sequence
+      title: BatchResult
+    DeviceSequenceState:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        latest_device_sequence:
+          type: integer
+          minimum: 0.0
+          title: Latest Device Sequence
+        next_device_sequence:
+          type: integer
+          minimum: 1.0
+          title: Next Device Sequence
+      type: object
+      required:
+      - device_id
+      - latest_device_sequence
+      - next_device_sequence
+      title: DeviceSequenceState
+    BuildInputEntry:
+      properties:
+        path:
+          type: string
+          maxLength: 1024
+          minLength: 1
+          title: Path
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Sha256
+        size_bytes:
+          type: integer
+          minimum: 0.0
+          title: Size Bytes
+        media_type:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Media Type
+        role:
+          type: string
+          enum:
+          - asset
+          - generated
+          - external_pdf
+          title: Role
+      type: object
+      required:
+      - path
+      - sha256
+      - size_bytes
+      - media_type
+      - role
+      title: BuildInputEntry
+    BuildInputSnapshotRecord:
+      properties:
+        schema_version:
+          type: integer
+          const: 3
+          title: Schema Version
+          default: 3
+        sha256:
+          type: string
+          title: Sha256
+        target:
+          type: string
+          title: Target
+        project:
+          type: string
+          title: Project
+        discovery_policy:
+          type: string
+          const: tex-closure-v1
+          title: Discovery Policy
+          default: tex-closure-v1
+        manifest_object_sha256:
+          type: string
+          title: Manifest Object Sha256
+        entries:
+          items:
+            $ref: '#/components/schemas/BuildInputEntry'
+          type: array
+          title: Entries
+      type: object
+      required:
+      - sha256
+      - target
+      - project
+      - manifest_object_sha256
+      - entries
+      title: BuildInputSnapshotRecord
+    BuildInputSnapshotRequest:
+      properties:
+        schema_version:
+          type: integer
+          const: 3
+          title: Schema Version
+          default: 3
+        target:
+          type: string
+          title: Target
+        project:
+          type: string
+          title: Project
+        discovery_policy:
+          type: string
+          const: tex-closure-v1
+          title: Discovery Policy
+          default: tex-closure-v1
+        entries:
+          items:
+            $ref: '#/components/schemas/BuildInputEntry'
+          type: array
+          maxItems: 10000
+          title: Entries
+      type: object
+      required:
+      - target
+      - project
+      - entries
+      title: BuildInputSnapshotRequest
+    BuildOutputChunk:
+      properties:
+        offset:
+          type: integer
+          minimum: 0.0
+          title: Offset
+        next_offset:
+          type: integer
+          minimum: 0.0
+          title: Next Offset
+        text:
+          type: string
+          title: Text
+        complete:
+          type: boolean
+          title: Complete
+      type: object
+      required:
+      - offset
+      - next_offset
+      - text
+      - complete
+      title: BuildOutputChunk
+    BuildRecord:
+      properties:
+        id:
+          type: string
+          title: Id
+        target:
+          type: string
+          title: Target
+        repair_mode:
+          type: string
+          enum:
+          - none
+          - codex
+          - review_cards
+          title: Repair Mode
+          default: none
+        status:
+          type: string
+          title: Status
+        command:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Command
+        source_frontier:
+          type: integer
+          title: Source Frontier
+        source_snapshot_sha256:
+          type: string
+          title: Source Snapshot Sha256
+        input_snapshot_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Input Snapshot Sha256
+        comment_frontier:
+          type: integer
+          title: Comment Frontier
+        annotation_frontier:
+          type: integer
+          title: Annotation Frontier
+        toolchain_key:
+          type: string
+          title: Toolchain Key
+        render_fingerprint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Render Fingerprint
+        progress:
+          additionalProperties: true
+          type: object
+          title: Progress
+        result:
+          additionalProperties: true
+          type: object
+          title: Result
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        cancellation_requested:
+          type: boolean
+          title: Cancellation Requested
+        trace_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Trace Id
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - target
+      - status
+      - source_frontier
+      - source_snapshot_sha256
+      - comment_frontier
+      - annotation_frontier
+      - toolchain_key
+      - progress
+      - result
+      - error
+      - cancellation_requested
+      - updated_at
+      title: BuildRecord
+    BuildRequest:
+      properties:
+        target:
+          type: string
+          title: Target
+          default: all
+        repair_mode:
+          type: string
+          enum:
+          - none
+          - codex
+          - review_cards
+          title: Repair Mode
+          default: none
+        review_generation:
+          anyOf:
+          - $ref: '#/components/schemas/ReviewGenerationOptions'
+          - type: 'null'
+        request_id:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Request Id
+        source_frontier:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Source Frontier
+        input_snapshot_sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Input Snapshot Sha256
+      type: object
+      title: BuildRequest
+    BuildScope:
+      properties:
+        kind:
+          type: string
+          enum:
+          - document
+          - library
+          title: Kind
+        filename:
+          anyOf:
+          - type: string
+            pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]*\.pdf$
+          - type: 'null'
+          title: Filename
+      type: object
+      required:
+      - kind
+      title: BuildScope
+    ChangePage:
+      properties:
+        changes:
+          items:
+            $ref: '#/components/schemas/ChangeRecord'
+          type: array
+          title: Changes
+        next_cursor:
+          type: integer
+          title: Next Cursor
+        has_more:
+          type: boolean
+          title: Has More
+      type: object
+      required:
+      - changes
+      - next_cursor
+      - has_more
+      title: ChangePage
+    ChangeRecord:
+      properties:
+        server_sequence:
+          type: integer
+          title: Server Sequence
+        operation_id:
+          type: string
+          title: Operation Id
+        device_id:
+          type: string
+          title: Device Id
+        device_sequence:
+          type: integer
+          title: Device Sequence
+        entity_type:
+          type: string
+          title: Entity Type
+        entity_id:
+          type: string
+          title: Entity Id
+        collection:
+          type: string
+          title: Collection
+        base_revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Base Revision
+        client_timestamp:
+          type: string
+          title: Client Timestamp
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+        outcome:
+          type: string
+          title: Outcome
+        entity_revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Entity Revision
+        provenance:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provenance
+      type: object
+      required:
+      - server_sequence
+      - operation_id
+      - device_id
+      - device_sequence
+      - entity_type
+      - entity_id
+      - collection
+      - base_revision
+      - client_timestamp
+      - payload
+      - outcome
+      title: ChangeRecord
+    ConflictDiscardRequest:
+      properties:
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        expected_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Expected Sha256
+      type: object
+      required:
+      - expected_revision
+      - expected_sha256
+      title: ConflictDiscardRequest
+    ConflictRecord:
+      properties:
+        id:
+          type: string
+          title: Id
+        path:
+          type: string
+          title: Path
+        base_sha256:
+          type: string
+          title: Base Sha256
+        current_sha256:
+          type: string
+          title: Current Sha256
+        incoming_sha256:
+          type: string
+          title: Incoming Sha256
+        merged_object_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Merged Object Sha256
+        conflict_count:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Conflict Count
+        expected_revision:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Expected Revision
+        current_modified_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Modified At
+        incoming_modified_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Incoming Modified At
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - id
+      - path
+      - base_sha256
+      - current_sha256
+      - incoming_sha256
+      - merged_object_sha256
+      - status
+      title: ConflictRecord
+    ConflictResolveRequest:
+      properties:
+        operation_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Operation Id
+        device_sequence:
+          type: integer
+          minimum: 1.0
+          title: Device Sequence
+        expected_revision:
+          type: integer
+          minimum: 0.0
+          title: Expected Revision
+        expected_sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Expected Sha256
+        content_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Content Sha256
+        client_timestamp:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Client Timestamp
+        proposal_decisions:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ProposalDecisionClaim'
+            type: array
+            maxItems: 500
+          - type: 'null'
+          title: Proposal Decisions
+      type: object
+      required:
+      - operation_id
+      - device_sequence
+      - expected_revision
+      - content_sha256
+      - client_timestamp
+      title: ConflictResolveRequest
+    DocumentSyncSnapshot:
+      properties:
+        target:
+          type: string
+          pattern: ^[^/\\]+\.pdf$
+          title: Target
+        snapshot_sequence:
+          type: integer
+          title: Snapshot Sequence
+        projections:
+          items:
+            $ref: '#/components/schemas/ProjectionRecord'
+          type: array
+          title: Projections
+        publication:
+          $ref: '#/components/schemas/LibraryEntry'
+        render_status:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Render Status
+      type: object
+      required:
+      - target
+      - snapshot_sequence
+      - projections
+      - publication
+      title: DocumentSyncSnapshot
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        version:
+          type: string
+          title: Version
+        capabilities:
+          items:
+            type: string
+          type: array
+          title: Capabilities
+        storage:
+          $ref: '#/components/schemas/ServerStorageUsage'
+      type: object
+      required:
+      - status
+      - version
+      - storage
+      title: HealthResponse
+    LibraryArchiveStateRequest:
+      properties:
+        filename:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]*\.pdf$
+          title: Filename
+        expected_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Expected Sha256
+        archived:
+          type: boolean
+          title: Archived
+      type: object
+      required:
+      - filename
+      - expected_sha256
+      - archived
+      title: LibraryArchiveStateRequest
+    LibraryArchiveStateResult:
+      properties:
+        filename:
+          type: string
+          title: Filename
+        sha256:
+          type: string
+          title: Sha256
+        archived:
+          type: boolean
+          title: Archived
+        status:
+          type: string
+          enum:
+          - updated
+          - unchanged
+          title: Status
+      type: object
+      required:
+      - filename
+      - sha256
+      - archived
+      - status
+      title: LibraryArchiveStateResult
+    LibraryDisplayNameRequest:
+      properties:
+        filename:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]*\.pdf$
+          title: Filename
+        expected_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Expected Sha256
+        display_name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Display Name
+      type: object
+      required:
+      - filename
+      - expected_sha256
+      - display_name
+      title: LibraryDisplayNameRequest
+    LibraryDisplayNameResult:
+      properties:
+        filename:
+          type: string
+          title: Filename
+        sha256:
+          type: string
+          title: Sha256
+        display_name:
+          type: string
+          title: Display Name
+        status:
+          type: string
+          enum:
+          - updated
+          - unchanged
+          title: Status
+      type: object
+      required:
+      - filename
+      - sha256
+      - display_name
+      - status
+      title: LibraryDisplayNameResult
+    SourceResourceEntry:
+      properties:
+        kind:
+          type: string
+          enum:
+          - shared_style
+          - project_style
+          - project_style_override
+          title: Kind
+        path:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          title: Path
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Sha256
+        object_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Object Sha256
+        size_bytes:
+          type: integer
+          minimum: 0.0
+          title: Size Bytes
+      type: object
+      required:
+      - kind
+      - path
+      - sha256
+      - object_sha256
+      - size_bytes
+      title: SourceResourceEntry
+    HtmlEditionRecord:
+      properties:
+        pdf_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Pdf Sha256
+        filename:
+          type: string
+          title: Filename
+        document_id:
+          type: string
+          title: Document Id
+        source_format:
+          type: string
+          title: Source Format
+        html_status:
+          anyOf:
+          - type: string
+            enum:
+            - pending
+            - ready
+            - failed
+          - type: 'null'
+          title: Html Status
+        html_edition_sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Html Edition Sha256
+        html_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Html Error
+        manifest:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Manifest
+      type: object
+      required:
+      - pdf_sha256
+      - filename
+      - document_id
+      - source_format
+      title: HtmlEditionRecord
+    LibraryEntry:
+      properties:
+        html_status:
+          anyOf:
+          - type: string
+            enum:
+            - pending
+            - ready
+            - failed
+          - type: 'null'
+          title: Html Status
+        html_edition_sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Html Edition Sha256
+        html_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Html Error
+        generation_id:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Generation Id
+        document_id:
+          type: string
+          title: Document Id
+        filename:
+          type: string
+          title: Filename
+        sha256:
+          type: string
+          title: Sha256
+        size_bytes:
+          type: integer
+          title: Size Bytes
+        project:
+          type: string
+          title: Project
+        source_frontier:
+          type: integer
+          title: Source Frontier
+        comment_frontier:
+          type: integer
+          title: Comment Frontier
+        annotation_frontier:
+          type: integer
+          title: Annotation Frontier
+        build_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Build Id
+        source_snapshot_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Snapshot Sha256
+        input_snapshot_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Input Snapshot Sha256
+        latest_build:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Latest Build
+        pdf_stale:
+          type: boolean
+          title: Pdf Stale
+          default: false
+        published_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Published At
+        placement_manifest_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Placement Manifest Sha256
+        source_artifact_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Artifact Sha256
+        source_resources:
+          items:
+            $ref: '#/components/schemas/SourceResourceEntry'
+          type: array
+          title: Source Resources
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+        trace_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Trace Id
+      type: object
+      required:
+      - generation_id
+      - document_id
+      - filename
+      - sha256
+      - size_bytes
+      - project
+      - source_frontier
+      - comment_frontier
+      - annotation_frontier
+      - metadata
+      title: LibraryEntry
+    LibraryImportRequest:
+      properties:
+        document_id:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+          title: Document Id
+        filename:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]*\.pdf$
+          title: Filename
+        object_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Object Sha256
+      type: object
+      required:
+      - document_id
+      - filename
+      - object_sha256
+      title: LibraryImportRequest
+    LibraryImportResult:
+      properties:
+        document_id:
+          type: string
+          title: Document Id
+        filename:
+          type: string
+          title: Filename
+        sha256:
+          type: string
+          title: Sha256
+        status:
+          type: string
+          enum:
+          - imported
+          - existing
+          title: Status
+      type: object
+      required:
+      - document_id
+      - filename
+      - sha256
+      - status
+      title: LibraryImportResult
+    LibraryRemovalRequest:
+      properties:
+        filename:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]*\.pdf$
+          title: Filename
+        expected_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Expected Sha256
+      type: object
+      required:
+      - filename
+      - expected_sha256
+      title: LibraryRemovalRequest
+    LibraryRemovalResult:
+      properties:
+        filename:
+          type: string
+          title: Filename
+        sha256:
+          type: string
+          title: Sha256
+        status:
+          type: string
+          enum:
+          - removed
+          - already_removed
+          title: Status
+      type: object
+      required:
+      - filename
+      - sha256
+      - status
+      title: LibraryRemovalResult
+    LibrarySnapshot:
+      properties:
+        publications:
+          items:
+            $ref: '#/components/schemas/LibraryEntry'
+          type: array
+          title: Publications
+        latest_server_sequence:
+          type: integer
+          title: Latest Server Sequence
+        source_index_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Index Sha256
+        source_bundle_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Bundle Sha256
+        artifact_revision:
+          type: string
+          title: Artifact Revision
+          default: ''
+        library_revision:
+          type: string
+          title: Library Revision
+          default: ''
+      type: object
+      required:
+      - publications
+      - latest_server_sequence
+      title: LibrarySnapshot
+    ObjectMetadata:
+      properties:
+        sha256:
+          type: string
+          title: Sha256
+        size_bytes:
+          type: integer
+          title: Size Bytes
+        media_type:
+          type: string
+          title: Media Type
+      type: object
+      required:
+      - sha256
+      - size_bytes
+      - media_type
+      title: ObjectMetadata
+    OperationBatch:
+      properties:
+        operations:
+          items:
+            $ref: '#/components/schemas/OperationInput'
+          type: array
+          maxItems: 1000
+          minItems: 1
+          title: Operations
+      type: object
+      required:
+      - operations
+      title: OperationBatch
+    OperationInput:
+      properties:
+        operation_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Operation Id
+        device_sequence:
+          type: integer
+          minimum: 1.0
+          title: Device Sequence
+        entity_type:
+          type: string
+          enum:
+          - agent_conversation
+          - annotation
+          - comment
+          - document_feedback
+          - logical_comment
+          - pdf_link_override
+          - proposal
+          - proposal_event
+          - review_correspondence_review
+          - resolution
+          - review_card
+          - review_card_feedback
+          - review_event
+          - review_exclusion
+          - review_tag_groups
+          - review_tag_merge
+          title: Entity Type
+        entity_id:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Entity Id
+        collection:
+          type: string
+          maxLength: 512
+          title: Collection
+          default: ''
+        base_revision:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Base Revision
+        client_timestamp:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Client Timestamp
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+      type: object
+      required:
+      - operation_id
+      - device_sequence
+      - entity_type
+      - entity_id
+      - client_timestamp
+      - payload
+      title: OperationInput
+    OperationResult:
+      properties:
+        operation_id:
+          type: string
+          title: Operation Id
+        server_sequence:
+          type: integer
+          title: Server Sequence
+        outcome:
+          type: string
+          enum:
+          - applied
+          - superseded
+          - duplicate
+          title: Outcome
+        entity_revision:
+          type: integer
+          title: Entity Revision
+        anchor_job_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Anchor Job Id
+      type: object
+      required:
+      - operation_id
+      - server_sequence
+      - outcome
+      - entity_revision
+      title: OperationResult
+    ProjectionRecord:
+      properties:
+        entity_type:
+          type: string
+          title: Entity Type
+        entity_id:
+          type: string
+          title: Entity Id
+        collection:
+          type: string
+          title: Collection
+        revision:
+          type: integer
+          title: Revision
+        deleted:
+          type: boolean
+          title: Deleted
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+      type: object
+      required:
+      - entity_type
+      - entity_id
+      - collection
+      - revision
+      - deleted
+      - payload
+      title: ProjectionRecord
+    ProjectionSnapshot:
+      properties:
+        snapshot_sequence:
+          type: integer
+          title: Snapshot Sequence
+        projections:
+          items:
+            $ref: '#/components/schemas/ProjectionRecord'
+          type: array
+          title: Projections
+      type: object
+      required:
+      - snapshot_sequence
+      - projections
+      title: ProjectionSnapshot
+    ProposalDecisionClaim:
+      properties:
+        decision_id:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          title: Decision Id
+        proposal_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9._:-]{0,127}$
+          title: Proposal Id
+        action:
+          type: string
+          enum:
+          - accept
+          - reject
+          - partial
+          - withdraw
+          title: Action
+        wrapper_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Wrapper Sha256
+        source_file:
+          type: string
+          maxLength: 1024
+          minLength: 1
+          title: Source File
+        decided_at:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Decided At
+        origin:
+          type: string
+          maxLength: 32
+          minLength: 1
+          title: Origin
+      type: object
+      required:
+      - decision_id
+      - proposal_id
+      - action
+      - wrapper_sha256
+      - source_file
+      - decided_at
+      - origin
+      title: ProposalDecisionClaim
+      description: 'A client''s record that it decided a proposal; it travels with the upload that removes
+        the wrapper.
+
+
+        See protocol/agent-proposals.md 10.4.2. The server keeps no decision table.'
+    ProposalDecisionOutcome:
+      properties:
+        decision_id:
+          type: string
+          title: Decision Id
+        proposal_id:
+          type: string
+          title: Proposal Id
+        outcome:
+          type: string
+          enum:
+          - matched
+          - matched_late
+          - settled
+          - unmatched
+          title: Outcome
+      type: object
+      required:
+      - decision_id
+      - proposal_id
+      - outcome
+      title: ProposalDecisionOutcome
+    ProposalObjectIdentity:
+      properties:
+        id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9._:-]{0,127}$
+          title: Id
+        object_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Object Sha256
+      type: object
+      required:
+      - id
+      - object_sha256
+      title: ProposalObjectIdentity
+    RenderCheckRequest:
+      properties:
+        target:
+          type: string
+          title: Target
+          default: all
+        request_id:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Request Id
+      type: object
+      title: RenderCheckRequest
+    RenderCheckResult:
+      properties:
+        status:
+          type: string
+          enum:
+          - current
+          - building
+          - attention
+          title: Status
+        library_revision:
+          type: integer
+          title: Library Revision
+        build:
+          anyOf:
+          - $ref: '#/components/schemas/BuildRecord'
+          - type: 'null'
+        documents:
+          items:
+            $ref: '#/components/schemas/RenderDocumentState'
+          type: array
+          title: Documents
+      type: object
+      required:
+      - status
+      - library_revision
+      title: RenderCheckResult
+    RenderDocumentState:
+      properties:
+        filename:
+          type: string
+          title: Filename
+        state:
+          type: string
+          enum:
+          - queued
+          - building
+          - current
+          - attention
+          title: State
+        reason:
+          type: string
+          title: Reason
+          default: ''
+      type: object
+      required:
+      - filename
+      - state
+      title: RenderDocumentState
+    RenderPublicationIdentity:
+      properties:
+        html_status:
+          anyOf:
+          - type: string
+            enum:
+            - pending
+            - ready
+            - failed
+          - type: 'null'
+          title: Html Status
+        html_edition_sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Html Edition Sha256
+        html_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Html Error
+        filename:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]*\.pdf$
+          title: Filename
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Sha256
+        size_bytes:
+          type: integer
+          minimum: 0.0
+          title: Size Bytes
+        build_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Build Id
+        source_frontier:
+          type: integer
+          minimum: 0.0
+          title: Source Frontier
+        published_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Published At
+      type: object
+      required:
+      - filename
+      - sha256
+      - size_bytes
+      - source_frontier
+      title: RenderPublicationIdentity
+    RenderStateDocumentRecord:
+      properties:
+        filename:
+          type: string
+          title: Filename
+        status:
+          type: string
+          enum:
+          - synced
+          - out_of_sync
+          - building
+          - attention
+          - error
+          title: Status
+        reason:
+          type: string
+          title: Reason
+          default: ''
+        build_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Build Id
+        last_successful_build_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Successful Build At
+        publication:
+          anyOf:
+          - $ref: '#/components/schemas/RenderPublicationIdentity'
+          - type: 'null'
+      type: object
+      required:
+      - filename
+      - status
+      title: RenderStateDocumentRecord
+    RenderStateRecord:
+      properties:
+        status:
+          type: string
+          enum:
+          - current
+          - changed
+          - building
+          - attention
+          title: Status
+        render_fingerprint:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Render Fingerprint
+        source_frontier:
+          type: integer
+          minimum: 0.0
+          title: Source Frontier
+        build_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Build Id
+        observed_at:
+          type: string
+          format: date-time
+          title: Observed At
+        last_successful_build_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Successful Build At
+        server_duration_ms:
+          type: number
+          minimum: 0.0
+          title: Server Duration Ms
+        storage:
+          $ref: '#/components/schemas/ServerStorageUsage'
+        server_summary:
+          $ref: '#/components/schemas/ServerSummary'
+        documents:
+          items:
+            $ref: '#/components/schemas/RenderStateDocumentRecord'
+          type: array
+          title: Documents
+      type: object
+      required:
+      - status
+      - render_fingerprint
+      - source_frontier
+      - observed_at
+      - server_duration_ms
+      - storage
+      - server_summary
+      title: RenderStateRecord
+    RenderStatusRecord:
+      properties:
+        status:
+          type: string
+          enum:
+          - synced
+          - out_of_sync
+          - building
+          - attention
+          - error
+          title: Status
+        reason:
+          type: string
+          title: Reason
+          default: ''
+        source_frontier:
+          type: integer
+          minimum: 0.0
+          title: Source Frontier
+        build:
+          anyOf:
+          - $ref: '#/components/schemas/BuildRecord'
+          - type: 'null'
+        publication:
+          anyOf:
+          - $ref: '#/components/schemas/RenderPublicationIdentity'
+          - type: 'null'
+      type: object
+      required:
+      - status
+      - source_frontier
+      title: RenderStatusRecord
+    ReviewGenerationOptions:
+      properties:
+        expected_pdf_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Expected Pdf Sha256
+        max_candidates:
+          type: integer
+          maximum: 50.0
+          minimum: 1.0
+          title: Max Candidates
+          default: 20
+        instruction:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Instruction
+          default: Create high-value question-and-answer review cards from this PDF.
+        agent_model:
+          anyOf:
+          - type: string
+            maxLength: 100
+            minLength: 1
+          - type: 'null'
+          title: Agent Model
+        agent_reasoning_effort:
+          anyOf:
+          - type: string
+            enum:
+            - low
+            - medium
+            - high
+            - xhigh
+          - type: 'null'
+          title: Agent Reasoning Effort
+      type: object
+      required:
+      - expected_pdf_sha256
+      title: ReviewGenerationOptions
+    ScopedBuildRequest:
+      properties:
+        scope:
+          $ref: '#/components/schemas/BuildScope'
+        mode:
+          type: string
+          const: if_changed
+          title: Mode
+          default: if_changed
+        repair_mode:
+          type: string
+          enum:
+          - none
+          - codex
+          - review_cards
+          title: Repair Mode
+          default: none
+        review_generation:
+          anyOf:
+          - $ref: '#/components/schemas/ReviewGenerationOptions'
+          - type: 'null'
+        request_id:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Request Id
+        source_frontier:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Source Frontier
+        input_snapshot_sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Input Snapshot Sha256
+      type: object
+      required:
+      - scope
+      title: ScopedBuildRequest
+    ServerMaintenanceSummary:
+      properties:
+        status:
+          type: string
+          enum:
+          - successful
+          - running
+          - failed
+          - unknown
+          title: Status
+        last_run_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Run At
+      type: object
+      required:
+      - status
+      title: ServerMaintenanceSummary
+    ServerStorageUsage:
+      properties:
+        total_bytes:
+          type: integer
+          minimum: 0.0
+          title: Total Bytes
+        used_bytes:
+          type: integer
+          minimum: 0.0
+          title: Used Bytes
+        available_bytes:
+          type: integer
+          minimum: 0.0
+          title: Available Bytes
+      type: object
+      required:
+      - total_bytes
+      - used_bytes
+      - available_bytes
+      title: ServerStorageUsage
+    ServerSummary:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - attention
+          - unknown
+          title: Status
+        operating_system:
+          type: string
+          title: Operating System
+          default: ''
+        architecture:
+          type: string
+          title: Architecture
+          default: ''
+        uptime_seconds:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Uptime Seconds
+        cpu_count:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Cpu Count
+        memory_total_bytes:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Memory Total Bytes
+        memory_available_bytes:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Memory Available Bytes
+        services_available:
+          type: boolean
+          title: Services Available
+          default: false
+        services_running:
+          type: integer
+          minimum: 0.0
+          title: Services Running
+        services_total:
+          type: integer
+          minimum: 0.0
+          title: Services Total
+        thoughts_memory_current_bytes:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Thoughts Memory Current Bytes
+        worker_peak_memory_bytes:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Worker Peak Memory Bytes
+        builds_queued:
+          type: integer
+          minimum: 0.0
+          title: Builds Queued
+        builds_running:
+          type: integer
+          minimum: 0.0
+          title: Builds Running
+        latest_build_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Latest Build Status
+        latest_build_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Latest Build At
+        backup:
+          $ref: '#/components/schemas/ServerMaintenanceSummary'
+        integrity_check:
+          $ref: '#/components/schemas/ServerMaintenanceSummary'
+      type: object
+      required:
+      - status
+      - services_running
+      - services_total
+      - builds_queued
+      - builds_running
+      - backup
+      - integrity_check
+      title: ServerSummary
+    SourceApplyRequest:
+      properties:
+        operation_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Operation Id
+        device_sequence:
+          type: integer
+          minimum: 1.0
+          title: Device Sequence
+        path:
+          type: string
+          maxLength: 1024
+          minLength: 1
+          title: Path
+        base_revision:
+          type: integer
+          minimum: 0.0
+          title: Base Revision
+        base_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Base Sha256
+        base_object_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Base Object Sha256
+        content_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Content Sha256
+        client_timestamp:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Client Timestamp
+        proposal_decisions:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ProposalDecisionClaim'
+            type: array
+            maxItems: 500
+          - type: 'null'
+          title: Proposal Decisions
+      type: object
+      required:
+      - operation_id
+      - device_sequence
+      - path
+      - base_revision
+      - base_sha256
+      - base_object_sha256
+      - content_sha256
+      - client_timestamp
+      title: SourceApplyRequest
+    SourceApplyResult:
+      properties:
+        outcome:
+          type: string
+          enum:
+          - applied
+          - merged
+          - conflict
+          - duplicate
+          title: Outcome
+        path:
+          type: string
+          title: Path
+        revision:
+          type: integer
+          title: Revision
+        sha256:
+          type: string
+          title: Sha256
+        object_sha256:
+          type: string
+          title: Object Sha256
+        server_sequence:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Server Sequence
+        conflict_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conflict Id
+        conflict_count:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Conflict Count
+        merged_object_sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Merged Object Sha256
+        current_modified_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Modified At
+        incoming_modified_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Incoming Modified At
+        proposal_decisions:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ProposalDecisionOutcome'
+            type: array
+          - type: 'null'
+          title: Proposal Decisions
+      type: object
+      required:
+      - outcome
+      - path
+      - revision
+      - sha256
+      - object_sha256
+      title: SourceApplyResult
+    SourcePublicationMutation:
+      properties:
+        action:
+          type: string
+          enum:
+          - upsert
+          - delete
+          title: Action
+        operation_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Operation Id
+        device_sequence:
+          type: integer
+          minimum: 1.0
+          title: Device Sequence
+        path:
+          type: string
+          maxLength: 1024
+          minLength: 1
+          title: Path
+        base_revision:
+          type: integer
+          minimum: 0.0
+          title: Base Revision
+        base_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Base Sha256
+        base_object_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Base Object Sha256
+        content_sha256:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Content Sha256
+        client_timestamp:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Client Timestamp
+      type: object
+      required:
+      - action
+      - operation_id
+      - device_sequence
+      - path
+      - base_revision
+      - base_sha256
+      - base_object_sha256
+      - client_timestamp
+      title: SourcePublicationMutation
+    SourcePublicationRequest:
+      properties:
+        publication_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Publication Id
+        mutations:
+          items:
+            $ref: '#/components/schemas/SourcePublicationMutation'
+          type: array
+          maxItems: 1000
+          minItems: 1
+          title: Mutations
+        proposal_decisions:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ProposalDecisionClaim'
+            type: array
+            maxItems: 500
+          - type: 'null'
+          title: Proposal Decisions
+      type: object
+      required:
+      - publication_id
+      - mutations
+      title: SourcePublicationRequest
+    SourcePublicationResult:
+      properties:
+        publication_id:
+          type: string
+          title: Publication Id
+        source_frontier:
+          type: integer
+          title: Source Frontier
+        results:
+          items:
+            $ref: '#/components/schemas/SourceApplyResult'
+          type: array
+          title: Results
+        trace_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Trace Id
+        proposal_decisions:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ProposalDecisionOutcome'
+            type: array
+          - type: 'null'
+          title: Proposal Decisions
+      type: object
+      required:
+      - publication_id
+      - source_frontier
+      - results
+      title: SourcePublicationResult
+    SourceSelectionRequest:
+      properties:
+        pdf_filename:
+          type: string
+          pattern: ^[^/\\]+\.pdf$
+          title: Pdf Filename
+        pdf_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Pdf Sha256
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+        x:
+          type: number
+          minimum: 0.0
+          title: X
+        y:
+          type: number
+          minimum: 0.0
+          title: Y
+      type: object
+      required:
+      - pdf_filename
+      - pdf_sha256
+      - page
+      - x
+      - y
+      title: SourceSelectionRequest
+    SourceSelectionResult:
+      properties:
+        path:
+          type: string
+          title: Path
+        line:
+          type: integer
+          minimum: 1.0
+          title: Line
+        column:
+          type: integer
+          title: Column
+        build_id:
+          type: string
+          title: Build Id
+        revision:
+          type: integer
+          title: Revision
+        sha256:
+          type: string
+          title: Sha256
+        object_sha256:
+          type: string
+          title: Object Sha256
+      type: object
+      required:
+      - path
+      - line
+      - column
+      - build_id
+      - revision
+      - sha256
+      - object_sha256
+      title: SourceSelectionResult
+    SourceSnapshot:
+      properties:
+        path:
+          type: string
+          title: Path
+        revision:
+          type: integer
+          title: Revision
+        sha256:
+          type: string
+          title: Sha256
+        object_sha256:
+          type: string
+          title: Object Sha256
+        deleted:
+          type: boolean
+          title: Deleted
+          default: false
+      type: object
+      required:
+      - path
+      - revision
+      - sha256
+      - object_sha256
+      title: SourceSnapshot
+    SourceTreeSnapshot:
+      properties:
+        source_frontier:
+          type: integer
+          title: Source Frontier
+        sources:
+          items:
+            $ref: '#/components/schemas/SourceSnapshot'
+          type: array
+          title: Sources
+      type: object
+      required:
+      - source_frontier
+      - sources
+      title: SourceTreeSnapshot
+    SyncPlan:
+      properties:
+        contract_version:
+          type: integer
+          const: 2
+          title: Contract Version
+          default: 2
+        source_profile:
+          type: string
+          const: reader-v1
+          title: Source Profile
+          default: reader-v1
+        include_voice_media:
+          type: boolean
+          const: false
+          title: Include Voice Media
+          default: false
+        plan_id:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Plan Id
+        latest_server_sequence:
+          type: integer
+          minimum: 0.0
+          title: Latest Server Sequence
+        library_revision:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Library Revision
+        metadata_download_bytes:
+          type: integer
+          minimum: 0.0
+          title: Metadata Download Bytes
+        download_bytes:
+          type: integer
+          minimum: 0.0
+          title: Download Bytes
+        objects:
+          items:
+            $ref: '#/components/schemas/SyncPlanObject'
+          type: array
+          title: Objects
+      type: object
+      required:
+      - plan_id
+      - latest_server_sequence
+      - library_revision
+      - metadata_download_bytes
+      - download_bytes
+      title: SyncPlan
+    SyncPlanObject:
+      properties:
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Sha256
+        size_bytes:
+          type: integer
+          minimum: 0.0
+          title: Size Bytes
+        kind:
+          type: string
+          enum:
+          - pdf
+          - source
+          - source_index
+          title: Kind
+        roles:
+          items:
+            type: string
+            enum:
+            - pdf
+            - pdf_delta
+            - source_index
+            - source_manifest
+            - source_snapshot
+            - reverse_lookup
+            - raw_synctex_fallback
+            - source_resource
+            - renderer_evidence
+          type: array
+          minItems: 1
+          title: Roles
+        publications:
+          items:
+            type: string
+          type: array
+          title: Publications
+      type: object
+      required:
+      - sha256
+      - size_bytes
+      - kind
+      - roles
+      title: SyncPlanObject
+    SyncPlanRequest:
+      properties:
+        contract_version:
+          type: integer
+          const: 2
+          title: Contract Version
+          default: 2
+        source_profile:
+          type: string
+          const: reader-v1
+          title: Source Profile
+        include_voice_media:
+          type: boolean
+          const: false
+          title: Include Voice Media
+          default: false
+        after_sequence:
+          type: integer
+          minimum: 0.0
+          title: After Sequence
+          default: 0
+        projection_bootstrapped:
+          type: boolean
+          title: Projection Bootstrapped
+          default: false
+        library_revision:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Library Revision
+        known_object_sha256s:
+          items:
+            type: string
+          type: array
+          maxItems: 20000
+          title: Known Object Sha256S
+        pdf_delta_base_sha256s:
+          items:
+            type: string
+          type: array
+          maxItems: 20000
+          title: Pdf Delta Base Sha256S
+        target_pdf_filename:
+          anyOf:
+          - type: string
+            pattern: ^[^/\\]+\.pdf$
+          - type: 'null'
+          title: Target Pdf Filename
+        capabilities:
+          items:
+            type: string
+          type: array
+          maxItems: 64
+          title: Capabilities
+      type: object
+      required:
+      - source_profile
+      title: SyncPlanRequest
+    SyncState:
+      properties:
+        contract_version:
+          type: integer
+          const: 2
+          title: Contract Version
+          default: 2
+        latest_server_sequence:
+          type: integer
+          minimum: 0.0
+          title: Latest Server Sequence
+        library_revision:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Library Revision
+        source_frontier:
+          type: integer
+          minimum: 0.0
+          title: Source Frontier
+      type: object
+      required:
+      - latest_server_sequence
+      - library_revision
+      - source_frontier
+      title: SyncState
+    SyncPreflightEstimate:
+      properties:
+        plan_id:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Plan Id
+        latest_server_sequence:
+          type: integer
+          minimum: 0.0
+          title: Latest Server Sequence
+        library_revision:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Library Revision
+        metadata_download_bytes:
+          type: integer
+          minimum: 0.0
+          title: Metadata Download Bytes
+        download_bytes:
+          type: integer
+          minimum: 0.0
+          title: Download Bytes
+        objects:
+          items:
+            $ref: '#/components/schemas/SyncPreflightObject'
+          type: array
+          title: Objects
+      type: object
+      required:
+      - plan_id
+      - latest_server_sequence
+      - library_revision
+      - metadata_download_bytes
+      - download_bytes
+      title: SyncPreflightEstimate
+    SyncPreflightObject:
+      properties:
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          title: Sha256
+        size_bytes:
+          type: integer
+          minimum: 0.0
+          title: Size Bytes
+        kind:
+          type: string
+          enum:
+          - pdf
+          - source
+          - source_index
+          - voice
+          title: Kind
+      type: object
+      required:
+      - sha256
+      - size_bytes
+      - kind
+      title: SyncPreflightObject
+    SyncPreflightRequest:
+      properties:
+        after_sequence:
+          type: integer
+          minimum: 0.0
+          title: After Sequence
+          default: 0
+        projection_bootstrapped:
+          type: boolean
+          title: Projection Bootstrapped
+          default: false
+        library_revision:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Library Revision
+        known_object_sha256s:
+          items:
+            type: string
+          type: array
+          maxItems: 20000
+          title: Known Object Sha256S
+        target_pdf_filename:
+          anyOf:
+          - type: string
+            pattern: ^[^/\\]+\.pdf$
+          - type: 'null'
+          title: Target Pdf Filename
+      type: object
+      title: SyncPreflightRequest
+    TraceEventPage:
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+          title: Schema Version
+          default: 1
+        trace_id:
+          type: string
+          title: Trace Id
+        events:
+          items:
+            $ref: '#/components/schemas/TraceEventRecord'
+          type: array
+          title: Events
+        next_after:
+          type: integer
+          minimum: 0.0
+          title: Next After
+        has_more:
+          type: boolean
+          title: Has More
+        terminal:
+          type: boolean
+          title: Terminal
+      type: object
+      required:
+      - trace_id
+      - events
+      - next_after
+      - has_more
+      - terminal
+      title: TraceEventPage
+    TraceEventRecord:
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+          title: Schema Version
+          default: 1
+        trace_id:
+          type: string
+          pattern: ^[0-9a-fA-F-]{36}$
+          title: Trace Id
+        sequence:
+          type: integer
+          minimum: 1.0
+          title: Sequence
+        event_key:
+          type: string
+          title: Event Key
+        timestamp:
+          type: string
+          format: date-time
+          title: Timestamp
+        component:
+          type: string
+          title: Component
+        phase:
+          type: string
+          title: Phase
+        state:
+          type: string
+          title: State
+        target:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target
+        build_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Build Id
+        message:
+          type: string
+          title: Message
+        completed:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Completed
+        total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total
+        unit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unit
+        bytes_completed:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Bytes Completed
+        bytes_total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Bytes Total
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+        terminal:
+          type: boolean
+          title: Terminal
+          default: false
+      type: object
+      required:
+      - trace_id
+      - sequence
+      - event_key
+      - timestamp
+      - component
+      - phase
+      - state
+      - message
+      title: TraceEventRecord
+    TraceSnapshot:
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+          title: Schema Version
+          default: 1
+        trace_id:
+          type: string
+          title: Trace Id
+        target:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target
+        server_state:
+          type: string
+          title: Server State
+        last_sequence:
+          type: integer
+          minimum: 0.0
+          title: Last Sequence
+        terminal:
+          type: boolean
+          title: Terminal
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+        terminal_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Terminal At
+        build_ids:
+          items:
+            type: string
+          type: array
+          title: Build Ids
+      type: object
+      required:
+      - trace_id
+      - server_state
+      - last_sequence
+      - terminal
+      - created_at
+      - updated_at
+      title: TraceSnapshot
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    DocumentRegistrationRequest:
+      properties:
+        document_id:
+          type: string
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+          title: Document Id
+        filename:
+          anyOf:
+          - type: string
+            pattern: ^[A-Za-z0-9][A-Za-z0-9_.-]*\.pdf$
+          - type: 'null'
+          title: Filename
+        source_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Path
+      type: object
+      required:
+      - document_id
+      title: DocumentRegistrationRequest
+    AgentNoteCreateResponse:
+      properties:
+        note:
+          $ref: '#/components/schemas/AgentNoteRecord'
+        delivery:
+          $ref: '#/components/schemas/AgentNoteDelivery'
+        reply_listening:
+          $ref: '#/components/schemas/AgentNoteReplyListening'
+      type: object
+      required:
+      - note
+      - delivery
+      - reply_listening
+      title: AgentNoteCreateResponse
+    AgentNoteDelivery:
+      properties:
+        live:
+          type: boolean
+          title: Live
+        listeners:
+          items:
+            $ref: '#/components/schemas/AgentNoteListenerRecord'
+          type: array
+          title: Listeners
+      type: object
+      required:
+      - live
+      - listeners
+      title: AgentNoteDelivery
+    AgentNoteInbox:
+      properties:
+        notes:
+          items:
+            $ref: '#/components/schemas/AgentNoteRecord'
+          type: array
+          title: Notes
+        cursor:
+          type: integer
+          title: Cursor
+        server_time:
+          type: string
+          title: Server Time
+      type: object
+      required:
+      - notes
+      - cursor
+      - server_time
+      title: AgentNoteInbox
+    AgentNoteListeningAnswer:
+      properties:
+        state:
+          type: string
+          enum:
+          - listening
+          - not_listening
+          - unknown
+          title: State
+        listeners:
+          items:
+            $ref: '#/components/schemas/AgentNoteReplyListenerRecord'
+          type: array
+          title: Listeners
+        note_id:
+          type: string
+          title: Note Id
+        checked_at:
+          type: string
+          title: Checked At
+      type: object
+      required:
+      - state
+      - listeners
+      - note_id
+      - checked_at
+      title: AgentNoteListeningAnswer
+    AgentNoteList:
+      properties:
+        notes:
+          items:
+            $ref: '#/components/schemas/AgentNoteRecord'
+          type: array
+          title: Notes
+      type: object
+      required:
+      - notes
+      title: AgentNoteList
+    AgentNoteListenerRecord:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        last_seen_at:
+          type: string
+          title: Last Seen At
+        context:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Context
+      type: object
+      required:
+      - device_id
+      - last_seen_at
+      - context
+      title: AgentNoteListenerRecord
+    AgentNoteRecord:
+      properties:
+        note_id:
+          type: string
+          title: Note Id
+        sequence:
+          type: integer
+          title: Sequence
+        created_at:
+          type: string
+          title: Created At
+        sender_device_id:
+          type: string
+          title: Sender Device Id
+        title:
+          type: string
+          title: Title
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        media_type:
+          type: string
+          title: Media Type
+        image_width:
+          type: integer
+          title: Image Width
+        image_height:
+          type: integer
+          title: Image Height
+        image_bytes:
+          type: integer
+          title: Image Bytes
+        image_sha256:
+          type: string
+          title: Image Sha256
+        image_url:
+          type: string
+          title: Image Url
+        document_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Id
+        document_filename:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Filename
+        review_card_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Review Card Id
+        review_question:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Review Question
+        origin:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Origin
+        delivered_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Delivered At
+        delivered_device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Delivered Device Id
+        opened_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Opened At
+        deleted:
+          type: boolean
+          title: Deleted
+        replies:
+          items:
+            $ref: '#/components/schemas/AgentNoteReplyRecord'
+          type: array
+          title: Replies
+      type: object
+      required:
+      - note_id
+      - sequence
+      - created_at
+      - sender_device_id
+      - title
+      - message
+      - media_type
+      - image_width
+      - image_height
+      - image_bytes
+      - image_sha256
+      - image_url
+      - document_id
+      - document_filename
+      - review_card_id
+      - review_question
+      - origin
+      - delivered_at
+      - delivered_device_id
+      - opened_at
+      - deleted
+      - replies
+      title: AgentNoteRecord
+    AgentNoteReplyFeed:
+      properties:
+        replies:
+          items:
+            $ref: '#/components/schemas/AgentNoteReplyFeedItem'
+          type: array
+          title: Replies
+        cursor:
+          type: integer
+          title: Cursor
+      type: object
+      required:
+      - replies
+      - cursor
+      title: AgentNoteReplyFeed
+    AgentNoteReplyListenerRecord:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+        note_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note Id
+        last_seen_at:
+          type: string
+          title: Last Seen At
+      type: object
+      required:
+      - device_id
+      - conversation_id
+      - note_id
+      - last_seen_at
+      title: AgentNoteReplyListenerRecord
+    AgentNoteReplyListening:
+      properties:
+        state:
+          type: string
+          enum:
+          - listening
+          - not_listening
+          - unknown
+          title: State
+        listeners:
+          items:
+            $ref: '#/components/schemas/AgentNoteReplyListenerRecord'
+          type: array
+          title: Listeners
+      type: object
+      required:
+      - state
+      - listeners
+      title: AgentNoteReplyListening
+    AgentNoteReplyPhotoRecord:
+      properties:
+        url:
+          type: string
+          title: Url
+        media_type:
+          type: string
+          title: Media Type
+        width:
+          type: integer
+          title: Width
+        height:
+          type: integer
+          title: Height
+        bytes:
+          type: integer
+          title: Bytes
+        sha256:
+          type: string
+          title: Sha256
+        capture:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capture
+      type: object
+      required:
+      - url
+      - media_type
+      - width
+      - height
+      - bytes
+      - sha256
+      - capture
+      title: AgentNoteReplyPhotoRecord
+    AgentNoteReplyFeedItem:
+      properties:
+        reply_id:
+          type: string
+          title: Reply Id
+        sequence:
+          type: integer
+          title: Sequence
+        note_id:
+          type: string
+          title: Note Id
+        device_id:
+          type: string
+          title: Device Id
+        created_at:
+          type: string
+          title: Created At
+        media_type:
+          type: string
+          title: Media Type
+        image_width:
+          type: integer
+          title: Image Width
+        image_height:
+          type: integer
+          title: Image Height
+        image_bytes:
+          type: integer
+          title: Image Bytes
+        image_sha256:
+          type: string
+          title: Image Sha256
+        image_url:
+          type: string
+          title: Image Url
+        strokes_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Strokes Url
+        stroke_count:
+          type: integer
+          title: Stroke Count
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        photo:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteReplyPhotoRecord'
+          - type: 'null'
+        note:
+          $ref: '#/components/schemas/AgentNoteSummary'
+      type: object
+      required:
+      - reply_id
+      - sequence
+      - note_id
+      - device_id
+      - created_at
+      - media_type
+      - image_width
+      - image_height
+      - image_bytes
+      - image_sha256
+      - image_url
+      - strokes_url
+      - stroke_count
+      - message
+      - photo
+      - note
+      title: AgentNoteReplyFeedItem
+    AgentNoteReplyRecord:
+      properties:
+        reply_id:
+          type: string
+          title: Reply Id
+        sequence:
+          type: integer
+          title: Sequence
+        note_id:
+          type: string
+          title: Note Id
+        device_id:
+          type: string
+          title: Device Id
+        created_at:
+          type: string
+          title: Created At
+        media_type:
+          type: string
+          title: Media Type
+        image_width:
+          type: integer
+          title: Image Width
+        image_height:
+          type: integer
+          title: Image Height
+        image_bytes:
+          type: integer
+          title: Image Bytes
+        image_sha256:
+          type: string
+          title: Image Sha256
+        image_url:
+          type: string
+          title: Image Url
+        strokes_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Strokes Url
+        stroke_count:
+          type: integer
+          title: Stroke Count
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        photo:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteReplyPhotoRecord'
+          - type: 'null'
+      type: object
+      required:
+      - reply_id
+      - sequence
+      - note_id
+      - device_id
+      - created_at
+      - media_type
+      - image_width
+      - image_height
+      - image_bytes
+      - image_sha256
+      - image_url
+      - strokes_url
+      - stroke_count
+      - message
+      - photo
+      title: AgentNoteReplyRecord
+    AgentNoteReplyCreateResponse:
+      properties:
+        reply_id:
+          type: string
+          title: Reply Id
+        sequence:
+          type: integer
+          title: Sequence
+        note_id:
+          type: string
+          title: Note Id
+        device_id:
+          type: string
+          title: Device Id
+        created_at:
+          type: string
+          title: Created At
+        media_type:
+          type: string
+          title: Media Type
+        image_width:
+          type: integer
+          title: Image Width
+        image_height:
+          type: integer
+          title: Image Height
+        image_bytes:
+          type: integer
+          title: Image Bytes
+        image_sha256:
+          type: string
+          title: Image Sha256
+        image_url:
+          type: string
+          title: Image Url
+        strokes_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Strokes Url
+        stroke_count:
+          type: integer
+          title: Stroke Count
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        photo:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteReplyPhotoRecord'
+          - type: 'null'
+        listening:
+          $ref: '#/components/schemas/AgentNoteReplyListening'
+      type: object
+      required:
+      - reply_id
+      - sequence
+      - note_id
+      - device_id
+      - created_at
+      - media_type
+      - image_width
+      - image_height
+      - image_bytes
+      - image_sha256
+      - image_url
+      - strokes_url
+      - stroke_count
+      - message
+      - photo
+      - listening
+      title: AgentNoteReplyCreateResponse
+    AgentNoteSummary:
+      properties:
+        note_id:
+          type: string
+          title: Note Id
+        title:
+          type: string
+          title: Title
+        document_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Id
+        review_card_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Review Card Id
+      type: object
+      required:
+      - note_id
+      - title
+      - document_id
+      - review_card_id
+      title: AgentNoteSummary

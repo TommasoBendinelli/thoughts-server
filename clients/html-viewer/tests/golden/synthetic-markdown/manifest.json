@@ -1,0 +1,45 @@
+{
+ "kind": "thoughts_html_edition",
+ "schema": 1,
+ "document_id": "d04bf3c9-e206-4c60-96e1-0342615eee56",
+ "source_format": "markdown",
+ "source_snapshot_sha256": null,
+ "pdf_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+ "converter": {
+  "name": "pandoc",
+  "version": "3.9",
+  "profile": "thoughts-commonmark-v1",
+  "math": "tex+mathjax-4.1.3",
+  "edition": "1"
+ },
+ "entry": "index.html",
+ "files": {
+  "assets/697c737a6c0fb48f.png": "697c737a6c0fb48f74d3fdb9611d9d71b09988d68e210f03ff990c99fa94bc99",
+  "index.html": "2d06ccd59df96fe6beda756bfeed2f97154832349eb28af99e86b23aa62de249",
+  "style.css": "f24b8543c5bde5d09a07bd0698992795e0201686ac4501dc5a3e2a990f016c73"
+ },
+ "anchors": [
+  "card:0072b138-d3fe-416a-83e7-1407058f0e2b:0",
+  "comment:c3"
+ ],
+ "items": {
+  "cards": {
+   "0072b138-d3fe-416a-83e7-1407058f0e2b": {
+    "anchors": [
+     "card:0072b138-d3fe-416a-83e7-1407058f0e2b:0"
+    ],
+    "question_anchors": []
+   }
+  },
+  "comments": {
+   "c3": [
+    "comment:c3"
+   ]
+  }
+ },
+ "source_map": "exact",
+ "source_files": {
+  "docs-notes/notes.md": "7681d92c26fe7dc73bc58ed90e45987ed0ae7a99008fdfecc127e3ec604f3c91"
+ },
+ "warnings": []
+}
