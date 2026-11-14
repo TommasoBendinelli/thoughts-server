@@ -3397,3 +3397,44 @@ def test_source_edit_marks_only_documents_that_recorded_the_file(client, auth_he
     # A newly created file may be one the compiler searched for; every project document is stale.
     apply("docs-manual/new.tex", b"new\n", 0, b"")
     assert states() == {"manual_first.pdf": "out_of_sync", "manual_second.pdf": "out_of_sync"}
+
+
+def test_a_pdf_built_before_the_newest_hundred_builds_is_still_current(client, auth_headers, settings):
+    """A busy Library queues many builds of other documents. Once a PDF's own build was
+    older than the newest 100, render checks reported it as never built and rebuilt it,
+    with every other PDF that build had published (a whole Project at once)."""
+    from datetime import timedelta
+
+    from thoughts_server.builds import render_status
+    from thoughts_server.document_identity import register_document
+
+    database = Database(settings.database_url)
+    store = ObjectStore(settings.object_root)
+    initial = client.post("/v1/builds", headers=auth_headers, json={"target": "all"}).json()
+    assert BuildWorker(settings, database.session_factory, store).run_once() is True
+    with database.session_factory() as session:
+        job = session.get(BuildJob, initial["id"])
+        job.progress = {**(job.progress or {}), "documents": ["quiet.pdf"]}
+        pdf = store.put_bytes(session, b"%PDF-quiet", "application/pdf")
+        document_id = str(uuid.uuid4())
+        register_document(session, document_id, "quiet.pdf", "docs-quiet/tex/source/quiet.tex")
+        session.add(Publication(
+            filename="quiet.pdf", document_id=document_id, object_sha256=pdf.sha256,
+            size_bytes=pdf.size_bytes, project="docs-quiet", build_id=job.id,
+            source_frontier=job.source_frontier,
+            metadata_json={"kind": "source_linked", "source_resources": [],
+                           "compiler_dependencies": {"version": 1, "paths": ["docs-quiet/tex/source/quiet.tex"]}},
+        ))
+        for index in range(101):
+            session.add(BuildJob(
+                id=f"busy-{index}", requested_by="test-device", target="all", source_frontier=job.source_frontier,
+                source_snapshot_sha256=job.source_snapshot_sha256, comment_frontier=job.comment_frontier,
+                annotation_frontier=job.annotation_frontier, toolchain_key=job.toolchain_key,
+                dedupe_key=hashlib.sha256(f"busy-{index}".encode()).hexdigest(), status="succeeded",
+                progress={"documents": ["busy.pdf"]}, created_at=job.created_at + timedelta(seconds=index + 1),
+            ))
+        session.commit()
+        status = render_status(session, "quiet.pdf", job.toolchain_key, store=store)
+        assert status["status"] == "synced", status["reason"]
+        assert status["build"]["id"] == job.id
+    database.close()

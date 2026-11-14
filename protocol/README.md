@@ -30,6 +30,8 @@ Source changes reference an uploaded base object and incoming object.
 
 An explicit `conflict` response means that the canonical source was not modified.
 
+Open conflicts are re-checked with the server's current merge rules whenever `GET /v1/conflicts` is called (any `status`). One whose stored base, server and incoming versions now merge cleanly, and whose result also merges cleanly onto the file if it changed since, is resolved by the server like a resolution with that text: a new source revision from the internal device `thoughts-conflict-recheck`, the conflict listed as `resolved`. One clash is one conflict: an upload with the same path, base, current and incoming versions as an open conflict answers that conflict's `conflict_id` and `merged_object_sha256`. Older records of one clash keep the newest open; the others get status `duplicate`, are no longer listed as `unresolved`, can still be resolved or discarded by their ID, and take the status the open one gets when it is resolved, discarded or superseded.
+
 Unknown payload fields must be retained when a client rewrites an entity.
 
 PDF link overrides (`pdf_link_override` records) are specified in `pdf-link-overrides.md`.

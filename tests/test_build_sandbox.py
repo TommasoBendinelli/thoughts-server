@@ -118,3 +118,94 @@ def test_a_hostile_document_cannot_read_outside_files_or_run_latexmkrc(tmp_path)
     assert "NOSECRETVISIBLE" in text and "SECRETVALUE" not in text
     assert not (project / "latexmkrc-ran").exists()
     assert not (project / "shell-ran").exists()
+
+
+# The Library's font cache
+
+
+def test_the_font_cache_is_the_only_thing_added_to_the_sandbox(fake_bwrap, tmp_path):
+    docs = tmp_path / "library" / "worktree"
+    project = docs / "docs-x"
+    project.mkdir(parents=True)
+    state = tmp_path / "library" / "state"
+    (state / "latex-cache").mkdir(parents=True)
+    (state / "server.db").write_text("the Library's database")
+    cache = build_sandbox.font_cache_for(state)
+    assert cache == state / "tex-font-cache" and not cache.exists()
+    arguments = dict(environment={"TEXINPUTS": f"{project}//:", "SOURCE_DATE_EPOCH": "946684800"},
+                     cwd=project, writable=[docs, project], pid_offset=build_sandbox.PID_STRIDE)
+
+    plain, plain_env = build_sandbox.wrap(["/usr/bin/latexmk", "-pdf", "main.tex"], **arguments)
+    cached, cached_env = build_sandbox.wrap(["/usr/bin/latexmk", "-pdf", "main.tex"], font_cache=cache, **arguments)
+
+    # The folder is made for the Library's account only.
+    assert cache.is_dir() and (cache.stat().st_mode & 0o777) == 0o700
+    mount = ["--bind", str(cache.resolve()), "/home/tex/texmf-var"]
+    position = cached.index(mount[1]) - 1
+    assert cached[position:position + 3] == mount
+    # Every other argument of the sandbox, and its environment, is what it was.
+    assert cached[:position] + cached[position + 3:] == plain and cached_env == plain_env
+    assert ("TEXMFVAR", "/home/tex/texmf-var") in option(cached, "--setenv")
+    assert ("TEXMFVAR", "/home/tex/texmf-var") in option(plain, "--setenv")
+    assert ("openout_any", "p") in option(cached, "--setenv") and ("shell_escape", "f") in option(cached, "--setenv")
+    # Mounted after the sandbox's home folder exists, so it lies inside it.
+    assert cached.index("/home/tex") < position
+    # Nothing else of the state folder is visible inside.
+    mounted = {source for source, _ in option(cached, "--bind") + option(cached, "--ro-bind")}
+    assert [path for path in mounted if path.startswith(str(state.resolve()))] == [str(cache.resolve())]
+    assert str(state.resolve()) not in mounted
+
+
+def test_an_unusable_font_cache_leaves_the_temporary_one(fake_bwrap, tmp_path):
+    project = tmp_path / "docs-x"
+    project.mkdir()
+    elsewhere = tmp_path / "another-library"
+    elsewhere.mkdir()
+    link = tmp_path / "state" / "tex-font-cache"
+    link.parent.mkdir()
+    link.symlink_to(elsewhere)
+    blocked = tmp_path / "file"
+    blocked.write_text("not a folder")
+    plain, _ = build_sandbox.wrap(["/usr/bin/latexmk", "main.tex"], environment={}, cwd=project, writable=[project])
+    for cache in (link, blocked, blocked / "below", Path("relative/tex-font-cache"), None):
+        command, _ = build_sandbox.wrap(["/usr/bin/latexmk", "main.tex"], environment={}, cwd=project,
+                                        writable=[project], font_cache=cache)
+        assert command == plain, cache
+    assert list(elsewhere.iterdir()) == [] and not Path("relative").exists()
+
+
+def test_each_library_compiles_with_its_own_font_cache(settings, tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from thoughts_server.builds import BuildWorker
+    from thoughts_server.database import Database
+    from thoughts_server.models import BuildJob
+    from thoughts_server.object_store import ObjectStore
+    from thoughts_server.proposal_previews import _preview_environment
+
+    job = BuildJob(id="job", target="all")
+    caches = []
+    for name in ("sam", "alex"):
+        library = replace(settings, state_root=tmp_path / name / "state", sandbox_builds=True)
+        database = Database(settings.database_url)
+        worker = BuildWorker(library, database.session_factory, ObjectStore(settings.object_root))
+        environment = worker._renderer_environment(job)
+        database.close()
+        assert environment[build_sandbox.FONT_CACHE_ENVIRONMENT] == str(tmp_path / name / "state" / "tex-font-cache")
+        assert _preview_environment(library)[build_sandbox.FONT_CACHE_ENVIRONMENT] == environment[
+            build_sandbox.FONT_CACHE_ENVIRONMENT]
+        caches.append(environment[build_sandbox.FONT_CACHE_ENVIRONMENT])
+    assert len(set(caches)) == 2
+
+    # A render inside the API names the cache of the Library it renders, and only meanwhile.
+    monkeypatch.setenv(build_sandbox.FONT_CACHE_ENVIRONMENT, "/left/by/the/environment")
+    with build_sandbox.sandboxed(True, font_cache=tmp_path / "sam" / "state" / "tex-font-cache"):
+        assert build_sandbox.font_cache() == tmp_path / "sam" / "state" / "tex-font-cache"
+        with build_sandbox.sandboxed(True):
+            assert build_sandbox.font_cache() is None
+        assert build_sandbox.font_cache() == tmp_path / "sam" / "state" / "tex-font-cache"
+    assert build_sandbox.font_cache() == Path("/left/by/the/environment")
+    with build_sandbox.sandboxed(False, font_cache=tmp_path / "unused"):
+        assert build_sandbox.font_cache() == Path("/left/by/the/environment")
+    monkeypatch.delenv(build_sandbox.FONT_CACHE_ENVIRONMENT)
+    assert build_sandbox.font_cache() is None

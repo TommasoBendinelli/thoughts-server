@@ -96,6 +96,10 @@ class Settings:
     workers_on_demand: bool = False
     # An on-demand worker ends after this long without work.
     worker_idle_exit_seconds: float = 60.0
+    # Compute the Library listing and what a Sync plan reads from the stored artifacts in
+    # the background when the API starts, so the first Sync after a restart does not wait
+    # for it. From the environment this is on (THOUGHTS_WARM_SYNC_PLAN=false turns it off).
+    warm_sync_plan_at_startup: bool = False
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -189,6 +193,8 @@ class Settings:
             library_storage_quota_bytes=_non_negative_int("THOUGHTS_LIBRARY_STORAGE_QUOTA_BYTES", 0),
             preview_parallel_jobs=_positive_int("THOUGHTS_PREVIEW_PARALLEL_JOBS", 2),
             max_queued_builds=_positive_int("THOUGHTS_MAX_QUEUED_BUILDS", 32),
+            warm_sync_plan_at_startup=os.environ.get("THOUGHTS_WARM_SYNC_PLAN", "true").strip().lower()
+            not in {"0", "false", "no"},
             host_build_slots=_non_negative_int("THOUGHTS_HOST_BUILD_SLOTS", 0),
             host_build_slot_dir=_path("THOUGHTS_HOST_BUILD_SLOT_DIR", str(state_root / "build-slots")),
             database_pool_size=_positive_int("THOUGHTS_DATABASE_POOL_SIZE", 1),

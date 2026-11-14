@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -315,7 +316,7 @@ class WorkspaceImporter:
         return self.report
 
 
-def _atomic_write(path: Path, content: bytes) -> bool:
+def _atomic_write(path: Path, content: bytes, *, durable: bool = True) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         if path.read_bytes() == content:
@@ -327,7 +328,8 @@ def _atomic_write(path: Path, content: bytes) -> bool:
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(content)
             stream.flush()
-            os.fsync(stream.fileno())
+            if durable:
+                os.fsync(stream.fileno())
         os.replace(temporary, path)
     finally:
         with suppress(FileNotFoundError):
@@ -359,6 +361,88 @@ def _export_scope(
     return types, (set(selected_collections) if selected_collections is not None else None)
 
 
+EXPORT_RECORD_VERSION = 1
+# A directory changed this recently before its record was written could change again
+# within the same file-system timestamp without showing it.
+_RACY_NS = 2_000_000_000
+# A record is believed for this long; then the export runs once in full again.
+_RECORD_MAX_AGE_NS = 24 * 3600 * 1_000_000_000
+
+
+def _directory_identity(path: Path) -> list[int] | None:
+    try:
+        status = os.stat(path)
+    except OSError:
+        return None
+    return [status.st_mtime_ns, status.st_ino]
+
+
+def _export_identity(session: Session, destination: Path, frontier: int | None, scoped_types: set[str],
+                     scoped_collections: set[str] | None, options: dict) -> str:
+    """A digest of everything an export's files are computed from.
+
+    At a frontier that is the applied operations of the exported types up to it
+    (their number and the newest one; operations do not change once accepted). At
+    the head it is the exported entities themselves (their number, newest update
+    and revisions) and the newest operation of their types, because some derived
+    fields of an entity change without a revision, but never without an operation.
+    """
+    types = sorted(scoped_types)
+    if frontier is None:
+        operations = session.execute(
+            select(func.max(Operation.server_sequence), func.count(Operation.server_sequence))
+            .where(Operation.entity_type.in_(types))
+        ).one()
+        entities = session.execute(
+            select(func.count(Entity.entity_id), func.max(Entity.updated_at), func.sum(Entity.revision))
+            .where(Entity.entity_type.in_(types))
+        ).one()
+        state = ["head", *(str(value) for value in operations), *(str(value) for value in entities)]
+    else:
+        operations = session.execute(
+            select(func.max(Operation.server_sequence), func.count(Operation.server_sequence))
+            .where(Operation.server_sequence <= frontier, Operation.entity_type.in_(types),
+                   Operation.outcome == "applied")
+        ).one()
+        state = ["frontier", *(str(value) for value in operations)]
+    description = [EXPORT_RECORD_VERSION, str(destination), state, types,
+                   sorted(scoped_collections) if scoped_collections is not None else None,
+                   sorted(options.items())]
+    return hashlib.sha256(json.dumps(description, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _recorded_export(state: Path, identity: str, directories: list[Path]) -> dict[str, int] | None:
+    """The counts of the export ``state`` records, if the destination still holds exactly that export."""
+    try:
+        record = json.loads(state.read_bytes())
+    except (OSError, ValueError):
+        return None
+    if (not isinstance(record, dict) or record.get("version") != EXPORT_RECORD_VERSION
+            or record.get("identity") != identity or not isinstance(record.get("counts"), dict)
+            or not isinstance(record.get("directories"), dict) or not isinstance(record.get("written_ns"), int)):
+        return None
+    written = record["written_ns"]
+    if not 0 <= time.time_ns() - written <= _RECORD_MAX_AGE_NS:
+        return None
+    for directory in directories:
+        recorded = record["directories"].get(str(directory))
+        current = _directory_identity(directory)
+        if recorded != current:
+            return None
+        if current is not None and written - current[0] < _RACY_NS:
+            return None
+    return {str(key): int(value) for key, value in record["counts"].items()}
+
+
+def _record_export(state: Path, identity: str, directories: list[Path], counts: dict[str, int]) -> None:
+    record = {
+        "version": EXPORT_RECORD_VERSION, "identity": identity, "counts": counts,
+        "directories": {str(directory): _directory_identity(directory) for directory in directories},
+        "written_ns": time.time_ns(),
+    }
+    _atomic_write(state, json.dumps(record, sort_keys=True).encode("utf-8"), durable=False)
+
+
 def export_workspace(
     session: Session,
     destination: Path,
@@ -369,14 +453,53 @@ def export_workspace(
     selected_collections: set[str] | None = None,
     include_review_data: bool = True,
     include_proposal_history: bool = True,
+    comments_only: bool = False,
+    durable: bool = True,
+    state: Path | None = None,
 ) -> dict[str, int]:
+    """Write the comments, annotations and review data of a Library as files under ``destination``.
+
+    ``comments_only`` writes just the files under ``comments/`` (a sparse build
+    workspace holds nothing else of an export) and reads no review data.
+    ``durable=False`` skips the sync of each file, for a disposable build workspace.
+
+    ``state`` names a record file outside ``destination``. With it the export is
+    skipped, and the recorded counts returned, when nothing it is computed from
+    changed since the export the record describes (_export_identity) and the
+    destination still holds that export. The second is known from the directories
+    the export writes into: every writer of these files (this function, the
+    comment helper, an export by another process with or without a record)
+    replaces or removes files, which changes the directory's modification time.
+    A directory whose time is closer than two seconds to the record's, or a record
+    older than a day, proves nothing, and the export runs in full; it then writes
+    only the files whose content differs. An administrative rewrite of stored
+    payloads must remove the record.
+    """
     destination = destination.resolve()
     counts: dict[str, int] = {}
+    if comments_only:
+        include_review_data = False
     export_types = EXPORT_ENTITY_TYPES if include_proposal_history else EXPORT_ENTITY_TYPES - {"proposal_event"}
     # Read only the rows this export writes. The filters below still decide what is
     # written; the scope only keeps the database from returning rows they would drop
     # (a targeted build exports one document's comments, not every review event).
     scoped_types, scoped_collections = _export_scope(export_types, selected_collections, include_review_data)
+    identity = None
+    written_directories = [destination / "comments"]
+    if not comments_only:
+        written_directories.append(destination / "annotations")
+    if include_review_data:
+        written_directories += [destination / "reviews" / name for name in ("cards", "events", "exclusions")]
+    if write_manifest:
+        written_directories.append(destination)
+    if state is not None:
+        identity = _export_identity(session, destination, frontier, scoped_types, scoped_collections, {
+            "prune": prune, "write_manifest": write_manifest, "comments_only": comments_only,
+            "include_review_data": include_review_data, "include_proposal_history": include_proposal_history,
+        })
+        recorded = _recorded_export(state, identity, written_directories)
+        if recorded is not None:
+            return recorded
 
     def in_scope(model):
         conditions = [model.entity_type.in_(scoped_types)]
@@ -459,18 +582,19 @@ def export_workspace(
     for collection, records in collections.items():
         raw = "".join(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in records)
         filename = f"{_safe_export_component(collection)}_comments.jsonl"
-        _atomic_write(destination / "comments" / filename, raw.encode("utf-8"))
+        _atomic_write(destination / "comments" / filename, raw.encode("utf-8"), durable=durable)
     counts["comments"] = len(comments)
     logical_comments = [entity.payload for entity in entities if entity.entity_type == "logical_comment"]
     logical_raw = "".join(
         json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in logical_comments
     )
-    _atomic_write(destination / "comments" / "logical_comments.jsonl", logical_raw.encode("utf-8"))
+    _atomic_write(destination / "comments" / "logical_comments.jsonl", logical_raw.encode("utf-8"), durable=durable)
     counts["logical_comments"] = len(logical_comments)
     if include_proposal_history:
         proposal_events = [entity.payload for entity in entities if entity.entity_type == "proposal_event"]
         proposal_raw = "".join(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n" for event in proposal_events)
-        _atomic_write(destination / "comments" / "proposal_events.jsonl", proposal_raw.encode("utf-8"))
+        _atomic_write(destination / "comments" / "proposal_events.jsonl", proposal_raw.encode("utf-8"),
+                      durable=durable)
         counts["proposal_events"] = len(proposal_events)
     correspondence_reviews = [
         entity.payload for entity in entities if entity.entity_type == "review_correspondence_review"
@@ -482,12 +606,13 @@ def export_workspace(
     _atomic_write(
         destination / "comments" / "review_correspondence_reviews.jsonl",
         correspondence_review_raw.encode("utf-8"),
+        durable=durable,
     )
     counts["review_correspondence_reviews"] = len(correspondence_reviews)
     annotation_collections: dict[str, list[dict]] = {}
     for entity in annotations:
         annotation_collections.setdefault(entity.collection, []).append(entity.payload)
-    if prune:
+    if prune and not comments_only:
         expected = {
             f"{_safe_export_component(collection)}_annotations.jsonl" for collection in annotation_collections
         }
@@ -497,16 +622,17 @@ def export_workspace(
                 selected_collections is None or collection in selected_collections
             ):
                 path.unlink()
-    for collection, records in annotation_collections.items():
+    for collection, records in ({} if comments_only else annotation_collections).items():
         raw = "".join(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in records)
         filename = f"{_safe_export_component(collection)}_annotations.jsonl"
-        _atomic_write(destination / "annotations" / filename, raw.encode("utf-8"))
+        _atomic_write(destination / "annotations" / filename, raw.encode("utf-8"), durable=durable)
     counts["annotations"] = len(annotations)
     resolutions = [entity for entity in entities if entity.entity_type == "resolution"]
     raw_resolutions = "".join(
         json.dumps(entity.payload, ensure_ascii=False, sort_keys=True) + "\n" for entity in resolutions
     )
-    _atomic_write(destination / "comments" / "review_resolutions.jsonl", raw_resolutions.encode("utf-8"))
+    _atomic_write(destination / "comments" / "review_resolutions.jsonl", raw_resolutions.encode("utf-8"),
+                  durable=durable)
     counts["resolutions"] = len(resolutions)
     for entity_type, directory in (
         ("review_card", "cards"),
@@ -527,6 +653,7 @@ def export_workspace(
                 (json.dumps(entity.payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode(
                     "utf-8"
                 ),
+                durable=durable,
             )
         counts[entity_type] = len(typed_entities)
     if write_manifest:
@@ -535,5 +662,8 @@ def export_workspace(
             (json.dumps({"schema_version": 1, "counts": counts}, sort_keys=True, indent=2) + "\n").encode(
                 "utf-8"
             ),
+            durable=durable,
         )
+    if state is not None and identity is not None:
+        _record_export(state, identity, written_directories, counts)
     return counts

@@ -10,12 +10,37 @@ from thoughts_server import latex_cache, native_renderer
 from test_component_cache import declare
 
 
-def test_publication_changes_preserve_cache_but_compiler_changes_invalidate(tmp_path, monkeypatch):
+# The compiler output version and the hash of the compiler's sources it was recorded with.
+#
+# This test fails whenever one of latex_cache.COMPILER_SOURCES changes. Then decide:
+#   * the change CAN alter what a compile writes (a PDF, SyncTeX, recorder or auxiliary
+#     file): bump latex_cache.COMPILER_OUTPUT_VERSION and write the new version and the
+#     new hash here. Every document of every Library is compiled once more;
+#   * the change CANNOT alter compiled output (logging, timing, sandbox set-up, comments):
+#     write only the new hash here. No cache entry is lost.
+RECORDED_COMPILER_OUTPUT_VERSION = 1
+RECORDED_COMPILER_SOURCES_SHA256 = "375c4cf5c90b5d58dded4e060427dfbfcc8a311eb01e1c12748cd6eca1976f51"
+
+
+def test_compiler_sources_are_recorded_with_the_output_version():
+    assert latex_cache.COMPILER_OUTPUT_VERSION == RECORDED_COMPILER_OUTPUT_VERSION, (
+        "latex_cache.COMPILER_OUTPUT_VERSION changed: record it in RECORDED_COMPILER_OUTPUT_VERSION "
+        "together with the new RECORDED_COMPILER_SOURCES_SHA256 "
+        f"({latex_cache.compiler_sources_sha256()})"
+    )
+    assert latex_cache.compiler_sources_sha256() == RECORDED_COMPILER_SOURCES_SHA256, (
+        "A compiler source file changed (" + ", ".join(latex_cache.COMPILER_SOURCES) + "). "
+        "If the change can alter compiled output, bump latex_cache.COMPILER_OUTPUT_VERSION (every cached "
+        "document is then compiled once more) and record the new version here. If it cannot, update only "
+        f"RECORDED_COMPILER_SOURCES_SHA256 to {latex_cache.compiler_sources_sha256()}."
+    )
+
+
+def test_cache_name_follows_the_output_version_not_the_compilers_files(tmp_path, monkeypatch):
+    """A deploy that edits the compiler keeps every entry; only a bumped version starts afresh."""
     implementation = tmp_path / "implementation"
     (implementation / "renderer_tools").mkdir(parents=True)
-    for name in ("latex_cache.py", "latex_compiler.py", "native_renderer.py", "component_cache.py",
-                 "renderer_tools/review_instrumentation.py", "renderer_tools/review_source_staging.py",
-                 "renderer_tools/review_macro_expansion.py", "renderer_tools/review_macro_definitions.py"):
+    for name in (*latex_cache.COMPILER_SOURCES, "native_renderer.py"):
         (implementation / name).write_text("version one")
     monkeypatch.setattr(latex_cache, "__file__", str(implementation / "latex_cache.py"))
     monkeypatch.setenv("THOUGHTS_LATEX_CACHE_ROOT", str(tmp_path / "cache"))
@@ -23,10 +48,42 @@ def test_publication_changes_preserve_cache_but_compiler_changes_invalidate(tmp_
     project = docs / "docs-paper"
     project.mkdir(parents=True)
     before = latex_cache.cache_path(docs, project, "main.tex")
-    (implementation / "native_renderer.py").write_text("changed publishing and progress reporting")
-    assert latex_cache.cache_path(docs, project, "main.tex") == before
-    (implementation / "latex_compiler.py").write_text("changed compilation behavior")
+    recorded = latex_cache.compiler_sources_sha256()
+    for name in ("native_renderer.py", *latex_cache.COMPILER_SOURCES):
+        (implementation / name).write_text("changed without changing compiled output")
+        assert latex_cache.cache_path(docs, project, "main.tex") == before
+    # The guard sees the edit, so its author has to decide about the version.
+    assert latex_cache.compiler_sources_sha256() != recorded
+    monkeypatch.setattr(latex_cache, "COMPILER_OUTPUT_VERSION", 2)
+    bumped = latex_cache.cache_path(docs, project, "main.tex")
+    assert bumped != before
+    monkeypatch.setattr(latex_cache, "COMPILER_OUTPUT_VERSION", 3)
+    assert latex_cache.cache_path(docs, project, "main.tex") not in {before, bumped}
+    # Everything else that named an entry still does.
+    monkeypatch.setattr(latex_cache, "COMPILER_OUTPUT_VERSION", 1)
+    assert latex_cache.cache_path(docs, project, "other.tex") != before
+    (project / "latexmkrc").write_text("$pdf_mode = 1;\n")
     assert latex_cache.cache_path(docs, project, "main.tex") != before
+
+
+def test_entries_written_before_the_version_constant_are_still_found(tmp_path, monkeypatch):
+    """Version 1 names an entry as the release that hashed its own files did.
+
+    The expected name was computed with that release's code for these inputs, so the
+    deploy that introduces the constant finds every existing entry.
+    """
+    for name in ("SOURCE_DATE_EPOCH", "TEXINPUTS", "BIBINPUTS", "BSTINPUTS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("THOUGHTS_LATEX_CACHE_ROOT", "/cache")
+    monkeypatch.setattr(latex_cache.shutil, "which", lambda _name: None)
+    docs = tmp_path / "docs"
+    (docs / "docs-paper").mkdir(parents=True)
+    assert latex_cache.COMPILER_OUTPUT_VERSION == 1
+    assert latex_cache.cache_path(docs, docs / "docs-paper", "main.tex") == Path(
+        "/cache/f40b08f6a63867052b75e4b3338825317e9a92e38e5781152f14185fb2b09787.zip"
+    )
+    # A later version no longer needs the recorded hashes of that release.
+    assert latex_cache.compiler_identity(2) == ["compiler-output-version", 2]
 
 
 def test_restores_auxiliary_paths_but_never_a_pdf(tmp_path):

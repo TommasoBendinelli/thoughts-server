@@ -27,6 +27,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import build_sources as frontier_sources
+from .build_summary import RendererSummary
 from .file_clone import clone_or_copy
 from .build_inputs import (
     latest_build_input_snapshot,
@@ -812,6 +813,7 @@ def affected_document_filenames(
         and _source_changes_affect(
             session, publication, changed_paths, projects,
             _publication_build_frontier(session, publication),
+            since=baseline.source_frontier, store=store,
         )
     ]
     return sorted(set(affected) | page_stale | _unbuilt_source_projects(session, store).keys())
@@ -1058,6 +1060,14 @@ def render_status(
         ),
         None,
     )
+    if job is None and publication.build_id:
+        # The newest builds of a busy Library can all be of other documents. The build
+        # that published this PDF is then still its latest one; without it the PDF, and
+        # every other PDF that build published, counted as never built and was rebuilt.
+        own = session.get(BuildJob, publication.build_id)
+        if (own is not None and own.repair_mode != "review_cards" and own.status in {"succeeded", "attention"}
+                and _job_mentions_document(own, target)):
+            job = own
     if job is None:
         return {
             "status": "out_of_sync",
@@ -1097,6 +1107,7 @@ def render_status(
     relevant_source_change = _source_changes_affect(
         session, publication, changed_paths, projects,
         job.source_frontier if publication.build_id == job.id else None,
+        since=job.source_frontier, store=store,
     )
     if relevant_source_change:
         return {
@@ -1818,7 +1829,22 @@ def _source_changes_affect(
     paths: list[str],
     known_projects: set[str],
     build_frontier: int | None,
+    *,
+    since: int | None = None,
+    store: ObjectStore | None = None,
 ) -> bool:
+    """Whether source changes ``paths`` (made after operation ``since``) can change this PDF.
+
+    A Project manifest is not judged by its path: what changed in it decides
+    (manifest_render_impact). Without ``since`` or a store to read it, it counts
+    as an input of every document, as before.
+    """
+    from .project_configuration import is_manifest_path
+    manifests = list(dict.fromkeys(path for path in paths if is_manifest_path(path)))
+    if manifests and since is not None and store is not None:
+        paths = [path for path in paths if not is_manifest_path(path)]
+    else:
+        manifests = []
     metadata = publication.metadata_json if build_frontier is not None else None
 
     def affects(path: str, existed: bool) -> bool:
@@ -1829,12 +1855,170 @@ def _source_changes_affect(
 
     # Only files the build did not read, in its own project, depend on whether they existed then.
     candidates = [path for path in paths if affects(path, False)]
-    if not candidates:
+    if candidates:
+        if any(affects(path, True) for path in candidates):
+            return True
+        present = _sources_present_at(session, candidates, build_frontier) if build_frontier is not None else set()
+        if any(path not in present for path in candidates):
+            return True
+    if not manifests:
         return False
-    if any(affects(path, True) for path in candidates):
+    # The PDF may be older than the build that last mentioned it: compare from the older frontier.
+    frontier = since
+    if publication.build_id and publication.source_frontier and publication.source_frontier < frontier:
+        frontier = publication.source_frontier
+    return any(_manifest_change_affects(session, store, publication, path, frontier) for path in manifests)
+
+
+def _manifest_paths_of(path: str) -> list[str]:
+    """A manifest path in both default-folder spellings, the given one first."""
+    from .default_folder_segment import legacy_spelling, rewrite_legacy_default_folder
+    return list(dict.fromkeys((path, rewrite_legacy_default_folder(path), legacy_spelling(path))))
+
+
+# A version of a manifest that cannot be read (its operation names no object).
+_UNREADABLE_MANIFEST = "unreadable"
+
+
+def _manifest_object_at(session: Session, path: str, frontier: int) -> str | None:
+    """The object of ``path``'s Project manifest as a build at ``frontier`` read it (None: none)."""
+    for candidate in _manifest_paths_of(path):
+        payload = session.scalar(
+            select(Operation.payload)
+            .where(
+                Operation.entity_type == "source",
+                Operation.entity_id == candidate,
+                Operation.server_sequence <= frontier,
+                Operation.outcome.in_(("applied", "merged")),
+            )
+            .order_by(Operation.server_sequence.desc())
+            .limit(1)
+        )
+        if payload is not None and not payload.get("deleted"):
+            digest = payload.get("result_object_sha256")
+            return digest if isinstance(digest, str) else _UNREADABLE_MANIFEST
+    return None
+
+
+def _manifest_object_now(session: Session, path: str) -> str | None:
+    for candidate in _manifest_paths_of(path):
+        record = session.get(SourceFile, candidate)
+        if record is not None and not record.deleted:
+            return record.object_sha256
+    return None
+
+
+# (object root, before object, after object) -> ManifestImpact; objects are immutable.
+_MANIFEST_IMPACTS: dict[tuple[str, str | None, str | None], object] = {}
+
+
+def _manifest_impact_between(store: ObjectStore, before: str | None, after: str | None):
+    from .manifest_render_impact import EVERYTHING, NOTHING, UnreadableManifest, impact, parse
+    if before == after and before != _UNREADABLE_MANIFEST:
+        return NOTHING
+    key = (str(store.root), before, after)
+    cached = _MANIFEST_IMPACTS.get(key)
+    if cached is not None:
+        return cached
+
+    def read(digest: str | None) -> dict | None:
+        if digest is None:
+            return None
+        if digest == _UNREADABLE_MANIFEST:
+            raise UnreadableManifest("a manifest version names no object")
+        try:
+            return parse(store.path(digest).read_bytes())
+        except OSError as error:
+            raise UnreadableManifest(str(error)) from error
+
+    try:
+        result = impact(read(before), read(after))
+    except UnreadableManifest:
+        result = EVERYTHING
+    if len(_MANIFEST_IMPACTS) > 4096:
+        _MANIFEST_IMPACTS.clear()
+    _MANIFEST_IMPACTS[key] = result
+    return result
+
+
+def _manifest_impact_since(session: Session, store: ObjectStore, path: str, frontier: int):
+    """What the change of one Project manifest since ``frontier`` can change."""
+    return _request_memo(session, ("manifest_impact", path, frontier), lambda: _manifest_impact_between(
+        store, _manifest_object_at(session, path, frontier), _manifest_object_now(session, path)))
+
+
+def _document_sources(session: Session, store: ObjectStore) -> dict[str, str]:
+    """Each declared latex/markdown document's main source (docs-root path), by document id."""
+    def compute() -> dict[str, str]:
+        from .project_configuration import canonical_projects, resolve
+        try:
+            configurations = canonical_projects(session, store)
+        except (OSError, ValueError):
+            return {}
+        return {declaration["document_id"]: resolve(configuration, declaration)
+                for configuration in configurations for declaration in configuration["documents"]
+                if declaration["format"] in {"latex", "markdown"}}
+    return _request_memo(session, ("manifest_document_sources",), compute)
+
+
+def _live_text_sources(session: Session, paths: Iterable[str] | None = None, folder: str | None = None) -> dict[str, str]:
+    """path -> object of live text sources: the given paths, or every one of a folder."""
+    from .manifest_render_impact import text_source
+    statement = select(SourceFile.path, SourceFile.object_sha256).where(SourceFile.deleted.is_(False))
+    if folder is not None:
+        prefix = folder.replace("\\", "\\\\").replace("_", "\\_").replace("%", "\\%") + "/%"
+        statement = statement.where(SourceFile.path.like(prefix, escape="\\"))
+        return {path: digest for path, digest in session.execute(statement) if text_source(path)}
+    wanted = sorted(path for path in set(paths or ()) if text_source(path))
+    result: dict[str, str] = {}
+    for start in range(0, len(wanted), 500):
+        result.update(session.execute(statement.where(SourceFile.path.in_(wanted[start:start + 500]))).all())
+    return result
+
+
+def _publication_source_files(session: Session, store: ObjectStore, publication: Publication) -> list[str] | None:
+    """The stored files a document's links can be written in; None when they are unknown.
+
+    Every text file its compiler recorded reading, else its main source for a
+    Markdown document (which includes no other text), else every TeX source of
+    its folder (a PDF built before compilers recorded their inputs).
+    """
+    from .manifest_render_impact import MARKDOWN_SUFFIXES
+    from .models import DocumentIdentity
+    from .source_owner import owner_of
+    from .source_resources import publication_compiler_dependencies
+    if not publication.project:
+        return None
+    main = _document_sources(session, store).get(publication.document_id)
+    if main is None:
+        identity = session.get(DocumentIdentity, publication.document_id)
+        main = identity.source_path if identity is not None else None
+    dependencies = publication_compiler_dependencies(publication.metadata_json)
+    if dependencies is not None:
+        sources = _live_text_sources(session, set(dependencies) | ({main} if main else set()))
+    elif main is not None and PurePosixPath(main).suffix.lower() in MARKDOWN_SUFFIXES:
+        sources = _live_text_sources(session, {main})
+    else:
+        folder = (owner_of(main) if main else None) or publication.project
+        sources = {path: digest for path, digest in _request_memo(
+            session, ("manifest_folder_sources", folder), lambda: _live_text_sources(session, folder=folder),
+        ).items() if PurePosixPath(path).suffix.lower() not in MARKDOWN_SUFFIXES}
+    return [str(store.path(digest)) for _path, digest in sorted(sources.items())]
+
+
+def _manifest_change_affects(
+    session: Session, store: ObjectStore, publication: Publication, path: str, frontier: int,
+) -> bool:
+    """Whether the change of one Project manifest since ``frontier`` can change this PDF."""
+    from .manifest_render_impact import links_to
+    change = _manifest_impact_since(session, store, path, frontier)
+    if change.empty:
+        return False
+    if change.names(publication.project, publication.document_id, publication.filename):
         return True
-    present = _sources_present_at(session, candidates, build_frontier) if build_frontier is not None else set()
-    return any(path not in present for path in candidates)
+    if not change.targets:
+        return False
+    return links_to(_publication_source_files(session, store, publication), change.tokens())
 
 
 def _renderer_dependency_paths(artifact_root: Path, filename: str) -> list[str] | None:
@@ -1885,7 +2069,10 @@ def conditional_render_check(
     request_id: str | None = None,
     timings: dict[str, float] | None = None,
     store: ObjectStore | None = None,
+    shared_aggregate: Callable[[Callable[[], dict | None]], dict | None] | None = None,
 ) -> dict:
+    """``shared_aggregate`` lets the caller keep the aggregate render status between
+    this check and the render state read after it (see ``read_render_state``)."""
     if store is not None:
         from .reading_migration import migrate_document_build_inputs
         migrate_document_build_inputs(session, store, requested_by)
@@ -1904,7 +2091,10 @@ def conditional_render_check(
         timings["input_identity_ms"] = round((time.perf_counter() - stage_started) * 1000, 3)
     if target == "all":
         stage_started = time.perf_counter()
-        aggregate = _aggregate_linked_render_status(session, toolchain_key, timings, store)
+        def compute_aggregate() -> dict | None:
+            return _aggregate_linked_render_status(session, toolchain_key, timings, store)
+
+        aggregate = shared_aggregate(compute_aggregate) if shared_aggregate is not None else compute_aggregate()
         if timings is not None:
             timings["aggregate_status_ms"] = round((time.perf_counter() - stage_started) * 1000, 3)
         if (
@@ -2187,8 +2377,15 @@ def read_render_state(
     target: str,
     toolchain_key: str,
     store: ObjectStore | None = None,
+    shared_aggregate: Callable[[Callable[[], dict | None]], dict | None] | None = None,
 ) -> dict:
-    """Return the canonical render state without creating or updating a build."""
+    """Return the canonical render state without creating or updating a build.
+
+    The aggregate status of every linked PDF is the costly part, and a Sync asks for
+    it twice: in its render check and in the render state it reads afterwards.
+    ``shared_aggregate`` is given the computation and returns its result, or the one
+    the caller kept for the same state of the Library.
+    """
     frontiers = (
         select(RenderFrontier.source_frontier, RenderFrontier.render_frontier)
         .where(RenderFrontier.target == "all")
@@ -2260,7 +2457,10 @@ def read_render_state(
     build_id = row.build_id
     documents = []
     if target == "all":
-        aggregate = _aggregate_linked_render_status(session, toolchain_key, store=store)
+        def compute_aggregate() -> dict | None:
+            return _aggregate_linked_render_status(session, toolchain_key, store=store)
+
+        aggregate = shared_aggregate(compute_aggregate) if shared_aggregate is not None else compute_aggregate()
         if aggregate is not None:
             status = aggregate["status"]
             build_id = aggregate["build"]["id"] if aggregate["build"] is not None else None
@@ -2371,6 +2571,8 @@ class BuildWorker:
         self.session_factory = session_factory
         self.store = store
         self._queue_listener = None
+        # Per running job: how its workspace got the existing PDFs (clone_files, copy_files).
+        self._workspace_publication_metrics: dict[str, dict] = {}
         # This Library's place in the host-wide queue for a build slot (host_slots).
         self._slot_request = settings.host_slots("builds").request()
 
@@ -2628,6 +2830,8 @@ class BuildWorker:
             "SOURCE_DATE_EPOCH",
             "TEXINPUTS",
             "THOUGHTS_SOURCE_ARTIFACT_WORKER",
+            # 1: a build of some documents does the whole-Project work again (native_renderer).
+            "THOUGHTS_RENDER_WHOLE_PROJECT",
         ):
             if value := os.environ.get(name):
                 environment[name] = value
@@ -2653,6 +2857,9 @@ class BuildWorker:
         )
         # Always explicit: the renderer must not fall back to a default of its own.
         environment["THOUGHTS_SANDBOX_BUILDS"] = "true" if self.settings.sandbox_builds else "false"
+        # Fonts TeX generates inside the sandbox are kept in this Library's own state folder.
+        from .build_sandbox import FONT_CACHE_ENVIRONMENT, font_cache_for
+        environment[FONT_CACHE_ENVIRONMENT] = str(font_cache_for(self.settings.state_root))
         return environment
 
     def _command(
@@ -2707,6 +2914,82 @@ class BuildWorker:
         for candidate in root.iterdir():
             if candidate.is_dir() and candidate.name not in active_job_ids:
                 shutil.rmtree(candidate, ignore_errors=True)
+
+    @staticmethod
+    def _sparse_expectations(job: BuildJob, exact: list[dict]) -> list[dict]:
+        """The exact inputs a sparse workspace is copied from; empty for a full copy of the worktree."""
+        affected_documents = list(
+            dict.fromkeys(
+                value
+                for value in (job.progress or {}).get("documents", [])
+                if isinstance(value, str)
+            )
+        )
+        exact_by_target = {
+            expectation["target"]: expectation
+            for expectation in exact
+            if isinstance(expectation, dict) and isinstance(expectation.get("target"), str)
+        }
+        if job.target != "all" and len(exact) == 1:
+            return exact
+        if job.target == "all" and affected_documents:
+            missing = [target for target in affected_documents if target not in exact_by_target]
+            if missing:
+                raise RuntimeError(
+                    "project_layout_invalid: affected target has no exact build input: "
+                    + ", ".join(sorted(missing))
+                )
+            return [exact_by_target[target] for target in affected_documents]
+        return []
+
+    def _export_annotations_into_workspace(
+        self,
+        job: BuildJob,
+        workspace: Path,
+        closure_expectations: list[dict] | None = None,
+    ) -> None:
+        """Give the build workspace the comments and review data of the job's annotation frontier.
+
+        Before, the worktree itself was exported at the frontier and the workspace
+        copied from it; the cleanup then exported the worktree at the head again, so
+        every build rewrote the exported files twice (an operation's payload and its
+        entity's are spelled differently) and ranked every operation twice. The
+        export now goes into the workspace, over the files copied from the worktree,
+        with the same pruning: the workspace holds the same bytes, and the worktree
+        stays at the head.
+
+        A build of some documents ("all" with a list) holds only ``comments/`` of an
+        export. That export is kept in the Library's state folder between builds and
+        copied from there: it is not computed again while the annotation frontier's
+        operations are the same (migration.export_workspace, ``state``), and after a
+        change only the changed collections' files are rewritten.
+        """
+        sparse = self._sparse_expectations(job, closure_expectations or [])
+        with self._timed_build_stage(job, "workspace_annotation_export", "Exporting comments at the build's frontier"):
+            with self.session_factory() as session:
+                if sparse and job.target == "all":
+                    stage = self.settings.state_root / "build-export"
+                    export_workspace(
+                        session, stage, write_manifest=False, frontier=job.annotation_frontier, prune=True,
+                        selected_collections=None, include_proposal_history=False, comments_only=True,
+                        durable=False, state=self.settings.state_root / "build-export.json",
+                    )
+                    destination = workspace / "comments"
+                    destination.mkdir(parents=True, exist_ok=True)
+                    # What that export, with its pruning, leaves in a comments folder.
+                    for path in destination.iterdir():
+                        if path.name.endswith("_comments.jsonl") and (path.is_file() or path.is_symlink()):
+                            path.unlink()
+                    for path in sorted((stage / "comments").iterdir()):
+                        if path.is_file():
+                            shutil.copyfile(path, destination / path.name)
+                else:
+                    export_workspace(
+                        session, workspace, write_manifest=False, frontier=job.annotation_frontier, prune=True,
+                        selected_collections=(None if job.target == "all" else {Path(job.target).stem}),
+                        include_review_data=job.target == "all" and not sparse,
+                        include_proposal_history=False, comments_only=bool(sparse), durable=False,
+                    )
 
     def _prepare_build_workspace(
         self,
@@ -2799,29 +3082,7 @@ class BuildWorker:
                 stage_metrics["scan_ms"] = stage_metrics.get("scan_ms", 0) + (time.perf_counter() - started) * 1000
 
         exact = closure_expectations or []
-        affected_documents = list(
-            dict.fromkeys(
-                value
-                for value in (job.progress or {}).get("documents", [])
-                if isinstance(value, str)
-            )
-        )
-        exact_by_target = {
-            expectation["target"]: expectation
-            for expectation in exact
-            if isinstance(expectation, dict) and isinstance(expectation.get("target"), str)
-        }
-        sparse_expectations: list[dict] = []
-        if job.target != "all" and len(exact) == 1:
-            sparse_expectations = exact
-        elif job.target == "all" and affected_documents:
-            missing = [target for target in affected_documents if target not in exact_by_target]
-            if missing:
-                raise RuntimeError(
-                    "project_layout_invalid: affected target has no exact build input: "
-                    + ", ".join(sorted(missing))
-                )
-            sparse_expectations = [exact_by_target[target] for target in affected_documents]
+        sparse_expectations = self._sparse_expectations(job, exact)
 
         if sparse_expectations:
             with self._timed_build_stage(job, "workspace_project_inputs", "Copying project inputs") as stage_metrics:
@@ -3023,6 +3284,12 @@ class BuildWorker:
                     + [owner for owner in default_folders if is_default_folder(owner)])
         publication_root = workspace / "current_pdfs"
         with self._timed_build_stage(job, "workspace_publications", "Preparing existing PDFs") as stage_metrics:
+            # Every source-linked PDF: a link to another Project is certified against the
+            # published PDF of its target, and which PDFs a build's documents link to is
+            # known only once they are compiled. Pointers: only for the requested documents.
+            requested = {job.target} if job.target != "all" else {
+                value for value in (job.progress or {}).get("documents", []) if isinstance(value, str)
+            }
             self._restore_authoritative_publications(
                 job,
                 set(),
@@ -3030,7 +3297,10 @@ class BuildWorker:
                 artifact_root=artifact_root,
                 durable=False,
                 metrics=stage_metrics,
+                pointer_filenames=requested or None,
             )
+            # For the worker's summary line: how the existing PDFs reached the workspace.
+            self._workspace_publication_metrics[job.id] = dict(stage_metrics)
         with self._timed_build_stage(job, "workspace_indexes", "Writing workspace indexes"):
             projects_by_target = {
                 expectation["target"]: expectation["project"] for expectation in exact
@@ -3282,7 +3552,15 @@ class BuildWorker:
         artifact_root: Path | None = None,
         durable: bool = True,
         metrics: dict | None = None,
+        pointer_filenames: set[str] | None = None,
     ) -> int:
+        """Put the published PDFs, and the pointers to their source artifacts, where a build reads them.
+
+        ``pointer_filenames`` limits the pointer files to those documents (None: every
+        one). A build reads the pointer of a document only when it publishes that
+        document again (to reuse its source artifact), so a build workspace needs the
+        pointers of the documents it was asked for, not one file per PDF of the Library.
+        """
         if self.settings.docs_root is None:
             return 0
         if filenames is None:
@@ -3366,6 +3644,8 @@ class BuildWorker:
                     if destination_sha256 != publication.object_sha256:
                         atomic_write(destination, content)
                         restored += 1
+                if pointer_filenames is not None and filename not in pointer_filenames:
+                    continue
                 if publication.source_artifact_sha256:
                     pointer_raw = (
                         json.dumps(
@@ -3523,6 +3803,8 @@ class BuildWorker:
                 self.settings.worktree_root,
                 job.source_frontier,
                 captured_inputs=captured_sources,
+                # Sources this worktree already holds verified are not read again.
+                record_path=self.settings.state_root / "source-materialization.json",
             )
             sources_ready_at = time.perf_counter()
             input_snapshot_sources = (job.progress or {}).get("input_snapshot_sources")
@@ -3551,18 +3833,21 @@ class BuildWorker:
                 session, self.store, snapshot_sources, captured_sources,
             )
             inputs_ready_at = time.perf_counter()
-            export_workspace(
-                session,
-                self.settings.docs_root,
-                write_manifest=False,
-                frontier=job.annotation_frontier,
-                prune=True,
-                selected_collections=(None if job.target == "all" else {Path(job.target).stem}),
-                include_review_data=job.target == "all",
-                include_proposal_history=False,
-            )
+            if self.settings.renderer_backend != "native":
+                # A renderer that works in the worktree itself reads the export there.
+                export_workspace(
+                    session,
+                    self.settings.docs_root,
+                    write_manifest=False,
+                    frontier=job.annotation_frontier,
+                    prune=True,
+                    selected_collections=(None if job.target == "all" else {Path(job.target).stem}),
+                    include_review_data=job.target == "all",
+                    include_proposal_history=False,
+                )
             annotations_ready_at = time.perf_counter()
         job_workspace_root: Path | None = None
+        annotation_export_seconds = 0.0
         build_docs_root = self.settings.docs_root
         publication_root = build_docs_root / "current_pdfs"
         artifact_root = self._source_artifact_root()
@@ -3574,6 +3859,9 @@ class BuildWorker:
             job_workspace_root, build_docs_root, publication_root, artifact_root = (
                 self._prepare_build_workspace(job, closure_expectations)
             )
+            export_started_at = time.perf_counter()
+            self._export_annotations_into_workspace(job, build_docs_root, closure_expectations)
+            annotation_export_seconds = time.perf_counter() - export_started_at
             if closure_expectations:
                 (build_docs_root / ".thoughts-build-inputs.json").write_text(
                     json.dumps(
@@ -3658,6 +3946,11 @@ class BuildWorker:
         failed_documents: list[dict[str, str]] = []
         warnings: list[dict[str, str]] = []
         rendered_source_artifacts: dict[str, dict[str, str]] = {}
+        requested_documents = (
+            [job.target] if job.target != "all"
+            else list(dict.fromkeys((job.progress or {}).get("documents") or []))
+        )
+        summary = RendererSummary(len(requested_documents) or None)
         try:
             assert process.stdout is not None
             with live_log_path.open("ab", buffering=0) as live_log:
@@ -3668,6 +3961,9 @@ class BuildWorker:
                         progress = match.groupdict()
                         progress["completed"] = int(progress["completed"])
                         progress["total"] = int(progress["total"])
+                        summary.progress(
+                            progress["phase"], progress["completed"], progress["total"], progress["detail"]
+                        )
                         if not self._set_progress(job.id, progress):
                             cancelled.set()
                             signal_process(signal.SIGTERM)
@@ -4042,12 +4338,17 @@ class BuildWorker:
             "artifacts": artifacts,
             "outcomes": outcomes,
             "publication_timings_ms": publication_timings,
+            # Counts only (build_summary): what was compiled or reused, and why not reused.
+            "build_summary": summary.record(self._workspace_publication_metrics.pop(job.id, None)),
             "html_edition_inputs": bool(html_edition_projects),
             "timings_ms": {
                 "source_materialization": round((sources_ready_at - started_at) * 1000),
                 "build_input_materialization": round((inputs_ready_at - sources_ready_at) * 1000),
-                "annotation_export": round((annotations_ready_at - inputs_ready_at) * 1000),
-                "workspace_snapshot": round((workspace_ready_at - annotations_ready_at) * 1000),
+                # The export is written into the build workspace, after it is copied.
+                "annotation_export": round(
+                    (annotations_ready_at - inputs_ready_at + annotation_export_seconds) * 1000),
+                "workspace_snapshot": round(
+                    (workspace_ready_at - annotations_ready_at - annotation_export_seconds) * 1000),
                 "renderer_setup": round((renderer_started_at - workspace_ready_at) * 1000),
                 "renderer": round((renderer_finished_at - renderer_started_at) * 1000),
                 "publication": round((time.perf_counter() - renderer_finished_at) * 1000),
@@ -4110,12 +4411,18 @@ class BuildWorker:
                             already_locked=True,
                         )
                     if self.settings.docs_root is not None:
+                        # The build did not write the exported files of the worktree
+                        # (_export_annotations_into_workspace): this export is needed
+                        # only when comments or review data changed since the last one,
+                        # or another process wrote in those folders (export_workspace).
                         export_workspace(
                             session,
                             self.settings.docs_root,
                             write_manifest=False,
                             prune=True,
                             include_proposal_history=False,
+                            state=(self.settings.state_root / "worktree-export.json"
+                                   if release_after_snapshot is not None else None),
                         )
         timings = result.setdefault("timings_ms", {})
         timings["cleanup"] = round((time.perf_counter() - cleanup_started_at) * 1000)
@@ -4268,6 +4575,9 @@ class BuildWorker:
                         "error_code": None,
                         "timings_ms": (result or {}).get("timings_ms") or {},
                         "publication_timings_ms": (result or {}).get("publication_timings_ms") or {},
+                        # Documents requested, compiled and reused, cache-miss reasons by
+                        # kind, cloned or copied workspace PDFs: counts, never names.
+                        "build_summary": (result or {}).get("build_summary") or {},
                     },
                     separators=(",", ":"),
                 )

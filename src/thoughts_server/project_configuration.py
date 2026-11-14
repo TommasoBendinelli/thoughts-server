@@ -623,6 +623,19 @@ def canonical_projects(session, store) -> list[dict]:
     return result
 
 
+def declared_filename(value: dict, declaration: dict) -> str:
+    """The PDF filename a declared document has in the catalogue before anything of it is published."""
+    if declaration["format"] == "pdf":
+        return declaration["source"]["path"]
+    from .project_documents import document_output
+    from .source_owner import owner_of
+    location = resolve(value, declaration)
+    owner = owner_of(location)
+    options = value.get("rendering", {}).get(declaration["document_id"], {})
+    return document_output(owner, {"source": location.removeprefix(owner + "/"), "format": declaration["format"],
+                                   **({"output": options["output"]} if "output" in options else {})})
+
+
 def catalogue_entry(entry: dict, value: dict) -> None:
     """Overlay membership and global order without changing the authority on reads."""
     validate(value)
@@ -646,10 +659,7 @@ def catalogue_entry(entry: dict, value: dict) -> None:
             from .source_owner import owner_of
             owner = owner_of(location)
             document.update(source_file=location, source_project=owner)
-            from .project_documents import document_output
-            options = value.get("rendering", {}).get(doc_id, {})
-            document.setdefault("filename", document_output(owner, {"source": location.removeprefix(owner + "/"),
-                "format": kind, **({"output": options["output"]} if "output" in options else {})}))
+            document.setdefault("filename", declared_filename(value, declaration))
             document.setdefault("sha256", "")
         document.setdefault("start_page", 0)
         document.setdefault("size_bytes", -1)

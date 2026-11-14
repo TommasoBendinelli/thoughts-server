@@ -546,6 +546,15 @@ data class RenderStateCall(
     val timings: RenderStateTimings,
 )
 
+/** [SyncClient.renderStateIfChanged]: a null [state] means unchanged since the ETag sent (HTTP 304). */
+data class RenderStateIfChangedCall(
+    val state: RenderStateRecord?,
+    val etag: String,
+    val timings: RenderStateTimings,
+    /** The server's clock when it answered (its Date header); a 304 carries no other time. */
+    val serverDateEpochMillis: Long? = null,
+)
+
 data class BuildOutputChunk(
     val offset: Long,
     @SerializedName("next_offset") val nextOffset: Long,

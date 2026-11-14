@@ -17,7 +17,11 @@ uncertain retry cannot make a second card. move-review-card moves a card that
 has no source markers yet (a card on an imported PDF) into a note: it keeps the
 card's ID, question, schedule and review history and adds a ``move`` object, as
 the desktop does (capability client_review_card_move_v1). A card that already
-has markers moves by cutting and pasting its passage instead (linked_card).
+has markers moves with its marked passage instead: move-review-card with
+start_line equal to end_line (the line the passage goes before), an explanation
+and a conversation_id is move-card-passage (card_passage_moves.py), which writes
+two linked pending proposals the user decides as one. With a line range such a
+card is refused (linked_card).
 
 The selection rules are the desktop's sourceSelectionError (reviewdocumenttools.cpp),
 in review_card_selection.py, a copy of the server's module of that name: complete
@@ -43,6 +47,7 @@ from typing import Any
 
 from . import review_card_selection
 from .authoring import AuthoringRefused, _valid_uuid
+from .card_passage_moves import LINKED_CARD
 from .review_card_selection import (  # noqa: F401  (the selection API, as before)
     PENDING_PROPOSAL,
     PLACEMENT_FIELDS,
@@ -63,8 +68,9 @@ COMMANDS = (CREATE_REVIEW_CARD, MOVE_REVIEW_CARD)
 FIELDS = {
     CREATE_REVIEW_CARD: frozenset({"command", "source", "expected_source_sha256", "start_line", "end_line",
                                    "question", "due_at", "request_id"}),
+    # explanation, conversation_id and conversation_url are for a card linked to markers (passage_move).
     MOVE_REVIEW_CARD: frozenset({"command", "card_id", "source", "expected_source_sha256", "start_line",
-                                 "end_line", "request_id"}),
+                                 "end_line", "request_id", "explanation", "conversation_id", "conversation_url"}),
 }
 CAPABILITIES = {
     CREATE_REVIEW_CARD: ("client_review_sources_v1",),
@@ -105,6 +111,15 @@ def parse_due_at(value: str) -> datetime | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def passage_move(request: Any) -> bool:
+    """Whether a move-review-card request names an insertion line (start_line equal to end_line): the move
+    of a card linked to source markers with its marked passage (card_passage_moves.py)."""
+    if not isinstance(request, dict) or request.get("command") != MOVE_REVIEW_CARD:
+        return False
+    start = _line(request.get("start_line"))
+    return start >= 1 and start == _line(request.get("end_line"))
 
 
 def validate_request(request: Any) -> CardRequest:
@@ -189,9 +204,7 @@ def check_movable(row: dict[str, Any] | None, document: dict[str, Any]) -> tuple
         raise AuthoringRefused("unsupported_card", "This card's answer is not placed by areas.")
     anchor = primary.get("source_anchor")
     if isinstance(anchor, dict) and anchor.get("segments"):
-        raise AuthoringRefused(
-            "linked_card", "This card is linked to source markers. Move it by cutting its marked passage "
-            "and pasting it into the other document's source.")
+        raise AuthoringRefused("linked_card", LINKED_CARD)
     from_stem, to_stem = primary.get("pdf_stem") or "", document["filename"][:-len(".pdf")]
     if not from_stem:
         raise AuthoringRefused("unsupported_card", "This card names no document.")

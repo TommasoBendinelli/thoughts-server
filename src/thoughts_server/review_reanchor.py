@@ -55,20 +55,58 @@ def _deleted_review_card_ids(session: Session) -> set[str]:
     Those events remain in history for audit, but a missing source location cannot
     delete a card, even if that location was later restored.
     """
-    events = {
-        row.payload.get("event_id"): row.payload
+    return _deliberately_deleted_card_ids(
+        row.payload
         for row in session.scalars(
             select(Entity).where(Entity.entity_type == "review_event", Entity.deleted.is_(False))
         )
-        if isinstance(row.payload, dict)
-        and row.payload.get("event_id")
-        and "queue_action" not in row.payload
+    )
+
+
+def _deliberately_deleted_card_ids(payloads) -> set[str]:
+    events = {
+        payload.get("event_id"): payload
+        for payload in payloads
+        if isinstance(payload, dict)
+        and payload.get("event_id")
+        and "queue_action" not in payload
     }
     return {
         event["card_id"] for event_id, event in events.items()
         if event.get("rating") == "delete" and event.get("card_id")
         and not _inferred_source_deletion(event)
     }
+
+
+# Above this many cards the events are read unfiltered, as for a whole Library.
+_FROZEN_CARD_FILTER_LIMIT = 2000
+
+
+def _frozen_review_card_ids(session: Session, card_ids: set[str] | None = None) -> set[str]:
+    """Cards no placement work touches: deliberately deleted ones, and retired ones.
+
+    A retired card stays where it was when it was retired: on that PDF version, with
+    those source segments (protocol/review-card-retire.md section 5). Restoring it
+    places it on the current version again (operations.apply_batch).
+
+    With ``card_ids`` only those cards are answered for, from their own review
+    events: a card is deleted or retired by events that name it, so the events of
+    every other card of the Library (most of the review history) are not read.
+    """
+    from .review_retirement import retired_review_card_ids, retired_review_cards
+    if card_ids is None or len(card_ids) > _FROZEN_CARD_FILTER_LIMIT:
+        return _deleted_review_card_ids(session) | set(retired_review_card_ids(session))
+    wanted = sorted(card_ids)
+    payloads = [
+        row.payload
+        for start in range(0, len(wanted), 500)
+        for row in session.scalars(select(Entity).where(
+            Entity.entity_type == "review_event", Entity.deleted.is_(False),
+            Entity.payload["card_id"].as_string().in_(wanted[start:start + 500]),
+        ))
+        if isinstance(row.payload, dict)
+    ]
+    return _deliberately_deleted_card_ids(payloads) | set(retired_review_cards(payloads))
 
 
 def _timestamp() -> str:
@@ -677,6 +715,15 @@ def _project_document_card(session: Session, entity: Entity, target_pdf_sha256: 
     return outcome
 
 
+def _placeable_cards(pdf_stem: str, anchored_card_ids: set[str]):
+    """The database condition for the cards a publication of ``pdf_stem`` can place."""
+    candidates = [Entity.payload["primary"]["pdf_stem"].as_string() == pdf_stem]
+    wanted = sorted(anchored_card_ids)
+    for start in range(0, len(wanted), 500):
+        candidates.append(Entity.entity_id.in_(wanted[start:start + 500]))
+    return or_(*candidates)
+
+
 def project_review_anchors_for_publication(
     session: Session,
     filename: str,
@@ -712,14 +759,22 @@ def project_review_anchors_for_publication(
     publication_manifests = None
     publication_projects = None
     moved_cards = None
-    entities = list(
-        session.scalars(
-            select(Entity)
-            .where(Entity.entity_type == "review_card", Entity.deleted.is_(False))
-            .order_by(Entity.collection, Entity.entity_id)
-        )
-    )
-    deleted_card_ids = _deleted_review_card_ids(session)
+    # Only the cards this publication can place are read: the cards of this document
+    # (primary.pdf_stem) and the cards whose source markers the manifest lists for
+    # this PDF. Every other card left the loop below untouched (each branch needs
+    # one of the two), so before, a build read every card of the Library once per
+    # published PDF. The filter runs in the database and may return a card the loop
+    # then skips, never fewer. The one thing it changes is the returned "unchanged"
+    # number, which no longer counts other documents' manually linked cards.
+    conditions = [Entity.entity_type == "review_card", Entity.deleted.is_(False),
+                  _placeable_cards(pdf_stem, set(by_card))]
+    if card_ids is not None and len(card_ids) <= 500:
+        conditions.append(Entity.entity_id.in_(sorted(card_ids)))
+    entities = list(session.scalars(select(Entity).where(*conditions).order_by(Entity.collection, Entity.entity_id)))
+    if not entities:
+        # A PDF without cards: nothing to place and nothing more to read.
+        return counts
+    deleted_card_ids = _frozen_review_card_ids(session, {entity.entity_id for entity in entities})
     pdf_reader = None
     for entity in entities:
         if card_ids is not None and entity.entity_id not in card_ids:
@@ -1026,8 +1081,13 @@ def project_review_anchors_for_publication(
     return counts
 
 
-def project_updated_source_cards(session: Session, store: ObjectStore, card_ids: set[str]) -> None:
-    """Recheck accepted client anchors against existing verified publication evidence."""
+def project_updated_source_cards(session: Session, store: ObjectStore, card_ids: set[str], *,
+                                 source_anchored_only: bool = True) -> None:
+    """Recheck accepted client anchors against existing verified publication evidence.
+
+    With ``source_anchored_only`` False every card of ``card_ids`` is placed on its
+    document's current publication as a build places it (a restored card).
+    """
     if not card_ids:
         return
     filenames = {
@@ -1035,7 +1095,7 @@ def project_updated_source_cards(session: Session, store: ObjectStore, card_ids:
         for entity in session.scalars(select(Entity).where(
             Entity.entity_type == "review_card", Entity.entity_id.in_(card_ids), Entity.deleted.is_(False),
         ))
-        if isinstance(_card_primary(entity.payload).get("source_anchor"), dict)
+        if not source_anchored_only or isinstance(_card_primary(entity.payload).get("source_anchor"), dict)
     }
     from .library_projects import retired_filenames
     retired = retired_filenames(session)
@@ -1065,6 +1125,19 @@ def project_updated_source_cards(session: Session, store: ObjectStore, card_ids:
             session, publication.filename, publication.object_sha256, manifest,
             store=store, card_ids=card_ids,
         )
+
+
+def place_restored_cards(session: Session, store: ObjectStore | None, card_ids: set[str]) -> None:
+    """Cards restored to review come back to their document's current PDF version.
+
+    While retired a card kept the placement it had when it was retired; restoring it
+    takes the same path as a new build: its source markers, or its PDF evidence,
+    projected onto the current publication.
+    """
+    from .review_retirement import retired_review_card_ids
+    active = {card_id for card_id in card_ids if isinstance(card_id, str)} - set(retired_review_card_ids(session))
+    if store is not None and active:
+        project_updated_source_cards(session, store, active, source_anchored_only=False)
 
 
 def backfill_review_page_identities(session: Session, store: ObjectStore, *, commit: bool = False) -> dict:
@@ -1165,6 +1238,7 @@ def queue_review_reanchors_for_publication(
     *,
     include_missing_anchor: bool = True,
     force: bool = False,
+    card_ids: set[str] | None = None,
 ) -> int:
     """Mark matching cards unavailable and queue an idempotent immutable-PDF job."""
 
@@ -1184,8 +1258,10 @@ def queue_review_reanchors_for_publication(
             .order_by(Entity.collection, Entity.entity_id)
         )
     )
-    deleted_card_ids = _deleted_review_card_ids(session)
+    deleted_card_ids = _frozen_review_card_ids(session)
     for entity in entities:
+        if card_ids is not None and entity.entity_id not in card_ids:
+            continue
         if entity.entity_id in deleted_card_ids:
             continue
         primary = _card_primary(entity.payload)
@@ -1482,7 +1558,7 @@ class ReviewReanchorWorker:
         *,
         error_code: str | None = None,
     ) -> bool:
-        if entity.deleted or entity.entity_id in _deleted_review_card_ids(session):
+        if entity.deleted or entity.entity_id in _frozen_review_card_ids(session):
             return False
         payload = dict(entity.payload)
         primary = dict(_card_primary(payload))
@@ -1537,7 +1613,7 @@ class ReviewReanchorWorker:
             if job is None:
                 return
             entity = session.get(Entity, ("review_card", job.collection, job.card_id))
-            if (entity is None or entity.deleted or entity.payload.get("generation_method") in BASIC_METHODS or job.card_id in _deleted_review_card_ids(session)
+            if (entity is None or entity.deleted or entity.payload.get("generation_method") in BASIC_METHODS or job.card_id in _frozen_review_card_ids(session)
                     or entity.winner_operation_id != job.input_operation_id
                     or is_attachment_card(entity.payload)):
                 job.status = "stale"
@@ -1622,7 +1698,7 @@ class ReviewReanchorWorker:
             job = session.get(ReviewReanchorJob, job_id)
             if job is None:
                 return
-            if job.card_id in _deleted_review_card_ids(session):
+            if job.card_id in _frozen_review_card_ids(session):
                 job.status = "stale"
                 job.completed_at = utc_now()
                 job.updated_at = utc_now()

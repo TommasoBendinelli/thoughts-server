@@ -38,7 +38,7 @@ from .models import (
 )
 from .object_store import ObjectStore
 from .pdf_retention import retire_superseded_pdfs
-from .proposal_renders import dispatch_due_proposal_render
+from .proposal_renders import dispatch_due_proposal_render_or_postpone
 from .review_correspondence_migration import (
     migrate_review_correspondence,
     validate_review_correspondence_pairs,
@@ -129,7 +129,7 @@ def _worker_main() -> None:
                 logging.getLogger(__name__).exception("agent figure cleanup failed")
         proposal_work = proposal_worker.run_once()
         with database.session_factory() as session:
-            deferred_render_work = dispatch_due_proposal_render(session, settings)
+            deferred_render_work = dispatch_due_proposal_render_or_postpone(session, settings)
             renders_waiting = deferred_render_work or pending_proposal_renders(session)
         build_work = build_worker.run_once()
         if not proposal_work and not deferred_render_work and not build_work:

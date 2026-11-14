@@ -84,6 +84,99 @@ def selection_regions(primary):
     return regions
 
 
+# Page furniture: the running header, footer and page number the page layout prints.
+# The page's output routine typesets them, so SyncTeX ties them to whatever source
+# line TeX was reading at the page break, not to their text (the desktop's
+# planReviewSourceAnchors follows the same rule).
+FURNITURE_EDGE_LINES = 2
+FURNITURE_EDGE_FRACTION = 0.2
+FURNITURE_HEIGHT_TOLERANCE = 3.0  # points
+
+
+def text_lines(words):
+    """A page's words (pdfplumber) in visual lines, top to bottom: words whose
+    vertical centres fall in one band. Each line keeps the indexes of its words."""
+    lines = []
+    for index in sorted(range(len(words)), key=lambda i: (words[i]["top"] + words[i]["bottom"]) / 2):
+        word = words[index]
+        if not word["text"].strip():
+            continue
+        centre = (word["top"] + word["bottom"]) / 2
+        if lines and lines[-1]["top"] <= centre <= lines[-1]["bottom"]:
+            line = lines[-1]
+            line["top"], line["bottom"] = min(line["top"], word["top"]), max(line["bottom"], word["bottom"])
+            line["words"].append(index)
+            line["texts"].append(word["text"])
+        else:
+            lines.append({"top": word["top"], "bottom": word["bottom"], "words": [index], "texts": [word["text"]]})
+    return lines
+
+
+def _lettered_words(texts):
+    """The words of a line that hold a letter, lower case and without punctuation."""
+    result = set()
+    for text in texts:
+        word = "".join(character.casefold() for character in text if character.isalnum())
+        if any(character.isalpha() for character in word):
+            result.add(word)
+    return result
+
+
+def _same_furniture_line(a, b):
+    """Two pages show the same running header or footer line: at the same height, with at
+    least half of the same words (a section title or date in it may change), or both
+    without letters (page numbers)."""
+    if abs((a["top"] + a["bottom"]) / 2 - (b["top"] + b["bottom"]) / 2) > FURNITURE_HEIGHT_TOLERANCE:
+        return False
+    first, second = _lettered_words(a["texts"]), _lettered_words(b["texts"])
+    if not first or not second:
+        return not first and not second
+    return 2 * len(first & second) >= max(len(first), len(second))
+
+
+def page_furniture(words, height, neighbours):
+    """Indexes of a page's ``words`` that are its running header, footer or page number.
+
+    They are the page's first or last text lines (at most two at each edge, in its
+    top or bottom fifth) that a neighbouring page (``neighbours``: their words)
+    repeats at the same height. Text no neighbour repeats is the note's, even at
+    the top of a page.
+    """
+    lines = text_lines(words)
+    others = [text_lines(other) for other in neighbours]
+
+    def repeated(line):
+        return any(_same_furniture_line(line, candidate) for other in others for candidate in other)
+
+    def centre(line):
+        return (line["top"] + line["bottom"]) / 2
+
+    furniture = set()
+    top = 0
+    while top < min(FURNITURE_EDGE_LINES, len(lines)):
+        line = lines[top]
+        if centre(line) > height * FURNITURE_EDGE_FRACTION or not repeated(line):
+            break
+        furniture.update(line["words"])
+        top += 1
+    index, taken = len(lines) - 1, 0
+    while index >= top and taken < FURNITURE_EDGE_LINES:
+        line = lines[index]
+        if centre(line) < height * (1 - FURNITURE_EDGE_FRACTION) or not repeated(line):
+            break
+        furniture.update(line["words"])
+        index, taken = index - 1, taken + 1
+    return furniture
+
+
+def furniture_refusal(texts, *, area=True):
+    shown = " ".join(" ".join(texts).split())
+    return LinkUnresolved(
+        f"The {'area' if area else 'selection'} holds only the page's running header, footer or page number "
+        f"(“{shown}”), which the page layout prints, not the note's source. Select text of the note itself."
+    )
+
+
 def selection_hits(regions, page, rect):
     return any(r["page"] == page and intersects(r["rect"], rect) for r in regions)
 
@@ -397,10 +490,23 @@ def select_tex_passages(manifest, segment, primary, store, *, several=True):
     regions = selection_regions(primary)
     rectangle = not primary.get("selected_text")
     observed = []  # (page, word, hit, region index, (path, line) or LinkUnresolved)
+    # Every word in reading order: (text, hit, page furniture). The furniture is never
+    # mapped to the source and never part of the answer, but a client's quote may hold it.
+    sequence = []
+    furniture_hits = []  # (region index, text) of selected page furniture
     with pdfplumber.open(io.BytesIO(verified(store, primary["pdf_sha256"]))) as pdf:
+        page_words = {}
+
+        def words_at(number):
+            if number not in page_words:
+                page_words[number] = pdf.pages[number - 1].extract_words()
+            return page_words[number]
+
         for number in range(segment["start_page"], segment["start_page"] + segment["page_count"]):
             page = pdf.pages[number - 1]
-            for word in page.extract_words():
+            furniture = page_furniture(words_at(number), page.height, [
+                words_at(other) for other in (number - 1, number + 1) if 1 <= other <= len(pdf.pages)])
+            for index, word in enumerate(words_at(number)):
                 rect = [
                     word["x0"] / page.width,
                     word["top"] / page.height,
@@ -413,6 +519,15 @@ def select_tex_passages(manifest, segment, primary, store, *, several=True):
                 middle = (rect[1] + rect[3]) / 2
                 probe = [rect[0], middle - 0.00001, rect[2], middle + 0.00001]
                 hit = selection_hits(regions, number, probe)
+                if index in furniture:
+                    # A running header, footer or page number at an area's edge is not the answer's.
+                    sequence.append((word["text"], hit, True))
+                    if hit:
+                        furniture_hits.append((next(i for i, r in enumerate(regions)
+                                                    if r["page"] == number and intersects(r["rect"], probe)),
+                                               word["text"]))
+                    continue
+                sequence.append((word["text"], hit, False))
                 region = None
                 if hit:
                     if not selection_contains(regions, number, probe):
@@ -439,9 +554,17 @@ def select_tex_passages(manifest, segment, primary, store, *, several=True):
                 selected.setdefault(key, len(selected))
                 mapped_regions.setdefault(region, set()).add(key)
         words.append((number, word, hit, key))
+    if rectangle:
+        # An area that holds nothing but page furniture has no answer of the note.
+        answered = {region for _number, _word, hit, region, _key in observed if hit}
+        for region, _text in furniture_hits:
+            if region not in answered:
+                raise furniture_refusal([text for other, text in furniture_hits if other == region])
     if not selected:
         if unmapped:
             raise unmapped[0][1]
+        if furniture_hits:
+            raise furniture_refusal([text for _region, text in furniture_hits], area=rectangle)
         raise LinkUnresolved("Select a complete passage from one source file")
     files = sorted({p for p, _ in selected}, key=lambda p: min(v for k, v in selected.items() if k[0] == p))
     if not several and len(files) != 1:
@@ -455,19 +578,21 @@ def select_tex_passages(manifest, segment, primary, store, *, several=True):
         def normalize(value):
             return " ".join(value.split())
 
-        if normalize(primary["selected_text"]) != normalize(
-            " ".join(w["text"] for _, w, hit, _key in words if hit)
-        ):
+        # The quote may hold the page furniture the selection crosses; the answer does not.
+        answer = normalize(" ".join(text for text, hit, printed in sequence if hit and not printed))
+        if normalize(primary["selected_text"]) not in {
+            answer, normalize(" ".join(text for text, hit, _printed in sequence if hit))
+        }:
             raise LinkUnresolved("The selected text and PDF words disagree")
-        quote = normalize(primary["selected_text"])
-        document_text = normalize(" ".join(w["text"] for _, w, _hit, _key in words))
+        quote = answer
+        document_text = normalize(" ".join(text for text, _hit, printed in sequence if not printed))
         if len(list(re.finditer(r"(?<!\S)" + re.escape(quote) + r"(?!\S)", document_text))) != 1:
             raise LinkUnresolved("The selected text renders more than once")
         try:
             return [(
                 path,
                 raw,
-                exact_plain_tex_range(raw, primary["selected_text"], [line for _, line in selected]),
+                exact_plain_tex_range(raw, quote, [line for _, line in selected]),
             )]
         except LinkUnresolved:
             # Full source-line selection can include TeX formatting commands.
@@ -1211,8 +1336,8 @@ def _job_id(entity, sha):
 def queue_source_links(session, store=None):
     from .operations import apply_operation
     from .review_reanchor import (
-        _deleted_review_card_ids,
         _ensure_system_device,
+        _frozen_review_card_ids,
         _system_card_operation,
         restore_basic_snapshots,
     )
@@ -1220,7 +1345,8 @@ def queue_source_links(session, store=None):
     from .models import ObjectRecord
 
     restore_basic_snapshots(session)
-    deleted = _deleted_review_card_ids(session)
+    # Deleted and retired cards are not linked: a retired card stays as it was retired.
+    deleted = _frozen_review_card_ids(session)
     retired = None
     count = 0
     for entity in session.scalars(select(Entity).where(Entity.entity_type == "review_card")):
@@ -1303,7 +1429,7 @@ def op_device():
 def process_source_link(worker, job_id):
     from .builds import enqueue_build
     from .operations import apply_operation
-    from .review_reanchor import _deleted_review_card_ids, _system_card_operation
+    from .review_reanchor import _frozen_review_card_ids, _system_card_operation
     from .schemas import SourceApplyRequest
     from .sources import _apply_source, source_transaction_lock
 
@@ -1323,7 +1449,7 @@ def process_source_link(worker, job_id):
             or entity.payload.get("generation_method") in {"basic_half_page", "basic_passages_v1"}
             or is_attachment_card(entity.payload)
             or entity.deleted
-            or entity.entity_id in _deleted_review_card_ids(session)
+            or entity.entity_id in _frozen_review_card_ids(session)
             or entity.winner_operation_id != job.input_operation_id
         ):
             job.status = "stale"
@@ -1433,9 +1559,9 @@ def plan_repairs(session, store, *, include_queued=False, keep_sources=False):
     import difflib
 
     from .library_projects import retired_filenames
-    from .review_reanchor import _deleted_review_card_ids
+    from .review_reanchor import _frozen_review_card_ids
 
-    deleted = _deleted_review_card_ids(session)
+    deleted = _frozen_review_card_ids(session)
     retired = retired_filenames(session)
     report = []
     for entity in session.scalars(select(Entity).where(Entity.entity_type == "review_card")

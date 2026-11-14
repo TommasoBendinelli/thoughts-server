@@ -13,6 +13,8 @@
         --question "What is ...?" --due-at 2026-11-05T09:00:00+01:00 --request-id ...
     thoughts-cli move-review-card --card-id ... --source ... --expected-source-sha256 ... \\
         --start-line 12 --end-line 15 --request-id ...
+    thoughts-cli move-review-card --card-id ... --source ... --expected-source-sha256 ... \\
+        --start-line 40 --end-line 40 --explanation "..." --conversation-id ... --request-id ...
     thoughts-cli merge-review-cards --card-id ... --card-id ... --source ... --expected-source-sha256 ... \\
         --request-id ...
     thoughts-cli pending-card-moves --card-id ...
@@ -44,6 +46,7 @@ from .authoring import CREATE, CREATE_BATCH, REMOVE, REVISE
 from .build_inputs import PUBLISH_BUILD_INPUTS
 from .build_status import BUILD_STATUS
 from .card_merges import MERGE_REVIEW_CARDS
+from .card_passage_moves import MOVE_CARD_PASSAGE
 from .card_pending_moves import CANCEL_PENDING_CARD_MOVE, PENDING_CARD_MOVES
 from .client import ThoughtsClient, error_body
 from .documents import CREATE_DOCUMENT, MAX_CONTENT_BYTES
@@ -58,7 +61,7 @@ MAX_PAGE_REQUEST_BYTES = 6 * MAX_PAGE_BYTES + 64 * 1024
 READ = "read-source"
 COMMANDS = (READ, CREATE, CREATE_BATCH, REVISE, REMOVE, CREATE_DOCUMENT, PUBLISH_BUILD_INPUTS,
             CREATE_REVIEW_CARD, MOVE_REVIEW_CARD, MERGE_REVIEW_CARDS, ADD_HTML_PAGE, MOVE_PDF, BUILD_STATUS,
-            PENDING_CARD_MOVES, CANCEL_PENDING_CARD_MOVE)
+            PENDING_CARD_MOVES, CANCEL_PENDING_CARD_MOVE, MOVE_CARD_PASSAGE)
 
 
 def exit_code(result: dict[str, Any]) -> int:
@@ -166,6 +169,24 @@ def parser() -> argparse.ArgumentParser:
                                                       "proposal's text once the user accepts it.")
     moved.add_argument("--card-id")
     selection(moved)
+
+    def passage(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument("--explanation", help="Card linked to markers: why its passage moves.")
+        sub.add_argument("--explanation-file", type=Path)
+        sub.add_argument("--conversation-id", help="Card linked to markers: the agent conversation's UUID.")
+        sub.add_argument("--conversation-url")
+
+    passage(moved)
+    linked = commands.add_parser(MOVE_CARD_PASSAGE, help="Move a card linked to source markers with its marked "
+                                                        "passage, as two linked pending proposals the user decides "
+                                                        "as one (move-review-card with --start-line equal to "
+                                                        "--end-line does the same).")
+    linked.add_argument("--card-id")
+    linked.add_argument("--source", help="The destination source.")
+    linked.add_argument("--expected-source-sha256")
+    linked.add_argument("--line", type=int, help="One-based line of the destination before which the passage goes.")
+    linked.add_argument("--request-id")
+    passage(linked)
     waiting = commands.add_parser(PENDING_CARD_MOVES, help="Card moves that wait for a pending proposal (reads only).")
     waiting.add_argument("--card-id")
     waiting.add_argument("--proposal-id")
@@ -207,7 +228,7 @@ FIELD_OPTIONS = {
     "content": "content", "document_id": "document_id", "publish": "publish", "question": "question",
     "due_at": "due_at", "card_id": "card_id", "folder": "folder", "replace": "replace", "pdf": "pdf",
     "document": "document", "card_ids": "card_ids", "keep_card_id": "keep_card_id",
-    "pending_move_id": "pending_move_id", "state": "state",
+    "pending_move_id": "pending_move_id", "state": "state", "line": "line",
 }
 FILE_OPTIONS = {"replacement_file": "replacement", "explanation_file": "explanation", "proposals_file": "proposals",
                 "content_file": "content", "html_file": "html"}

@@ -81,6 +81,8 @@ def _preview_environment(settings: Settings) -> dict[str, str] | None:
         and not name.startswith("RESTIC_")
     }
     environment["THOUGHTS_SANDBOX_BUILDS"] = "true"
+    from .build_sandbox import FONT_CACHE_ENVIRONMENT, font_cache_for
+    environment[FONT_CACHE_ENVIRONMENT] = str(font_cache_for(settings.state_root))
     return environment | SAFE_PATH_ENVIRONMENT
 
 

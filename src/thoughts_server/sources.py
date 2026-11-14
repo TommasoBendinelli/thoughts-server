@@ -296,6 +296,64 @@ def _pending_moved_cards(session: Session):
     return moved
 
 
+# A conflict that waits for the user. "duplicate" is an older record of the same clash (same
+# path, same base, current and incoming versions) recorded before the server answered a repeated
+# request with the open conflict: it is kept out of the open list, can still be resolved or
+# discarded by its ID, and closes with its twin (stale_conflicts.close_duplicates).
+OPEN_CONFLICT_STATUSES = ("unresolved", "duplicate")
+
+
+def _open_twin(
+    session: Session, path: str, base_sha256: str, current_sha256: str, incoming_sha256: str
+) -> SourceConflict | None:
+    """The open conflict of ``path`` between exactly these three versions, the newest if several."""
+    return session.scalar(
+        select(SourceConflict)
+        .where(
+            SourceConflict.path == path,
+            SourceConflict.base_sha256 == base_sha256,
+            SourceConflict.current_sha256 == current_sha256,
+            SourceConflict.incoming_sha256 == incoming_sha256,
+            SourceConflict.status == "unresolved",
+        )
+        .order_by(SourceConflict.created_at.desc(), SourceConflict.id.desc())
+        .limit(1)
+    )
+
+
+def _marker_count(store: ObjectStore, merged_object_sha256: str, fallback: int) -> int:
+    """How many overlaps a stored merged text shows (as the conflict list counts them)."""
+    try:
+        merged = store.path(merged_object_sha256).read_bytes()
+    except OSError:
+        return fallback
+    return max(1, merged.count(b"<<<<<<< FEDORA_CURRENT"))
+
+
+def _close_twins(session: Session, conflict: SourceConflict) -> list[str]:
+    """Give every other open record of ``conflict``'s clash the fate ``conflict`` just had.
+
+    The twins hold the same incoming edit against the same server version, so resolving,
+    discarding or superseding one of them does the same to all: a device that holds a twin's
+    ID then sees it closed exactly like the one that was decided.
+    """
+    closed = []
+    for twin in session.scalars(
+        select(SourceConflict).where(
+            SourceConflict.path == conflict.path,
+            SourceConflict.base_sha256 == conflict.base_sha256,
+            SourceConflict.current_sha256 == conflict.current_sha256,
+            SourceConflict.incoming_sha256 == conflict.incoming_sha256,
+            SourceConflict.status.in_(OPEN_CONFLICT_STATUSES),
+            SourceConflict.id != conflict.id,
+        )
+    ):
+        twin.status = conflict.status
+        twin.resolved_at = conflict.resolved_at
+        closed.append(twin.id)
+    return closed
+
+
 def _merge(base: bytes, current: bytes, incoming: bytes, *, path: str = "",
            folder_names=(), withdrawn=None, moved_cards=None) -> tuple[bytes, int]:
     # Project manifests carry structured authority. Formatting and object-key
@@ -720,6 +778,18 @@ def _apply_source(
             raise SourceApplyError(f"invalid .ThoughtIgnore for {project_name}: {error}") from error
     merged_record = store.put_bytes(session, merged, "text/x-tex; charset=utf-8")
     conflict_id = str(uuid.uuid4()) if conflicted else None
+    merged_object_sha256 = merged_record.sha256
+    # One clash is one conflict: the same three versions sent again (a new request for the
+    # same draft) answer the conflict that is already open instead of opening a second one.
+    twin = (
+        _open_twin(session, request.path, request.base_sha256, current_sha, request.content_sha256)
+        if conflicted else None
+    )
+    if twin is not None:
+        conflict_id = twin.id
+        if twin.merged_object_sha256 and twin.merged_object_sha256 != merged_object_sha256:
+            merged_object_sha256 = twin.merged_object_sha256
+            conflict_count = _marker_count(store, merged_object_sha256, conflict_count)
     current_object_sha256 = current.object_sha256 if current is not None else request.base_object_sha256
     current_modified_at = _source_modified_at(session, current)
     incoming_modified_at = _client_modified_at(request.client_timestamp)
@@ -735,7 +805,7 @@ def _apply_source(
             {
                 "conflict_id": conflict_id,
                 "conflict_count": conflict_count,
-                "merged_object_sha256": merged_record.sha256,
+                "merged_object_sha256": merged_object_sha256,
                 "current_revision": current_revision,
                 "current_sha256": current_sha,
                 "current_object_sha256": current_object_sha256,
@@ -789,19 +859,20 @@ def _apply_source(
     session.flush()
     _advance_render_frontier(session, operation)
     if conflicted:
-        session.add(
-            SourceConflict(
-                id=conflict_id,
-                path=request.path,
-                base_sha256=request.base_sha256,
-                current_sha256=current_sha,
-                incoming_sha256=request.content_sha256,
-                base_object_sha256=request.base_object_sha256,
-                current_object_sha256=current_object_sha256,
-                incoming_object_sha256=request.content_sha256,
-                merged_object_sha256=merged_record.sha256,
+        if twin is None:
+            session.add(
+                SourceConflict(
+                    id=conflict_id,
+                    path=request.path,
+                    base_sha256=request.base_sha256,
+                    current_sha256=current_sha,
+                    incoming_sha256=request.content_sha256,
+                    base_object_sha256=request.base_object_sha256,
+                    current_object_sha256=current_object_sha256,
+                    incoming_object_sha256=request.content_sha256,
+                    merged_object_sha256=merged_object_sha256,
+                )
             )
-        )
         session.flush()
         return SourceApplyResult(
             outcome="conflict",
@@ -812,7 +883,7 @@ def _apply_source(
             server_sequence=operation.server_sequence,
             conflict_id=conflict_id,
             conflict_count=conflict_count,
-            merged_object_sha256=merged_record.sha256,
+            merged_object_sha256=merged_object_sha256,
             current_modified_at=current_modified_at,
             incoming_modified_at=incoming_modified_at,
         )
@@ -1471,7 +1542,7 @@ def _resolve_conflict(
             server_sequence=existing.server_sequence,
             conflict_id=conflict.id,
         )
-    if conflict.status != "unresolved":
+    if conflict.status not in OPEN_CONFLICT_STATUSES:
         raise SourceApplyError("source conflict was already resolved")
     origin_operation = next(
         (
@@ -1547,7 +1618,14 @@ def _resolve_conflict(
     result_deleted = source.deleted and result_content == current_content
     result_record = store.put_bytes(session, result_content, "text/x-tex; charset=utf-8")
     if conflict_count:
-        successor_id = str(uuid.uuid4())
+        # The same clash already open (the same resolution against the same versions) is
+        # answered with that conflict, never with a second one.
+        twin = _open_twin(session, source.path, conflict.current_sha256, current_sha256, digest)
+        successor_id = twin.id if twin is not None else str(uuid.uuid4())
+        successor_merged_sha256 = result_record.sha256
+        if twin is not None and twin.merged_object_sha256 not in {None, successor_merged_sha256}:
+            successor_merged_sha256 = twin.merged_object_sha256
+            conflict_count = _marker_count(store, successor_merged_sha256, conflict_count)
         current_modified_at = _source_modified_at(session, source)
         incoming_modified_at = _client_modified_at(request.client_timestamp)
         payload = {
@@ -1559,7 +1637,7 @@ def _resolve_conflict(
             "resolution_sha256": digest,
             "outcome": "conflict",
             "conflict_count": conflict_count,
-            "merged_object_sha256": result_record.sha256,
+            "merged_object_sha256": successor_merged_sha256,
             "current_revision": source.revision,
             "current_sha256": current_sha256,
             "current_object_sha256": current_object_sha256,
@@ -1581,21 +1659,23 @@ def _resolve_conflict(
             render_impact=source_render_impact(source.path),
         )
         session.add(operation)
-        session.add(
-            SourceConflict(
-                id=successor_id,
-                path=source.path,
-                base_sha256=conflict.current_sha256,
-                current_sha256=current_sha256,
-                incoming_sha256=digest,
-                base_object_sha256=conflict.current_object_sha256,
-                current_object_sha256=current_object_sha256,
-                incoming_object_sha256=request.content_sha256,
-                merged_object_sha256=result_record.sha256,
+        if twin is None:
+            session.add(
+                SourceConflict(
+                    id=successor_id,
+                    path=source.path,
+                    base_sha256=conflict.current_sha256,
+                    current_sha256=current_sha256,
+                    incoming_sha256=digest,
+                    base_object_sha256=conflict.current_object_sha256,
+                    current_object_sha256=current_object_sha256,
+                    incoming_object_sha256=request.content_sha256,
+                    merged_object_sha256=successor_merged_sha256,
+                )
             )
-        )
         conflict.status = "superseded"
         conflict.resolved_at = utc_now()
+        _close_twins(session, conflict)
         session.flush()
         return SourceApplyResult(
             outcome="conflict",
@@ -1606,7 +1686,7 @@ def _resolve_conflict(
             server_sequence=operation.server_sequence,
             conflict_id=successor_id,
             conflict_count=conflict_count,
-            merged_object_sha256=result_record.sha256,
+            merged_object_sha256=successor_merged_sha256,
             current_modified_at=current_modified_at,
             incoming_modified_at=incoming_modified_at,
         )
@@ -1647,6 +1727,7 @@ def _resolve_conflict(
     source.updated_at = utc_now()
     conflict.status = "resolved"
     conflict.resolved_at = utc_now()
+    _close_twins(session, conflict)
     session.flush()
     return SourceApplyResult(
         outcome=outcome,
@@ -1730,7 +1811,7 @@ def discard_conflict(
         source = session.get(SourceFile, path)
         if conflict is None:
             raise SourceApplyError("source conflict does not exist")
-        if conflict.status not in {"unresolved", "discarded"}:
+        if conflict.status not in {*OPEN_CONFLICT_STATUSES, "discarded"}:
             raise SourceApplyError("source conflict is no longer unresolved")
         current_sha256 = EMPTY_SHA256 if source is None or source.deleted else source.sha256
         current_revision = 0 if source is None else source.revision
@@ -1748,6 +1829,7 @@ def discard_conflict(
             return conflict
         conflict.status = "discarded"
         conflict.resolved_at = utc_now()
+        _close_twins(session, conflict)
         session.commit()
         return conflict
 

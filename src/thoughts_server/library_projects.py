@@ -295,12 +295,21 @@ def _direct_project_pdf(documents, publications, store):
     return filename if actual == expected else ""
 
 
-def catalogue(session, root: Path, store, *, sources: bool = True):
+def catalogue(session, root: Path, store, *, sources: bool = True, listing: set[str] | None = None):
     """Render current manifests; publications supply bytes, never membership.
 
     Reading the catalogue must not create Projects, manifests, or input files.
     sources=False leaves out the source-folder file listings, which read every
     authored file of every Project from disk; documents do not depend on them.
+
+    ``listing`` (PDF filenames) leaves out the Projects that cannot list any of
+    them among their documents, so the caller composes only the Projects a build
+    touched. A Project's documents are its declarations, each named by the
+    publication of its source folder or else by its declared filename; a Project
+    is kept when a named publication belongs to one of its folders or a declared
+    filename is named. That is never fewer Projects than those whose documents
+    name one of the filenames, and each kept entry is computed as in the full
+    catalogue.
     """
     from . import project_configuration as pc
     from .library_project_manifests import source_manifests
@@ -316,13 +325,26 @@ def catalogue(session, root: Path, store, *, sources: bool = True):
             # The default folder's own documents publish under its full path.
             owner_to_project[folder["path"]] = configuration["id"]
 
+    for configuration in configurations:
+        record = saved.get(configuration["id"])
+        if record is not None and record.deleted:
+            raise ValueError("Deleted Project still has an active manifest: " + configuration["id"])
+    if listing is not None:
+        kept = {owner_to_project.get(pub.project) for filename, pub in publications.items() if filename in listing}
+        kept.update(
+            configuration["id"] for configuration in configurations
+            if any(pc.declared_filename(configuration, declaration) in listing
+                   for declaration in configuration["documents"])
+        )
+        configurations = [configuration for configuration in configurations if configuration["id"] in kept]
+
     components = {c["id"]: [] for c in configurations}
     from .source_folder_names import pairs
     # Artifacts built before the source-folder name migration name the old folders.
     renamed = pairs(session)
     for pub in publications.values():
         key = owner_to_project.get(pub.project)
-        if key is None:
+        if key is None or key not in components:
             continue
         for segment in _publication_segments(pub, store, renamed=renamed):
             source = segment.get("primary_source_file") or segment.get("source_id") or ""
@@ -555,8 +577,10 @@ def _assembly_record(session, project):
 def publish_project_readings(session, store, root: Path, *, changed_filenames=None):
     """Publish document compositions in the same transaction as their document versions."""
     changed = 0
-    # Readings are composed from documents only; skip the source-folder scan.
-    for project in catalogue(session, root, store, sources=False)["projects"]:
+    # Readings are composed from documents only; skip the source-folder scan. A build
+    # names the PDFs it published: only the Projects that can list one are composed
+    # (catalogue), not every Project of the Library after every build.
+    for project in catalogue(session, root, store, sources=False, listing=changed_filenames)["projects"]:
         if changed_filenames is not None and not changed_filenames.intersection(d["filename"] for d in project["documents"]):
             continue
         record = _assembly_record(session, project)

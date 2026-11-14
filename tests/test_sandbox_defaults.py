@@ -272,3 +272,27 @@ def test_every_make4ht_attempt_starts_in_a_fresh_folder_and_follows_the_sandbox_
         assert (str(project), str(project)) in option(first, "--bind")
     else:
         assert first[:4] == ["nice", "-n", "19", "make4ht"]
+
+
+def test_a_sandboxed_compile_mounts_the_librarys_font_cache(compiled_project, monkeypatch, tmp_path):
+    docs, project, calls = compiled_project
+    cache = tmp_path / "state" / "tex-font-cache"
+    monkeypatch.setenv("THOUGHTS_SANDBOX_BUILDS", "true")
+    monkeypatch.setenv(build_sandbox.FONT_CACHE_ENVIRONMENT, str(cache))
+    monkeypatch.setattr(build_sandbox.shutil, "which", lambda name: "/usr/bin/" + name)
+
+    native_renderer._compile_source(docs, project, "main.tex")
+
+    latexmk = calls[0]
+    position = latexmk.index(str(cache.resolve()))
+    assert latexmk[position - 1:position + 2] == ["--bind", str(cache.resolve()), "/home/tex/texmf-var"]
+    # The compile itself is the one it was: the same latexmk call after the sandbox.
+    program = latexmk.index("/usr/bin/latexmk")
+    assert latexmk[program + 1] == "-norc" and "-pdf" in latexmk[program:]
+
+    # Without a named cache the sandbox keeps its temporary folder.
+    calls.clear()
+    monkeypatch.delenv(build_sandbox.FONT_CACHE_ENVIRONMENT)
+    native_renderer._compile_source(docs, project, "main.tex")
+    assert "/home/tex/texmf-var" not in [part for part in calls[0] if calls[0][calls[0].index(part) - 1] == "--bind"]
+    assert str(cache.resolve()) not in calls[0]

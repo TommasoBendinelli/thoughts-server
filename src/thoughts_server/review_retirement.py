@@ -4,8 +4,9 @@
 
 Retire, restore and their undo are immutable ``review_event`` queue actions. A card's
 retired state is a pure function of its events, so arrival order does not matter. The
-server keeps no table for it: re-anchoring, source linking and deduplication treat a
-retired card as a live card, and only deliberate deletions stop a card.
+server keeps no table for it. Deduplication treats a retired card as a live card;
+re-anchoring, source linking and publication projections skip it, so it stays on the PDF
+version it was retired on, until a restore places it on the current one again.
 """
 from __future__ import annotations
 

@@ -183,7 +183,7 @@ def test_malformed_retire_events_are_refused(client, auth_headers):
     assert post(client, auth_headers, operation(1, skip), operation(2, answer)).status_code == 200
 
 
-def test_retired_card_keeps_reanchoring(client, settings):
+def test_retired_card_is_not_reanchored(client, settings):
     card_id, target = _seed_card_and_publication(client, settings)
     with client.app.state.database.session_factory() as session:
         apply_event(session, 2, retire_payload("retire", "2026-10-27T10:00:00Z", card_id=card_id))
@@ -191,12 +191,50 @@ def test_retired_card_keeps_reanchoring(client, settings):
     with client.app.state.database.session_factory() as session:
         assert card_id in retired_review_card_ids(session)
         assert card_id not in _deleted_review_card_ids(session)
-        # Its markers and regions keep following the PDF.
-        assert queue_review_reanchors_for_publication(session, "paper.pdf", target, force=True) == 1
+        # It stays on the PDF version it was retired on: no job, whatever is forced.
+        assert queue_review_reanchors_for_publication(session, "paper.pdf", target, force=True) == 0
         session.commit()
     with client.app.state.database.session_factory() as session:
         card = session.get(Entity, ("review_card", "cards", card_id))
         assert card is not None and not card.deleted
+        assert card.payload["primary"]["pdf_sha256"] == "a" * 64 and "reanchor" not in card.payload
+
+
+def test_retired_card_keeps_its_version_and_restore_places_it_on_the_current_one(client, settings, auth_headers, monkeypatch):
+    from test_review_document_relocation import _publish, _render_free_fingerprints, _save_manifest, _setup
+
+    from thoughts_server.review_reanchor import project_review_anchors_for_publication
+
+    _render_free_fingerprints(monkeypatch)
+    card_id, store = _setup(client, settings)
+    with client.app.state.database.session_factory() as session:
+        placed = dict(session.get(Entity, ("review_card", "cards", card_id)).payload["primary"])
+        apply_event(session, 10, retire_payload("retire", "2026-10-27T10:00:00Z", card_id=card_id))
+        session.commit()
+    # A new build moves the card's passage to another page: the retired card stays where it was.
+    with client.app.state.database.session_factory() as session:
+        new_sha, manifest = _publish(session, store, "paper.pdf", card_id, content=b"paper, second version")
+        manifest["review_card_anchors"][0]["placement"]["regions"][0]["page"] = 26
+        _save_manifest(session, store, "paper.pdf", store_record(session, new_sha), manifest)
+        counts = project_review_anchors_for_publication(session, "paper.pdf", new_sha, manifest, store=store)
+        assert counts["ready"] == 0
+        session.commit()
+    with client.app.state.database.session_factory() as session:
+        primary = session.get(Entity, ("review_card", "cards", card_id)).payload["primary"]
+        assert (primary["pdf_sha256"], primary["page"], primary["source_anchor"]) == (
+            placed["pdf_sha256"], placed["page"], placed["source_anchor"])
+    # Restore to review: placed on the current version as a build places it.
+    response = post(client, auth_headers, operation(100, retire_payload("restore", "2026-10-28T10:00:00Z", card_id=card_id)))
+    assert response.status_code == 200, response.text
+    with client.app.state.database.session_factory() as session:
+        assert card_id not in retired_review_card_ids(session)
+        primary = session.get(Entity, ("review_card", "cards", card_id)).payload["primary"]
+        assert (primary["pdf_sha256"], primary["page"]) == (new_sha, 26)
+
+
+def store_record(session, sha256):
+    from thoughts_server.models import ObjectRecord
+    return session.get(ObjectRecord, sha256)
 
 
 def test_retirement_does_not_change_the_card_record(client, settings):

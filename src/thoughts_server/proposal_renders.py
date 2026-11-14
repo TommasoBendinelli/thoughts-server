@@ -2,7 +2,8 @@
 # SPDX-FileCopyrightText: 2026 Tommaso Bendinelli
 from __future__ import annotations
 
-from datetime import timedelta
+import logging
+from datetime import UTC, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -225,3 +226,49 @@ def dispatch_due_proposal_render(session: Session, settings: Settings) -> bool:
             )
     session.commit()
     return True
+
+
+# A deferred render that cannot be dispatched is tried again after a wait that grows with the
+# age of its row (half its age, between these bounds), so a row that keeps failing is neither
+# retried in a tight loop nor dropped.
+DISPATCH_RETRY_SECONDS = 15.0
+DISPATCH_RETRY_MAXIMUM_SECONDS = 600.0
+
+
+def dispatch_due_proposal_render_or_postpone(session: Session, settings: Settings) -> bool:
+    """``dispatch_due_proposal_render`` for the build worker's loop: a failure postpones the render.
+
+    Until 14 November 2026 an exception here ended the worker process. A render check that ran
+    while the build inputs it names were still arriving raised "requested build input snapshot
+    does not exist", and every build of the Library waited until the service was started again.
+    Now the failure is logged, the row stays and becomes due again later, and False is returned:
+    nothing was dispatched, and the loop goes on with its builds.
+    """
+
+    try:
+        return dispatch_due_proposal_render(session, settings)
+    except Exception:  # noqa: BLE001 - one render must never stop the build worker
+        session.rollback()
+        logging.getLogger(__name__).exception(
+            "a deferred proposal render could not be dispatched; it is tried again later"
+        )
+    try:
+        now = utc_now()
+        row = session.scalar(
+            select(DeferredProposalRender)
+            .where(DeferredProposalRender.ready_at <= now)
+            .order_by(DeferredProposalRender.ready_at)
+            .limit(1)
+        )
+        if row is not None:
+            created = row.created_at or now
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=UTC)
+            age = max(0.0, (now - created).total_seconds())
+            wait = min(DISPATCH_RETRY_MAXIMUM_SECONDS, max(DISPATCH_RETRY_SECONDS, age / 2))
+            row.ready_at = now + timedelta(seconds=wait)
+            session.commit()
+    except Exception:  # noqa: BLE001 - the next pass of the loop tries again
+        session.rollback()
+        logging.getLogger(__name__).exception("a failing deferred proposal render could not be postponed")
+    return False

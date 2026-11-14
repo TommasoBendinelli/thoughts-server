@@ -441,8 +441,9 @@ def import_folder(session, store, root, request, settings, *, trace_owner_device
         try:
             # The renderer's page extractor is one per process and not thread-safe;
             # with several Libraries in one API process, imports render one at a time.
-            from .build_sandbox import sandboxed
-            with IN_PROCESS_RENDER_LOCK, sandboxed(settings.sandbox_builds):
+            from .build_sandbox import font_cache_for, sandboxed
+            with IN_PROCESS_RENDER_LOCK, sandboxed(settings.sandbox_builds,
+                                                   font_cache=font_cache_for(settings.state_root)):
                 render(stage, publication_root, artifacts, targets=targets, jobs=1, render_validation=False)
         except Exception as error:
             # Source delivery is independent of the selected PDF build.  Keep

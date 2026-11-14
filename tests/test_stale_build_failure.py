@@ -244,3 +244,30 @@ def test_renderer_identity_follows_the_code_and_helper(monkeypatch, tmp_path):
     helper.write_bytes(b"helper v2")
     monkeypatch.setattr(builds_module, "_renderer_identity", None)
     assert builds_module.current_renderer_identity() != with_helper
+
+
+def test_a_render_check_never_decides_from_a_kept_render_status(client, auth_headers, settings):
+    # 14 November 2026: a Sync's render check and the render state it reads next began to share
+    # one computed status, kept under the Library's change key. What a stored build says (its
+    # renderer, its failure) is not part of that key, so the check took the kept "this failure
+    # stands" after the renderer had been replaced and never built the PDF again (the Mac's
+    # end-to-end test testFailureOfReplacedRenderer caught it). The check computes its own.
+    database, _ = _rolled_back_failure_library(settings)
+    with database.session_factory() as session:
+        failed = session.get(BuildJob, "failed-0940")
+        failed.progress = {**failed.progress, "renderer_identity": builds_module.current_renderer_identity()}
+        session.commit()
+    check = client.post("/v1/render-checks", headers=auth_headers, json={"target": "all"}).json()
+    assert check["status"] == "attention" and check["build"]["id"] == "failed-0940"
+    # The render state a Sync reads next keeps the status for the following requests.
+    assert client.get("/v1/render-state", headers=auth_headers).status_code == 200
+    assert client.get("/v1/render-state", headers=auth_headers).status_code == 200
+
+    with database.session_factory() as session:
+        failed = session.get(BuildJob, "failed-0940")
+        failed.progress = {**failed.progress, "renderer_identity": ROLLED_BACK_RENDERER}
+        session.commit()
+    retried = client.post("/v1/render-checks", headers=auth_headers, json={"target": "all"}).json()
+    assert retried["status"] == "building"
+    assert retried["build"]["id"] != "failed-0940"
+    database.close()

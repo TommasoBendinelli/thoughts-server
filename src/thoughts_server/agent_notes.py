@@ -33,7 +33,7 @@ from typing import Any, Literal
 from fastapi import Depends, FastAPI, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select, text, update
+from sqlalchemy import and_, false, func, null, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 
@@ -41,11 +41,13 @@ from .config import Settings
 from .database import Database
 from .models import (
     AgentNote,
+    AgentNoteHandling,
     AgentNoteListener,
     AgentNoteReply,
     AgentNoteReplyListener,
     AgentNoteReplyPhoto,
     Entity,
+    SourceFile,
 )
 from .object_store import ObjectStore
 
@@ -56,6 +58,29 @@ LISTENING_CAPABILITY = "agent_note_listening_v1"
 REPLY_PHOTOS_CAPABILITY = "agent_note_reply_photos_v1"
 # Notes may carry links: rectangles of the image that open a source when tapped.
 LINKS_CAPABILITY = "agent_note_links_v1"
+# One agent may answer for every device (reply feed responder=true) and read the user's pages.
+RESPONDER_CAPABILITY = "agent_note_responder_v1"
+# The note_id of a responder's listener row: real note ids are UUIDs, so this one never collides.
+RESPONDER_NOTE_ID = "*"
+# origin.kind of a page the user sends to the agents (the phone's study mode, the Mac's Send Page).
+PHONE_PAGE_KIND = "phone_page"
+# Who answers a reply or a page: covered_by at arrival and one claim per item ("Who answers").
+CLAIMS_CAPABILITY = "agent_note_claims_v1"
+# A session that the user made responsible for a topic: a scoped listener ("Topic owners").
+OWNERS_CAPABILITY = "agent_note_owners_v1"
+# The user's answering rules, read from the Library note agent-note-rules.md ("Answering rules").
+RULES_CAPABILITY = "agent_note_rules_v1"
+# The user chooses which agent answers the replies to a note ("The user's choice").
+ANSWER_BY_CAPABILITY = "agent_note_answer_by_v1"
+ANSWER_BY_ROLES = ("sender", "owner", "responder")
+ANSWER_BY_REFUSAL = "the user chose another agent to answer this note"
+OWNER_PREFIX = "topic:"
+# A responder leaves a reply or page this long to the agent that covered it when it arrived.
+COVERER_GRACE = timedelta(minutes=10)
+RULES_FILENAME = "agent-note-rules.md"
+MAX_SCOPE_ITEMS = 200
+MAX_SCOPE_ITEM_CHARACTERS = 128
+MAX_LABEL_CHARACTERS = 200
 MAX_LINKS = 64
 MAX_LINK_HREF_CHARACTERS = 2048
 MAX_LINK_LABEL_CHARACTERS = 200
@@ -86,6 +111,7 @@ INBOX_MAX_WAIT = 30
 INBOX_UNDELIVERED_WINDOW = timedelta(hours=24)
 REPLY_FEED_LIMIT = 50
 REPLY_FEED_MAX_WAIT = 60
+PAGE_FEED_LIMIT = 20
 LIST_DEFAULT_LIMIT = 50
 LIST_MAX_LIMIT = 200
 LIVE_LISTENER_WINDOW = timedelta(seconds=45)
@@ -534,37 +560,281 @@ def note_conversation_id(note: AgentNote) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def is_responder(listener: AgentNoteReplyListener) -> bool:
+    """A responder hears replies to every note, whichever device sent it (reply feed ``responder=true``)."""
+    return listener.note_id == RESPONDER_NOTE_ID
+
+
+def is_owner(listener: AgentNoteReplyListener) -> bool:
+    """A topic owner hears the replies and pages of its scope, whichever device sent the note."""
+    return listener.note_id.startswith(OWNER_PREFIX)
+
+
+def listener_role(listener: AgentNoteReplyListener) -> str:
+    """``responder``, ``owner`` (a topic owner), or ``sender`` (an agent of the device that sent notes)."""
+    return "responder" if is_responder(listener) else "owner" if is_owner(listener) else "sender"
+
+
+def scope_matches(scope: dict | None, note: AgentNote) -> bool:
+    """Whether a topic owner's scope holds the note: its document, its card, or a tag in its title."""
+    if not isinstance(scope, dict):
+        return False
+    if note.document_id and note.document_id in (scope.get("document_ids") or []):
+        return True
+    if note.review_card_id and note.review_card_id in (scope.get("review_card_ids") or []):
+        return True
+    title = (note.title or "").lower()
+    return any(tag and tag.lower() in title for tag in scope.get("title_tags") or [])
+
+
+def scope_condition(scopes: list[dict]):
+    """The SQL form of ``scope_matches`` for any of ``scopes`` (false when they hold nothing)."""
+    documents = sorted({value for scope in scopes for value in scope.get("document_ids") or []})
+    cards = sorted({value for scope in scopes for value in scope.get("review_card_ids") or []})
+    tags = sorted({value.lower() for scope in scopes for value in scope.get("title_tags") or [] if value})
+    conditions = []
+    if documents:
+        conditions.append(AgentNote.document_id.in_(documents))
+    if cards:
+        conditions.append(AgentNote.review_card_id.in_(cards))
+    conditions.extend(func.lower(AgentNote.title).contains(tag, autoescape=True) for tag in tags)
+    return or_(*conditions) if conditions else false()
+
+
 def reply_listener_covers(listener: AgentNoteReplyListener, note: AgentNote) -> bool:
     """True when the listener's feed contains replies to this note (same filters as ``reply_feed``)."""
+    if is_responder(listener):
+        return True
+    if is_owner(listener):
+        return scope_matches(listener.scope, note)
     if listener.device_id != note.sender_device_id or listener.note_id not in ("", note.id):
         return False
     return listener.conversation_id == "" or listener.conversation_id == note_conversation_id(note)
 
 
 def reply_listener_record(listener: AgentNoteReplyListener) -> dict:
+    role = listener_role(listener)
+    scope = listener.scope if role == "owner" and isinstance(listener.scope, dict) else {}
     return {
         "device_id": listener.device_id,
         "conversation_id": listener.conversation_id or None,
-        "note_id": listener.note_id or None,
+        "note_id": (listener.note_id or None) if role == "sender" else None,
         "last_seen_at": rfc3339(listener.last_seen_at),
+        "responder": role == "responder",
+        "role": role,
+        "owner_id": listener.note_id[len(OWNER_PREFIX):] if role == "owner" else None,
+        "label": scope.get("label") if role == "owner" else None,
     }
 
 
-def listening_answer(session: Session, note: AgentNote, now: datetime) -> dict:
-    """Whether an agent of the note's sender device waits to act on replies to it.
+def listener_is_live(listener: AgentNoteReplyListener, now: datetime) -> bool:
+    return as_utc(listener.last_seen_at) >= now - REPLY_LISTENER_LIVE_WINDOW
+
+
+def covering_listeners(
+    session: Session, note: AgentNote, now: datetime, include_responders: bool = False
+) -> list[AgentNoteReplyListener]:
+    """The live listeners that hear replies to the note (or the page): its sender's agents and
+    topic owners, and responders when asked."""
+    conditions = [
+        AgentNoteReplyListener.device_id == note.sender_device_id,
+        AgentNoteReplyListener.note_id.startswith(OWNER_PREFIX),
+    ]
+    if include_responders:
+        conditions.append(AgentNoteReplyListener.note_id == RESPONDER_NOTE_ID)
+    rows = session.scalars(
+        select(AgentNoteReplyListener)
+        .where(or_(*conditions))
+        .order_by(AgentNoteReplyListener.last_seen_at.desc())
+    ).all()
+    return [
+        row
+        for row in rows
+        if listener_is_live(row, now)
+        and reply_listener_covers(row, note)
+        and (include_responders or not is_responder(row))
+    ]
+
+
+def coverer_entry(listener: AgentNoteReplyListener) -> dict:
+    """A listener as stored in ``agent_note_handling.covered_by``."""
+    key = [listener.device_id, listener.conversation_id, listener.note_id]
+    return {**reply_listener_record(listener), "key": key}
+
+
+def stored_choice(value: object) -> dict | None:
+    """A stored ``answer_by`` (a note's, or the one a reply's handling row kept), or None: automatic."""
+    if not isinstance(value, dict) or value.get("role") not in ANSWER_BY_ROLES:
+        return None
+    return value if isinstance(value.get("device_id"), str) else None
+
+
+def answerer_rows(
+    session: Session, choice: dict, note_id: str | None = None
+) -> list[AgentNoteReplyListener]:
+    """The listener rows of the agent the user chose, most recently seen first. With ``note_id``,
+    only the rows that hear that note's replies: a sender agent waiting for another note does not."""
+    rows = session.scalars(
+        select(AgentNoteReplyListener)
+        .where(
+            AgentNoteReplyListener.device_id == choice["device_id"],
+            AgentNoteReplyListener.conversation_id == (choice.get("conversation_id") or ""),
+        )
+        .order_by(AgentNoteReplyListener.last_seen_at.desc())
+    ).all()
+    role = choice["role"]
+    owner_row = OWNER_PREFIX + (choice.get("owner_id") or "")
+    return [
+        row
+        for row in rows
+        if listener_role(row) == role
+        and (role != "owner" or row.note_id == owner_row)
+        and (role != "sender" or note_id is None or row.note_id in ("", note_id))
+    ]
+
+
+def agent_record(listener: AgentNoteReplyListener, now: datetime) -> dict:
+    """A listener as an Agent object (``candidates``)."""
+    record = reply_listener_record(listener)
+    return {
+        "role": record["role"],
+        "device_id": record["device_id"],
+        "conversation_id": record["conversation_id"],
+        "owner_id": record["owner_id"],
+        "label": record["label"],
+        "live": listener_is_live(listener, now),
+    }
+
+
+def chosen_agent(session: Session, choice: dict, note_id: str, now: datetime) -> dict:
+    """The user's choice as an Agent object (``answer_by``): live while it listens for the note.
+    An owner whose topic was released keeps the label it had when it was chosen."""
+    rows = answerer_rows(session, choice, note_id)
+    owner = choice["role"] == "owner"
+    label = choice.get("label")
+    if owner and rows and isinstance(rows[0].scope, dict):
+        label = rows[0].scope.get("label")
+    return {
+        "role": choice["role"],
+        "device_id": choice["device_id"],
+        "conversation_id": choice.get("conversation_id") or None,
+        "owner_id": choice.get("owner_id") if owner else None,
+        "label": label if owner else None,
+        "live": bool(rows) and listener_is_live(rows[0], now),
+    }
+
+
+def answer_candidates(session: Session, note: AgentNote, now: datetime) -> list[dict]:
+    """The agents that could answer the note's replies now, each once: the sender's listeners that
+    cover it, then every live topic owner (those whose scope holds the note first), then responders."""
+    live = [
+        row
+        for row in session.scalars(
+            select(AgentNoteReplyListener)
+            .where(
+                or_(
+                    AgentNoteReplyListener.device_id == note.sender_device_id,
+                    AgentNoteReplyListener.note_id == RESPONDER_NOTE_ID,
+                    AgentNoteReplyListener.note_id.startswith(OWNER_PREFIX),
+                )
+            )
+            .order_by(AgentNoteReplyListener.last_seen_at.desc())
+        )
+        if listener_is_live(row, now)
+    ]
+    senders = [row for row in live if listener_role(row) == "sender" and reply_listener_covers(row, note)]
+    owners = [row for row in live if is_owner(row)]
+    owners.sort(key=lambda row: not scope_matches(row.scope, note))  # stable: most recent first in each half
+    candidates: list[dict] = []
+    for row in (*senders, *owners, *(row for row in live if is_responder(row))):
+        agent = agent_record(row, now)
+        if agent not in candidates:
+            candidates.append(agent)
+    return candidates
+
+
+def answerer_claims(choice: dict, device_id: str, conversation: str, responder: bool) -> bool:
+    """Whether a claim comes from the agent the user chose: that device's responder, or (sender,
+    owner) that device's conversation; a sender chosen device-wide is any conversation of its device."""
+    if choice["device_id"] != device_id:
+        return False
+    if choice["role"] == "responder":
+        return responder
+    chosen = choice.get("conversation_id") or ""
+    return not responder and (chosen == conversation or (choice["role"] == "sender" and not chosen))
+
+
+def chosen_replies(device_id: str, conversation_id: str | None):
+    """The replies whose note the user gave to this agent (``answer_by`` at arrival), as a subquery
+    of reply ids: its feed holds them even when its own notes and topics do not."""
+    chosen = AgentNoteHandling.answer_by
+    return select(AgentNoteHandling.item_id).where(
+        AgentNoteHandling.kind == "reply",
+        chosen["device_id"].as_string() == device_id,
+        chosen["role"].as_string() != "responder",
+        func.coalesce(chosen["conversation_id"].as_string(), "") == (conversation_id or ""),
+    )
+
+
+def parse_answer_by(body: bytes) -> dict | None:
+    """The body of PUT .../answer-by: ``{"agent": {role, device_id, conversation_id, owner_id}}``,
+    or ``{"agent": null}`` for the automatic choice. Other fields of an Agent object are ignored."""
+    payload = parse_json_object(body)
+    if "agent" not in payload:
+        raise invalid("agent is required: one of the note's candidates, or null for the automatic choice")
+    agent = payload["agent"]
+    if agent is None:
+        return None
+    if not isinstance(agent, dict):
+        raise invalid("agent must be a JSON object or null")
+    role = agent.get("role")
+    if role not in ANSWER_BY_ROLES:
+        raise invalid("agent.role must be sender, owner or responder")
+    device_id = agent.get("device_id")
+    if not isinstance(device_id, str) or not device_id or len(device_id) > 128:
+        raise invalid("agent.device_id is required (at most 128 characters)")
+    for field in ("conversation_id", "owner_id"):
+        if agent.get(field) is not None and not isinstance(agent[field], str):
+            raise invalid(f"agent.{field} must be a string or null")
+    owner_id = agent.get("owner_id") if role == "owner" else None
+    if role == "owner" and (not owner_id or len(owner_id) > MAX_SCOPE_ITEM_CHARACTERS):
+        raise invalid("agent.owner_id is required for an owner")
+    conversation = None if role == "responder" else optional_conversation_id(agent.get("conversation_id"))
+    return {"role": role, "device_id": device_id, "conversation_id": conversation, "owner_id": owner_id,
+            "label": None}
+
+
+def listening_answer(session: Session, note: AgentNote, now: datetime, choice: dict | None = None) -> dict:
+    """Whether an agent waits to act on replies to the note: one of its sender device, or a responder.
 
     ``listening``: a covering listener was seen in the last 90 s. ``not_listening``: none was,
-    but agents of that device announce listening (seen in the last 30 days). ``unknown``: the
-    sender's agents never announce it, so the server cannot tell.
+    but agents of that device, or a responder, announced listening in the last 30 days.
+    ``unknown``: neither ever announces it, so the server cannot tell.
+
+    With the user's ``choice`` of who answers (``answer_by``) only that agent counts: ``listening``
+    with its listener while it is live, else ``not_listening`` with none.
     """
+    if choice is not None:
+        chosen = [row for row in answerer_rows(session, choice, note.id)[:1] if listener_is_live(row, now)]
+        return {
+            "state": "listening" if chosen else "not_listening",
+            "listeners": [reply_listener_record(row) for row in chosen],
+        }
     rows = [
         row
         for row in session.scalars(
             select(AgentNoteReplyListener)
-            .where(AgentNoteReplyListener.device_id == note.sender_device_id)
+            .where(
+                or_(
+                    AgentNoteReplyListener.device_id == note.sender_device_id,
+                    AgentNoteReplyListener.note_id == RESPONDER_NOTE_ID,
+                    AgentNoteReplyListener.note_id.startswith(OWNER_PREFIX),
+                )
+            )
             .order_by(AgentNoteReplyListener.last_seen_at.desc())
         )
         if as_utc(row.last_seen_at) >= now - REPLY_LISTENER_KNOWN_WINDOW
+        and (not is_owner(row) or row.device_id == note.sender_device_id or scope_matches(row.scope, note))
     ]
     live = [
         row
@@ -573,6 +843,145 @@ def listening_answer(session: Session, note: AgentNote, now: datetime) -> dict:
     ]
     state = "listening" if live else ("not_listening" if rows else "unknown")
     return {"state": state, "listeners": [reply_listener_record(row) for row in live]}
+
+
+def handling_record(
+    item: AgentNoteHandling, session: Session | None = None, now: datetime | None = None
+) -> dict:
+    """A reply's or page's handling: who covered it at arrival (live now or not) and the claim."""
+    covered = []
+    for entry in item.covered_by or []:
+        stored = entry if isinstance(entry, dict) else {}
+        covered.append({key: value for key, value in stored.items() if key != "key"})
+    if session is not None and now is not None:
+        for entry, stored in zip(covered, item.covered_by or [], strict=False):
+            entry["live"] = coverer_live(session, stored, now)
+    claim = None
+    if item.claimed_at is not None:
+        claim = {
+            "device_id": item.claimed_device_id,
+            "conversation_id": item.claimed_conversation_id or None,
+            "role": item.claimed_role,
+            "claimed_at": rfc3339(item.claimed_at),
+            "answer_note_id": item.answer_note_id,
+        }
+    record = {
+        "item_id": item.item_id,
+        "kind": item.kind,
+        "note_id": item.note_id,
+        "arrived_at": rfc3339(item.arrived_at),
+        "covered_by": covered,
+        "claim": claim,
+    }
+    choice = stored_choice(item.answer_by)
+    if choice is not None and session is not None and now is not None:
+        # Only when the user had chosen who answers the note: the agent, and whether it listens now.
+        record["answer_by"] = chosen_agent(session, choice, item.note_id, now)
+    return record
+
+
+def coverer_live(session: Session, entry: object, now: datetime) -> bool:
+    """Whether a listener stored in covered_by still listens (re-polled within 90 s)."""
+    key = entry.get("key") if isinstance(entry, dict) else None
+    if not (isinstance(key, list) and len(key) == 3 and all(isinstance(part, str) for part in key)):
+        return False
+    row = session.get(AgentNoteReplyListener, tuple(key))
+    return row is not None and listener_is_live(row, now)
+
+
+def inferred_answer(
+    session: Session, item: AgentNoteHandling, note: AgentNote
+) -> tuple[AgentNote, dict] | None:
+    """A note one of the item's coverers sent after it arrived, which answers it: from the same
+    conversation when the coverer is one, else from the same device on the same document or card.
+    Agents with tools from before claims never claim, so this is how their answers are seen."""
+    for entry in item.covered_by or []:
+        if not isinstance(entry, dict) or not entry.get("device_id"):
+            continue
+        if entry.get("role") == "responder":
+            continue  # listed only as the user's choice; a responder claims, its device's notes say nothing
+        query = select(AgentNote).where(
+            AgentNote.created_at > item.arrived_at,
+            AgentNote.sender_device_id == entry["device_id"],
+            AgentNote.id != note.id,
+        )
+        conversation = entry.get("conversation_id")
+        if conversation:
+            query = query.where(AgentNote.origin["conversation_id"].as_string() == conversation)
+        else:
+            places = []
+            if note.document_id:
+                places.append(AgentNote.document_id == note.document_id)
+            if note.review_card_id:
+                places.append(AgentNote.review_card_id == note.review_card_id)
+            if not places:
+                continue
+            query = query.where(or_(*places))
+        for candidate in session.scalars(query.order_by(AgentNote.sequence).limit(50)):
+            origin = candidate.origin if isinstance(candidate.origin, dict) else {}
+            # The user's own pages, and the responder's notes, answer nothing for a coverer.
+            if origin.get("kind") == PHONE_PAGE_KIND or origin.get("responder") is True:
+                continue
+            return candidate, entry
+    return None
+
+
+def scope_list(payload: dict, field: str) -> list[str]:
+    value = payload.get(field)
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise invalid(f"{field} must be a list of strings")
+    items = []
+    for item in value:
+        item = item.strip()
+        if not item:
+            continue
+        if len(item) > MAX_SCOPE_ITEM_CHARACTERS:
+            raise invalid(f"{field} items have at most {MAX_SCOPE_ITEM_CHARACTERS} characters")
+        if item not in items:
+            items.append(item)
+    if len(items) > MAX_SCOPE_ITEMS:
+        raise invalid(f"{field} has at most {MAX_SCOPE_ITEMS} items")
+    return items
+
+
+def owner_record(listener: AgentNoteReplyListener, now: datetime) -> dict:
+    scope = listener.scope if isinstance(listener.scope, dict) else {}
+    return {
+        "owner_id": listener.note_id[len(OWNER_PREFIX):],
+        "device_id": listener.device_id,
+        "conversation_id": listener.conversation_id or None,
+        "label": scope.get("label"),
+        "document_ids": scope.get("document_ids") or [],
+        "review_card_ids": scope.get("review_card_ids") or [],
+        "title_tags": scope.get("title_tags") or [],
+        "captures": bool(scope.get("captures")),
+        "last_seen_at": rfc3339(listener.last_seen_at),
+        "live": listener_is_live(listener, now),
+    }
+
+
+def rules_text(path: str, raw: str) -> str:
+    """The rules note as the user accepted it: pending agent proposals rejected, marker lines gone."""
+    text = raw
+    try:
+        from .proposal_merge import _without_proposals
+
+        text = _without_proposals(path, raw)
+    except Exception:  # noqa: BLE001 - a proposal that does not parse leaves the text as stored
+        text = raw
+    lines, in_comment = [], False
+    for line in text.replace("\r\n", "\n").split("\n"):
+        # Thoughts marker comments (card markers; the header of a proposal that did not parse) are not rules.
+        if in_comment:
+            in_comment = not line.rstrip().endswith("-->")
+            continue
+        if line.lstrip().startswith("<!-- thoughts:"):
+            in_comment = not line.rstrip().endswith("-->")
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip() + "\n"
 
 
 def optional_conversation_id(value: str | None) -> str | None:
@@ -681,6 +1090,12 @@ class AgentNoteReplyListenerRecord(BaseModel):
     conversation_id: str | None
     note_id: str | None
     last_seen_at: str
+    # A responder hears replies to every device's notes (reply feed responder=true).
+    responder: bool = False
+    # sender (an agent of the device that sent the note), owner (a topic owner) or responder.
+    role: Literal["sender", "owner", "responder"] = "sender"
+    owner_id: str | None = None
+    label: str | None = None
 
 
 class AgentNoteReplyListening(BaseModel):
@@ -688,8 +1103,23 @@ class AgentNoteReplyListening(BaseModel):
     listeners: list[AgentNoteReplyListenerRecord]
 
 
+class AgentNoteAnswerer(BaseModel):
+    """An agent that can answer the replies to a note ("The user's choice")."""
+
+    role: Literal["sender", "owner", "responder"]
+    device_id: str
+    conversation_id: str | None
+    owner_id: str | None
+    label: str | None
+    live: bool
+
+
 class AgentNoteListeningAnswer(AgentNoteReplyListening):
     note_id: str
+    # The agent the user chose to answer this note's replies; null: the automatic choice.
+    answer_by: AgentNoteAnswerer | None = None
+    # The agents that could answer now: the sender's, then topic owners, then the responder.
+    candidates: list[AgentNoteAnswerer] = []
     checked_at: str
 
 
@@ -718,6 +1148,7 @@ class AgentNoteSummary(BaseModel):
     title: str
     document_id: str | None
     review_card_id: str | None
+    sender_device_id: str
 
 
 class AgentNoteReplyFeedItem(AgentNoteReplyRecord):
@@ -727,6 +1158,69 @@ class AgentNoteReplyFeedItem(AgentNoteReplyRecord):
 class AgentNoteReplyFeed(BaseModel):
     replies: list[AgentNoteReplyFeedItem]
     cursor: int
+
+
+class AgentNotePageFeed(BaseModel):
+    notes: list[AgentNoteRecord]
+    cursor: int
+
+
+class AgentNoteOwnerRecord(BaseModel):
+    owner_id: str
+    device_id: str
+    conversation_id: str | None
+    label: str | None
+    document_ids: list[str]
+    review_card_ids: list[str]
+    title_tags: list[str]
+    captures: bool
+    last_seen_at: str
+    live: bool
+
+
+class AgentNoteOwnerList(BaseModel):
+    owners: list[AgentNoteOwnerRecord]
+    checked_at: str
+
+
+class AgentNoteCoverer(AgentNoteReplyListenerRecord):
+    live: bool | None = None
+
+
+class AgentNoteClaim(BaseModel):
+    device_id: str | None
+    conversation_id: str | None
+    role: str | None
+    claimed_at: str
+    answer_note_id: str | None
+
+
+class AgentNoteHandlingRecord(BaseModel):
+    item_id: str
+    kind: Literal["reply", "page"]
+    note_id: str
+    arrived_at: str
+    covered_by: list[AgentNoteCoverer]
+    claim: AgentNoteClaim | None
+    inferred_answer_note_id: str | None = None
+    # Only on a reply that arrived while the user had chosen who answers its note.
+    answer_by: AgentNoteAnswerer | None = None
+
+
+class AgentNoteClaimAnswer(AgentNoteHandlingRecord):
+    claimed: bool
+    error_code: str | None = None
+    detail: str | None = None
+    retry_after: int | None = None
+
+
+class AgentNoteRules(BaseModel):
+    text: str
+    sha256: str
+    source_path: str
+    revision: int
+    updated_at: str | None
+    others: list[str]
 
 
 IMAGE_SCHEMA = {
@@ -823,6 +1317,76 @@ CREATE_REPLY_BODY = {
                             "capture": {"type": "string", "maxLength": MAX_CAPTURE_CHARACTERS},
                         },
                     },
+                },
+            }
+        }
+    },
+}
+SCOPE_LIST_SCHEMA = {"type": "array", "items": {"type": "string"}, "maxItems": MAX_SCOPE_ITEMS}
+OWN_TOPIC_BODY = {
+    "required": True,
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "required": ["conversation_id"],
+                "properties": {
+                    "conversation_id": {"type": "string", "maxLength": MAX_CONVERSATION_ID_CHARACTERS},
+                    "label": {"type": "string", "maxLength": MAX_LABEL_CHARACTERS},
+                    "document_ids": SCOPE_LIST_SCHEMA,
+                    "review_card_ids": SCOPE_LIST_SCHEMA,
+                    "title_tags": {
+                        **SCOPE_LIST_SCHEMA,
+                        "description": "A note is in the topic when its title contains one (any case).",
+                    },
+                    "captures": {"type": "boolean", "description": "The owner answers glasses captures too."},
+                },
+            }
+        }
+    },
+}
+CLAIM_BODY = {
+    "required": False,
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {"type": "string", "maxLength": MAX_CONVERSATION_ID_CHARACTERS},
+                    "responder": {
+                        "type": "boolean",
+                        "description": "Claim as the responder: wait for the agents that covered it.",
+                    },
+                    "only_if_covering": {"type": "boolean",
+                                         "description": "Claim only when the caller covers the item."},
+                },
+            }
+        }
+    },
+}
+ANSWER_BY_BODY = {
+    "required": True,
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "required": ["agent"],
+                "properties": {
+                    "agent": {
+                        "type": ["object", "null"],
+                        "description": "One of the note's candidates (GET .../listening), or null for the "
+                        "automatic choice. label and live are ignored.",
+                        "required": ["role", "device_id"],
+                        "properties": {
+                            "role": {"type": "string", "enum": list(ANSWER_BY_ROLES)},
+                            "device_id": {"type": "string", "maxLength": 128},
+                            "conversation_id": {
+                                "type": ["string", "null"],
+                                "maxLength": MAX_CONVERSATION_ID_CHARACTERS,
+                            },
+                            "owner_id": {"type": ["string", "null"]},
+                        },
+                    }
                 },
             }
         }
@@ -947,6 +1511,18 @@ class AgentNoteService:
                 content_sha256=content_sha256,
             )
             session.add(note)
+            if isinstance(origin, dict) and origin.get("kind") == PHONE_PAGE_KIND:
+                # A page the user sends: which topic owners cover it now ("Who answers").
+                now = utc_now()
+                session.add(
+                    AgentNoteHandling(
+                        item_id=note_id,
+                        kind="page",
+                        note_id=note_id,
+                        arrived_at=note.created_at,
+                        covered_by=[coverer_entry(row) for row in covering_listeners(session, note, now)],
+                    )
+                )
             try:
                 session.flush()
                 notify_other_processes(session)
@@ -983,7 +1559,7 @@ class AgentNoteService:
             "note": note_records(session, [note])[0],
             "delivery": {"live": live, "listeners": [listener_record(value) for value in listeners]},
             # Whether an agent of the sender waits for the user's reply (it may start listening later).
-            "reply_listening": listening_answer(session, note, now),
+            "reply_listening": listening_answer(session, note, now, stored_choice(note.answer_by)),
         }
 
     def list_notes(
@@ -1006,6 +1582,39 @@ class AgentNoteService:
         query = query.order_by(AgentNote.sequence.desc()).limit(limit)
         with self.database.session_factory() as session:
             return {"notes": note_records(session, list(session.scalars(query)))}
+
+    def list_etag(
+        self,
+        device_id: str,
+        document_id: str | None,
+        review_card_id: str | None,
+        sent_by_me: bool | None,
+        limit: int,
+    ) -> str:
+        """The ETag of ``list_notes`` for the same arguments, from counters instead of the list.
+
+        Everything a listed note shows either never changes after it is stored or is
+        stamped once: a note is added (number and newest sequence of notes), delivered,
+        opened or deleted (the number of notes with each stamp), a reply is added
+        (number and newest sequence of replies) and may carry a photo (number of
+        photos). Any such write, by any process, changes one of these numbers. They
+        are read before the list, so a list is never older than its ETag.
+        """
+        with self.database.session_factory() as session:
+            counters = session.execute(select(
+                select(func.count(AgentNote.sequence)).scalar_subquery(),
+                select(func.max(AgentNote.sequence)).scalar_subquery(),
+                select(func.count(AgentNote.delivered_at)).scalar_subquery(),
+                select(func.count(AgentNote.opened_at)).scalar_subquery(),
+                select(func.count(AgentNote.deleted_at)).scalar_subquery(),
+                select(func.count(AgentNoteReply.sequence)).scalar_subquery(),
+                select(func.max(AgentNoteReply.sequence)).scalar_subquery(),
+                select(func.count(AgentNoteReplyPhoto.reply_id)).scalar_subquery(),
+            )).one()
+        asked = (document_id or "", review_card_id or "", sent_by_me, limit,
+                 device_id if sent_by_me is not None else "")
+        digest = hashlib.sha256(repr(("agent-notes-v1", tuple(counters), asked)).encode("utf-8")).hexdigest()
+        return f'"{digest}"'
 
     def get_note(self, note_id: str) -> dict:
         with self.database.session_factory() as session:
@@ -1053,7 +1662,7 @@ class AgentNoteService:
             session.execute(
                 update(AgentNote)
                 .where(AgentNote.id == note_id, AgentNote.deleted_at.is_(None))
-                .values(deleted_at=utc_now())
+                .values(deleted_at=utc_now(), answer_by=null())  # the user's choice goes with the note
             )
             session.commit()
 
@@ -1120,6 +1729,25 @@ class AgentNoteService:
                     capture=photo[1],
                 )
                 session.add(stored_photo)
+            # Who covers the note as the reply arrives: its sender's agents, topic owners ("Who answers").
+            choice = stored_choice(note.answer_by)
+            if choice is None:
+                covered = [coverer_entry(row) for row in covering_listeners(session, note, utc_now())]
+                chosen = {}
+            else:
+                # The user chose who answers this note: the reply keeps that choice, and names only it.
+                covered = [coverer_entry(row) for row in answerer_rows(session, choice, note_id)[:1]]
+                chosen = {"answer_by": dict(choice)}
+            session.add(
+                AgentNoteHandling(
+                    item_id=reply_id,
+                    kind="reply",
+                    note_id=note_id,
+                    arrived_at=reply.created_at,
+                    covered_by=covered,
+                    **chosen,
+                )
+            )
             try:
                 session.flush()
                 notify_other_processes(session)
@@ -1130,28 +1758,77 @@ class AgentNoteService:
                 if existing is None:
                     raise
                 return 200, self._reply_answer(session, existing)
-            listening = listening_answer(session, note, utc_now())
+            listening = listening_answer(session, note, utc_now(), choice)
             return 201, {**reply_record(reply, stored_photo), "listening": listening}
 
     def _reply_answer(self, session: Session, reply: AgentNoteReply) -> dict:
         """A stored reply and whether an agent hears it now (the phone tells the user when none does)."""
         note = self._note(session, reply.note_id)
         photo = session.get(AgentNoteReplyPhoto, reply.id)
-        return {**reply_record(reply, photo), "listening": listening_answer(session, note, utc_now())}
+        item = session.get(AgentNoteHandling, reply.id)
+        choice = stored_choice(item.answer_by) if item is not None else None  # as when it arrived
+        return {**reply_record(reply, photo), "listening": listening_answer(session, note, utc_now(), choice)}
 
     def listening(self, note_id: str) -> dict:
         with self.database.session_factory() as session:
-            now = utc_now()
-            return {
-                "note_id": note_id,
-                **listening_answer(session, self._note(session, note_id), now),
-                "checked_at": rfc3339(now),
-            }
+            return self._listening(session, self._note(session, note_id), utc_now())
 
-    def record_reply_listener(self, device_id: str, conversation_id: str | None, note_id: str | None) -> None:
-        """An agent waits on the reply feed (``listen=true``); rows unseen for 30 days are dropped."""
+    @staticmethod
+    def _listening(session: Session, note: AgentNote, now: datetime) -> dict:
+        choice = stored_choice(note.answer_by)
+        return {
+            "note_id": note.id,
+            **listening_answer(session, note, now, choice),
+            "answer_by": None if choice is None else chosen_agent(session, choice, note.id, now),
+            "candidates": answer_candidates(session, note, now),
+            "checked_at": rfc3339(now),
+        }
+
+    def set_answer_by(self, note_id: str, body: bytes) -> tuple[int, dict]:
+        """The user chooses which agent answers the replies to a note; ``agent`` null: automatic again.
+
+        The choice applies to the replies that arrive from now on: each keeps the choice it arrived
+        under (``agent_note_handling.answer_by``), because an agent chosen later may already be past
+        that reply in its feed. 409 agent_note_answerer_unknown: no listener row is that agent.
+        """
+        try:
+            choice = parse_answer_by(body)
+        except AgentNoteError as error:
+            return 422, {"detail": error.detail, "error_code": error.error_code}
+        with self.database.session_factory() as session:
+            note = self._note(session, note_id)
+            if note.deleted_at is not None:
+                raise AgentNoteError("agent_note_not_found", "note not found")
+            if choice is not None:
+                rows = answerer_rows(session, choice)
+                if not rows:
+                    return 409, {
+                        "detail": "the server knows no such agent: none like it has listened for replies",
+                        "error_code": "agent_note_answerer_unknown",
+                    }
+                if choice["role"] == "owner" and isinstance(rows[0].scope, dict):
+                    choice["label"] = rows[0].scope.get("label")
+            session.execute(
+                update(AgentNote)
+                .where(AgentNote.id == note_id)
+                .values(answer_by=null() if choice is None else choice)
+            )
+            session.commit()
+            session.expire_all()
+            return 200, self._listening(session, self._note(session, note_id), utc_now())
+
+    def record_reply_listener(
+        self, device_id: str, conversation_id: str | None, note_id: str | None, responder: bool = False
+    ) -> None:
+        """An agent waits on the reply feed (``listen=true``); rows unseen for 30 days are dropped.
+
+        A responder (``responder=true``) is one row per device, keyed by RESPONDER_NOTE_ID.
+        """
         now = utc_now()
-        key = (device_id, conversation_id or "", note_id or "")
+        if responder:
+            key = (device_id, "", RESPONDER_NOTE_ID)
+        else:
+            key = (device_id, conversation_id or "", note_id or "")
         for _attempt in range(2):
             with self.database.session_factory() as session:
                 listener = session.get(AgentNoteReplyListener, key)
@@ -1163,6 +1840,17 @@ class AgentNoteService:
                     )
                 else:
                     listener.last_seen_at = now
+                if not responder and conversation_id:
+                    # The conversation keeps listening: its topic ownerships stay live too.
+                    session.execute(
+                        update(AgentNoteReplyListener)
+                        .where(
+                            AgentNoteReplyListener.device_id == device_id,
+                            AgentNoteReplyListener.conversation_id == conversation_id,
+                            AgentNoteReplyListener.note_id.startswith(OWNER_PREFIX),
+                        )
+                        .values(last_seen_at=now)
+                    )
                 for row in session.scalars(
                     select(AgentNoteReplyListener).where(AgentNoteReplyListener.device_id == device_id)
                 ).all():
@@ -1254,19 +1942,33 @@ class AgentNoteService:
             return note_records(session, notes), (notes[-1].sequence if notes else after)
 
     def reply_feed(
-        self, device_id: str, after: int, note_id: str | None, conversation_id: str | None = None
+        self,
+        device_id: str,
+        after: int,
+        note_id: str | None,
+        conversation_id: str | None = None,
+        responder: bool = False,
     ) -> tuple[list[dict], int]:
+        """Replies to the caller's notes; a responder's feed has the replies to every device's notes."""
         query = (
             select(AgentNoteReply, AgentNote)
             .join(AgentNote, AgentNote.id == AgentNoteReply.note_id)
-            .where(AgentNoteReply.sequence > after, AgentNote.sender_device_id == device_id)
+            .where(AgentNoteReply.sequence > after)
         )
         if note_id is not None:
             query = query.where(AgentNoteReply.note_id == note_id)
-        if conversation_id is not None:
-            query = query.where(AgentNote.origin["conversation_id"].as_string() == conversation_id)
-        query = query.order_by(AgentNoteReply.sequence).limit(REPLY_FEED_LIMIT)
         with self.database.session_factory() as session:
+            if not responder:
+                own = AgentNote.sender_device_id == device_id
+                if conversation_id is not None:
+                    own = and_(own, AgentNote.origin["conversation_id"].as_string() == conversation_id)
+                    # A conversation's feed also holds the replies of the topics it owns.
+                    scopes = self.owner_scopes(session, device_id, conversation_id)
+                    own = or_(own, scope_condition(scopes)) if scopes else own
+                # And the replies to the notes the user gave to this agent ("The user's choice").
+                own = or_(own, AgentNoteReply.id.in_(chosen_replies(device_id, conversation_id)))
+                query = query.where(own)
+            query = query.order_by(AgentNoteReply.sequence).limit(REPLY_FEED_LIMIT)
             rows = session.execute(query).all()
             photos = reply_photos(session, [reply.id for reply, _note in rows])
             replies = [
@@ -1277,11 +1979,348 @@ class AgentNoteService:
                         "title": note.title,
                         "document_id": note.document_id,
                         "review_card_id": note.review_card_id,
+                        "sender_device_id": note.sender_device_id,
                     },
                 }
                 for reply, note in rows
             ]
             return replies, (rows[-1][0].sequence if rows else after)
+
+    def page_baseline(self) -> int:
+        """Where a page feed starts that should not see earlier pages: the highest note sequence."""
+        with self.database.session_factory() as session:
+            return session.scalar(select(func.max(AgentNote.sequence))) or 0
+
+    def page_feed(
+        self, after: int, device_id: str | None = None, conversation_id: str | None = None
+    ) -> tuple[list[dict], int]:
+        """Pages the user sent to the agents (``origin.kind`` phone_page) from any device, oldest first;
+        with ``conversation_id``, only those of the topics that conversation owns."""
+        with self.database.session_factory() as session:
+            query = select(AgentNote).where(
+                AgentNote.sequence > after,
+                AgentNote.deleted_at.is_(None),
+                AgentNote.origin["kind"].as_string() == PHONE_PAGE_KIND,
+            )
+            if conversation_id is not None:
+                scopes = self.owner_scopes(session, device_id or "", conversation_id)
+                query = query.where(scope_condition(scopes))
+            notes = list(session.scalars(query.order_by(AgentNote.sequence).limit(PAGE_FEED_LIMIT)))
+            return note_records(session, notes), (notes[-1].sequence if notes else after)
+
+    # Topic owners ("Topic owners"): scoped listener rows, live while their conversation listens.
+
+    @staticmethod
+    def owner_scopes(session: Session, device_id: str, conversation_id: str) -> list[dict]:
+        return [
+            row.scope
+            for row in session.scalars(
+                select(AgentNoteReplyListener).where(
+                    AgentNoteReplyListener.device_id == device_id,
+                    AgentNoteReplyListener.conversation_id == conversation_id,
+                    AgentNoteReplyListener.note_id.startswith(OWNER_PREFIX),
+                )
+            )
+            if isinstance(row.scope, dict)
+        ]
+
+    def own_topic(self, device_id: str, body: bytes) -> tuple[int, dict]:
+        payload = parse_json_object(body)
+        conversation = optional_conversation_id(payload.get("conversation_id") if isinstance(
+            payload.get("conversation_id"), str) else None)
+        if conversation is None:
+            raise invalid("conversation_id is required: the conversation that becomes responsible")
+        label = optional_text(payload, "label", MAX_LABEL_CHARACTERS)
+        scope = {
+            "document_ids": scope_list(payload, "document_ids"),
+            "review_card_ids": scope_list(payload, "review_card_ids"),
+            "title_tags": scope_list(payload, "title_tags"),
+            "captures": payload.get("captures", False),
+        }
+        if not isinstance(scope["captures"], bool):
+            raise invalid("captures must be true or false")
+        if not any(scope[field] for field in ("document_ids", "review_card_ids", "title_tags", "captures")):
+            raise invalid("a topic needs document_ids, review_card_ids, title_tags or captures")
+        identity = {"device_id": device_id, "conversation_id": conversation, "scope": scope}
+        owner_id = canonical_hash(identity)[:24]
+        scope["label"] = label or ", ".join(scope["title_tags"]) or "topic"
+        key = (device_id, conversation, OWNER_PREFIX + owner_id)
+        now = utc_now()
+        for _attempt in range(2):
+            with self.database.session_factory() as session:
+                row = session.get(AgentNoteReplyListener, key)
+                created = row is None
+                if created:
+                    row = AgentNoteReplyListener(
+                        device_id=key[0],
+                        conversation_id=key[1],
+                        note_id=key[2],
+                        last_seen_at=now,
+                        scope=scope,
+                    )
+                    session.add(row)
+                else:
+                    row.last_seen_at = now
+                    row.scope = scope
+                try:
+                    session.commit()
+                except IntegrityError:
+                    session.rollback()
+                    continue
+                return (201 if created else 200), owner_record(row, now)
+        raise AgentNoteError("agent_note_conflict", "the topic changed while it was being claimed; try again")
+
+    def list_owners(self) -> dict:
+        now = utc_now()
+        with self.database.session_factory() as session:
+            rows = session.scalars(
+                select(AgentNoteReplyListener)
+                .where(AgentNoteReplyListener.note_id.startswith(OWNER_PREFIX))
+                .order_by(AgentNoteReplyListener.last_seen_at.desc())
+            ).all()
+            return {"owners": [owner_record(row, now) for row in rows], "checked_at": rfc3339(now)}
+
+    def release_topics(self, device_id: str, owner_id: str | None, conversation_id: str | None) -> int:
+        """Ends one ownership (any device may end it), or every ownership of the caller's conversation."""
+        with self.database.session_factory() as session:
+            owners = AgentNoteReplyListener.note_id.startswith(OWNER_PREFIX)
+            query = select(AgentNoteReplyListener).where(owners)
+            if owner_id is not None:
+                query = query.where(AgentNoteReplyListener.note_id == OWNER_PREFIX + owner_id)
+            else:
+                query = query.where(
+                    AgentNoteReplyListener.device_id == device_id,
+                    AgentNoteReplyListener.conversation_id == (conversation_id or ""),
+                )
+            rows = session.scalars(query).all()
+            for row in rows:
+                session.delete(row)
+            session.commit()
+            return len(rows)
+
+    # Who answers a reply or a page ("Who answers").
+
+    def _handling(self, session: Session, item_id: str) -> tuple[AgentNoteHandling, AgentNote]:
+        """The item's handling row and its note; a reply or page from before claims gets a row now."""
+        item = session.get(AgentNoteHandling, item_id)
+        if item is not None:
+            return item, self._note(session, item.note_id)
+        reply = session.scalar(select(AgentNoteReply).where(AgentNoteReply.id == item_id))
+        if reply is not None:
+            item = AgentNoteHandling(
+                item_id=item_id,
+                kind="reply",
+                note_id=reply.note_id,
+                arrived_at=reply.created_at,
+                covered_by=None,
+            )
+        else:
+            note = session.scalar(select(AgentNote).where(AgentNote.id == item_id))
+            origin = note.origin if note is not None and isinstance(note.origin, dict) else {}
+            if note is None or origin.get("kind") != PHONE_PAGE_KIND:
+                raise AgentNoteError("agent_note_not_found", "no reply or page with this id")
+            item = AgentNoteHandling(
+                item_id=item_id, kind="page", note_id=item_id, arrived_at=note.created_at, covered_by=None
+            )
+        session.add(item)
+        try:
+            session.flush()
+        except IntegrityError:
+            session.rollback()
+            item = session.get(AgentNoteHandling, item_id)
+            if item is None:
+                raise
+        return item, self._note(session, item.note_id)
+
+    def handling(self, item_id: str) -> dict:
+        now = utc_now()
+        with self.database.session_factory() as session:
+            item, note = self._handling(session, item_id)
+            record = handling_record(item, session, now)
+            if item.claimed_at is None:
+                inferred = inferred_answer(session, item, note)
+                record["inferred_answer_note_id"] = inferred[0].id if inferred else None
+            session.commit()
+            return record
+
+    def claim(self, device_id: str, item_id: str, body: bytes) -> tuple[int, dict]:
+        """The first claim on a reply or page wins; the answer says who has it.
+
+        ``responder``: the claim waits (409 agent_note_covered with retry_after) while an agent that
+        covered the item at arrival still listens, for up to 10 minutes, unless the responder sent
+        the note itself. ``only_if_covering``: claim only when the caller covers the item (at
+        arrival or now), else 409 agent_note_not_covering. An answer seen from a coverer (a later
+        note of its conversation, or of its device on the same document or card) counts as its claim.
+
+        A reply that arrived while the user had chosen who answers its note (``answer_by``) is that
+        agent's at once. Every other claim is refused with 409: agent_note_not_covering, or for a
+        responder agent_note_covered (retry_after) until that agent is gone (not live, 10 minutes
+        after arrival); then a responder takes it.
+        """
+        payload = parse_json_object(body) if body.strip() else {}
+        raw_conversation = payload.get("conversation_id")
+        if raw_conversation is not None and not isinstance(raw_conversation, str):
+            raise invalid("conversation_id must be a string")
+        conversation = optional_conversation_id(raw_conversation) or ""
+        responder = payload.get("responder", False)
+        only_if_covering = payload.get("only_if_covering", False)
+        if not isinstance(responder, bool) or not isinstance(only_if_covering, bool):
+            raise invalid("responder and only_if_covering must be true or false")
+        now = utc_now()
+        claimant = (device_id, conversation)
+        with self.database.session_factory() as session:
+            item, note = self._handling(session, item_id)
+            if item.claimed_at is None:
+                inferred = inferred_answer(session, item, note)
+                if inferred is not None:
+                    answer, entry = inferred
+                    item.claimed_device_id = entry.get("device_id")
+                    item.claimed_conversation_id = entry.get("conversation_id") or None
+                    item.claimed_role = "answered"
+                    item.claimed_at = now
+                    item.answer_note_id = answer.id
+                    session.flush()
+            if item.claimed_at is not None:
+                mine = (item.claimed_device_id, item.claimed_conversation_id or "") == claimant
+                record = handling_record(item, session, now)
+                session.commit()
+                if mine:
+                    return 200, {"claimed": True, **record}
+                return 409, {
+                    "claimed": False,
+                    "error_code": "agent_note_claimed",
+                    "detail": "another agent answers it",
+                    **record,
+                }
+            # The note's own conversation (a note that names none has no sender to claim it as).
+            sender = (
+                item.kind == "reply"
+                and note.sender_device_id == device_id
+                and bool(conversation)
+                and note_conversation_id(note) == conversation
+            )
+            entries = [entry for entry in item.covered_by or [] if isinstance(entry, dict)]
+            mine_at_arrival = [
+                entry for entry in entries
+                if (entry.get("device_id"), entry.get("conversation_id") or "") == claimant
+            ]
+            live_now = [
+                row for row in covering_listeners(session, note, now)
+                if (row.device_id, row.conversation_id) in (claimant, (device_id, ""))
+            ]
+            choice = stored_choice(item.answer_by) if item.kind == "reply" else None
+            chosen = choice is not None and answerer_claims(choice, device_id, conversation, responder)
+            if choice is not None and not chosen:
+                # The user chose who answers this note: every other agent leaves the reply to it. A
+                # responder takes it once that agent is gone: not live, 10 minutes after arrival.
+                remaining = (as_utc(item.arrived_at) + COVERER_GRACE - now).total_seconds()
+                rows = answerer_rows(session, choice, note.id)
+                held = remaining > 0 or (bool(rows) and listener_is_live(rows[0], now))
+                if held or not responder:
+                    record = handling_record(item, session, now)
+                    session.commit()
+                    refusal: dict = {
+                        "claimed": False,
+                        "error_code": "agent_note_covered" if responder else "agent_note_not_covering",
+                        "detail": ANSWER_BY_REFUSAL,
+                    }
+                    if responder:
+                        # Until the 10 minutes are over; then again once its listener would have lapsed.
+                        refusal["retry_after"] = math.ceil(
+                            remaining if remaining > 0 else REPLY_LISTENER_LIVE_WINDOW.total_seconds()
+                        )
+                    return 409, {**refusal, **record}
+            if chosen:
+                pass  # the user's choice answers at once: a chosen responder does not wait for coverers
+            elif responder and not sender:
+                waiting = [entry for entry in entries if coverer_live(session, entry, now)]
+                remaining = (as_utc(item.arrived_at) + COVERER_GRACE - now).total_seconds()
+                if waiting and remaining > 0:
+                    record = handling_record(item, session, now)
+                    session.commit()
+                    return 409, {
+                        "claimed": False,
+                        "error_code": "agent_note_covered",
+                        "detail": "the agent that covered it when it arrived still listens; it answers first",
+                        "retry_after": math.ceil(remaining),
+                        **record,
+                    }
+            elif not responder and only_if_covering and not sender and not mine_at_arrival and not live_now:
+                record = handling_record(item, session, now)
+                session.commit()
+                return 409, {
+                    "claimed": False,
+                    "error_code": "agent_note_not_covering",
+                    "detail": "this conversation does not cover it; leave it to the agent that does",
+                    **record,
+                }
+            if chosen:
+                role = choice["role"]
+            elif responder:
+                role = "responder"
+            elif sender:
+                role = "sender"
+            else:
+                roles = [entry.get("role") for entry in mine_at_arrival]
+                roles += [listener_role(row) for row in live_now]
+                role = "owner" if "owner" in roles else "sender" if "sender" in roles else "agent"
+            updated = session.execute(
+                update(AgentNoteHandling)
+                .where(AgentNoteHandling.item_id == item_id, AgentNoteHandling.claimed_at.is_(None))
+                .values(
+                    claimed_device_id=device_id,
+                    claimed_conversation_id=conversation or None,
+                    claimed_role=role,
+                    claimed_at=now,
+                )
+            )
+            session.commit()
+            session.expire_all()
+            item = session.get(AgentNoteHandling, item_id)
+            record = handling_record(item, session, now)
+            if updated.rowcount == 1:
+                return 201, {"claimed": True, **record}
+            mine = (item.claimed_device_id, item.claimed_conversation_id or "") == claimant
+            if mine:
+                return 200, {"claimed": True, **record}
+            return 409, {
+                "claimed": False,
+                "error_code": "agent_note_claimed",
+                "detail": "another agent answers it",
+                **record,
+            }
+
+    def rules(self) -> dict:
+        """The answering rules: the Library note agent-note-rules.md as accepted (``Answering rules``)."""
+        with self.database.session_factory() as session:
+            rows = [
+                row
+                for row in session.scalars(
+                    select(SourceFile).where(
+                        SourceFile.path.ilike(f"%{RULES_FILENAME}"), SourceFile.deleted.is_(False)
+                    )
+                )
+                if row.path.rsplit("/", 1)[-1].lower() == RULES_FILENAME
+            ]
+            if not rows:
+                raise AgentNoteError(
+                    "agent_note_not_found",
+                    f"no Library note named {RULES_FILENAME}: the answering rules are missing",
+                )
+            rows.sort(key=lambda row: (as_utc(row.updated_at) or datetime.min.replace(tzinfo=UTC), row.path))
+            chosen = rows[-1]
+            path = self.object_store.path(chosen.object_sha256)
+            if not path.is_file():
+                raise AgentNoteError("agent_note_not_found", "the rules note's stored bytes are missing")
+            text = rules_text(chosen.path, path.read_bytes().decode("utf-8", "replace"))
+            return {
+                "text": text,
+                "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                "source_path": chosen.path,
+                "revision": chosen.revision,
+                "updated_at": rfc3339(chosen.updated_at),
+                "others": [row.path for row in rows[:-1]],
+            }
 
     async def long_poll(
         self, request: Request, wait_seconds: float, page: Callable[[], tuple[list[dict], int]]
@@ -1377,16 +2416,22 @@ def register_agent_note_routes(
 
     @app.get("/v1/agent-notes", response_model=AgentNoteList, responses=ERROR_RESPONSES)
     def list_agent_notes(
+        request: Request,
         document_id: str | None = None,
         review_card_id: str | None = None,
         sent_by_me: bool | None = None,
         limit: int = LIST_DEFAULT_LIMIT,
         device=Depends(current_device),  # noqa: B008
-    ) -> JSONResponse:
+    ) -> Response:
+        # The apps ask for the whole list every few seconds: with If-None-Match an
+        # unchanged list is answered 304, from counters (AgentNoteService.list_etag).
+        limit = clamp(limit, 1, LIST_MAX_LIMIT)
+        etag = service.list_etag(device.id, document_id, review_card_id, sent_by_me, limit)
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers={"ETag": etag})
         return JSONResponse(
-            service.list_notes(
-                device.id, document_id, review_card_id, sent_by_me, clamp(limit, 1, LIST_MAX_LIMIT)
-            )
+            service.list_notes(device.id, document_id, review_card_id, sent_by_me, limit),
+            headers={"ETag": etag},
         )
 
     @app.get(
@@ -1433,7 +2478,8 @@ def register_agent_note_routes(
         description="Replies to notes the caller sent, oldest first (long-poll, wait 0..60 s). "
         "conversation_id keeps notes whose origin.conversation_id is that conversation. listen=true: "
         "the caller is an agent that will act on these replies; the phone shows it as listening "
-        "while it re-polls within 90 s.",
+        "while it re-polls within 90 s. responder=true: replies to every device's notes, and with "
+        "listen=true the caller listens for all of them (not with note_id or conversation_id).",
     )
     async def agent_note_replies(
         request: Request,
@@ -1442,10 +2488,13 @@ def register_agent_note_routes(
         note_id: str | None = None,
         conversation_id: str | None = Query(default=None, max_length=MAX_CONVERSATION_ID_CHARACTERS),  # noqa: B008
         listen: bool = False,
+        responder: bool = False,
         device=Depends(current_device),  # noqa: B008
     ) -> JSONResponse:
         device_id = device.id
         await release_auth_session(device)
+        if responder and (note_id is not None or optional_conversation_id(conversation_id) is not None):
+            raise invalid("responder=true covers every note; leave out note_id and conversation_id")
         wanted = None
         if note_id is not None:
             try:
@@ -1454,13 +2503,114 @@ def register_agent_note_routes(
                 return JSONResponse({"replies": [], "cursor": max(0, after)})
         conversation = optional_conversation_id(conversation_id)
         if listen:
-            await asyncio.to_thread(service.record_reply_listener, device_id, conversation, wanted)
+            await asyncio.to_thread(service.record_reply_listener, device_id, conversation, wanted, responder)
         wait_seconds = max(0.0, min(float(REPLY_FEED_MAX_WAIT), wait)) if math.isfinite(wait) else 0.0
         start = max(0, after)
         replies, cursor = await service.long_poll(
-            request, wait_seconds, lambda: service.reply_feed(device_id, start, wanted, conversation)
+            request,
+            wait_seconds,
+            lambda: service.reply_feed(device_id, start, wanted, conversation, responder),
         )
         return JSONResponse({"replies": replies, "cursor": cursor})
+
+    @app.get(
+        "/v1/agent-notes/pages",
+        response_model=AgentNotePageFeed,
+        responses=ERROR_RESPONSES,
+        description="Pages the user sent to the agents (notes with origin.kind phone_page, from any "
+        "device), oldest first, at most 20 (long-poll, wait 0..60 s). Without after: no notes and "
+        "cursor = the highest note sequence, where a new reader starts. Records nothing.",
+    )
+    async def agent_note_pages(
+        request: Request,
+        after: int | None = None,
+        wait: float = 0,
+        conversation_id: str | None = Query(default=None, max_length=MAX_CONVERSATION_ID_CHARACTERS),  # noqa: B008
+        device=Depends(current_device),  # noqa: B008
+    ) -> JSONResponse:
+        device_id = device.id
+        await release_auth_session(device)
+        conversation = optional_conversation_id(conversation_id)
+        if after is None:
+            return JSONResponse({"notes": [], "cursor": await asyncio.to_thread(service.page_baseline)})
+        wait_seconds = max(0.0, min(float(REPLY_FEED_MAX_WAIT), wait)) if math.isfinite(wait) else 0.0
+        start = max(0, after)
+        notes, cursor = await service.long_poll(
+            request, wait_seconds, lambda: service.page_feed(start, device_id, conversation)
+        )
+        return JSONResponse({"notes": notes, "cursor": cursor})
+
+    @app.post(
+        "/v1/agent-notes/owners",
+        status_code=201,
+        response_model=AgentNoteOwnerRecord,
+        responses={200: {"model": AgentNoteOwnerRecord, "description": "Claimed again"}, **ERROR_RESPONSES},
+        openapi_extra={"requestBody": OWN_TOPIC_BODY},
+        description="The caller's conversation becomes responsible for a topic (protocol/agent-notes.md, "
+        "Topic owners): replies and pages of notes in its scope go to that conversation, which hears them in "
+        "its reply feed (and pages?conversation_id=) and stays the owner while it keeps listening.",
+    )
+    async def own_agent_note_topic(request: Request, device=Depends(current_device)) -> JSONResponse:  # noqa: B008
+        body = await read_body(request)
+        status, answer = await asyncio.to_thread(service.own_topic, device.id, body)
+        return JSONResponse(status_code=status, content=answer)
+
+    @app.get("/v1/agent-notes/owners", response_model=AgentNoteOwnerList, responses=ERROR_RESPONSES,
+             description="Every topic owner seen in the last 30 days, live or not, most recent first.")
+    def list_agent_note_owners(_device=Depends(current_device)) -> JSONResponse:  # noqa: B008
+        return JSONResponse(service.list_owners())
+
+    @app.delete("/v1/agent-notes/owners/{owner_id}", status_code=204, response_class=Response,
+                responses=ERROR_RESPONSES, description="End one topic ownership (any device may).")
+    def release_agent_note_topic(owner_id: str, device=Depends(current_device)) -> Response:  # noqa: B008
+        known = re.fullmatch(r"[0-9a-f]{24}", owner_id)
+        if not known or not service.release_topics(device.id, owner_id, None):
+            raise AgentNoteError("agent_note_not_found", "no such topic owner")
+        return Response(status_code=204)
+
+    @app.delete("/v1/agent-notes/owners", status_code=204, response_class=Response, responses=ERROR_RESPONSES,
+                description="End every topic ownership of the caller's conversation_id.")
+    def release_agent_note_topics(
+        conversation_id: str = Query(min_length=1, max_length=MAX_CONVERSATION_ID_CHARACTERS),  # noqa: B008
+        device=Depends(current_device),  # noqa: B008
+    ) -> Response:
+        service.release_topics(device.id, None, conversation_id.strip())
+        return Response(status_code=204)
+
+    @app.get("/v1/agent-notes/handling/{item_id}", response_model=AgentNoteHandlingRecord,
+             responses=ERROR_RESPONSES,
+             description="Who covered a reply or page (item_id: the reply id, or the page's note id) when it "
+             "arrived, whether they still listen, and who claimed it (protocol/agent-notes.md, Who answers).")
+    def agent_note_handling(item_id: str, _device=Depends(current_device)) -> JSONResponse:  # noqa: B008
+        return JSONResponse(service.handling(path_uuid(item_id, "reply or page")))
+
+    @app.post(
+        "/v1/agent-notes/handling/{item_id}/claim",
+        status_code=201,
+        response_model=AgentNoteClaimAnswer,
+        responses={
+            200: {"model": AgentNoteClaimAnswer, "description": "Already claimed by the caller"},
+            409: {"model": AgentNoteClaimAnswer, "description": "agent_note_claimed, agent_note_covered "
+                  "(retry_after) or agent_note_not_covering"},
+            **{key: value for key, value in ERROR_RESPONSES.items() if key != 409},
+        },
+        openapi_extra={"requestBody": CLAIM_BODY},
+        description="Claim a reply or page before answering it: the first claim wins, so two agents never "
+        "both answer (protocol/agent-notes.md, Who answers).",
+    )
+    async def claim_agent_note_item(
+        item_id: str, request: Request, device=Depends(current_device)  # noqa: B008
+    ) -> JSONResponse:
+        wanted = path_uuid(item_id, "reply or page")
+        body = await read_body(request)
+        status, answer = await asyncio.to_thread(service.claim, device.id, wanted, body)
+        return JSONResponse(status_code=status, content=answer)
+
+    @app.get("/v1/agent-notes/rules", response_model=AgentNoteRules, responses=ERROR_RESPONSES,
+             description="The user's answering rules for agents that answer replies and pages: the Library "
+             "note agent-note-rules.md as accepted (pending proposals left out).")
+    def agent_note_rules(_device=Depends(current_device)) -> JSONResponse:  # noqa: B008
+        return JSONResponse(service.rules())
 
     @app.get(
         "/v1/agent-notes/replies/{reply_id}/image",
@@ -1515,10 +2665,32 @@ def register_agent_note_routes(
         response_model=AgentNoteListeningAnswer,
         responses=ERROR_RESPONSES,
         description="Whether an agent of the note's sender waits to act on replies to it right now: "
-        "listening, not_listening, or unknown (its agents never announce listening).",
+        "listening, not_listening, or unknown (its agents never announce listening). answer_by: the agent "
+        "the user chose to answer (then state and listeners are that agent's); candidates: who could.",
     )
     def agent_note_listening(note_id: str, _device=Depends(current_device)) -> JSONResponse:  # noqa: B008
         return JSONResponse(service.listening(path_uuid(note_id, "note")))
+
+    @app.put(
+        "/v1/agent-notes/{note_id}/answer-by",
+        response_model=AgentNoteListeningAnswer,
+        responses={
+            **ERROR_RESPONSES,
+            409: {"description": "agent_note_answerer_unknown: no known listener is that agent"},
+            422: {"description": "invalid_agent_note: the body is not {agent: <agent> | null}"},
+        },
+        openapi_extra={"requestBody": ANSWER_BY_BODY},
+        description="The user chooses which agent answers the replies to the note, or (agent null) leaves "
+        "it automatic; any device may. Answers as GET .../listening (protocol/agent-notes.md, The user's "
+        "choice). Idempotent.",
+    )
+    async def set_agent_note_answer_by(
+        note_id: str, request: Request, _device=Depends(current_device)  # noqa: B008
+    ) -> JSONResponse:
+        wanted = path_uuid(note_id, "note")
+        body = await read_body(request)
+        status, answer = await asyncio.to_thread(service.set_answer_by, wanted, body)
+        return JSONResponse(status_code=status, content=answer)
 
     @app.get(
         "/v1/agent-notes/{note_id}/image",

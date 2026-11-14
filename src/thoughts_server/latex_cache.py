@@ -15,6 +15,58 @@ from pathlib import Path
 # Auxiliary-only reuse; exact PDF/SyncTeX reuse is validated separately by component_cache.
 SUFFIXES = (".aux", ".bbl", ".blg", ".toc", ".out", ".lof", ".lot", ".bcf", ".run.xml", ".nav", ".snm", ".fdb_latexmk")
 
+# The version of the compiler's own code, as far as it decides what a compile writes.
+#
+# It is part of every cache entry's name. Bump it BY HAND, in the same commit, when a
+# change to the files in COMPILER_SOURCES can alter a compiled PDF, its SyncTeX, its
+# recorder file or the auxiliary files: every document of every Library is then
+# compiled once more. A change that cannot (logging, timing, sandbox set-up, comments)
+# leaves it alone, and no cache entry is lost.
+#
+# Before, the name hashed those source files themselves, so any deploy that touched
+# one of them threw every entry away. tests/test_latex_cache.py holds a hash of the
+# files and fails when they change, to make the author decide.
+COMPILER_OUTPUT_VERSION = 1
+# The files whose content used to be hashed into the cache name, relative to this package.
+COMPILER_SOURCES = (
+    "latex_cache.py",
+    "latex_compiler.py",
+    "component_cache.py",
+    "renderer_tools/review_instrumentation.py",
+    "renderer_tools/review_source_staging.py",
+    "renderer_tools/review_macro_expansion.py",
+    "renderer_tools/review_macro_definitions.py",
+)
+# Version 1 keeps the names the server gave its entries when the constant was
+# introduced: the hashes of COMPILER_SOURCES in the release that last hashed them.
+# Entries written by that release are therefore found, and introducing the constant
+# cost no recompile. Delete this list with the first bump.
+_VERSION_1_SOURCE_HASHES = (
+    "8504240f1b84b111ee4e6a5e0eeab863470eae6c382987850decbe19e71c6517",
+    "a52f1da2a6cb53f9da0e4c1bcdbb882043032a734d079f2955e2e2207f003d54",
+    "b388c4000199bdaeadc86787e1fab35203dc4df97919a64273e0a3ec3a8fa407",
+    "2571f25fb2bd66eec03af144207778c2ab1da8dd186ef314e5813b8de185bc04",
+    "55563153972710713557551266d1d2315a5f9f1ca0d01d109b5ede7b90642e9f",
+    "89e97dbdd9f11525f364b4b0b57137daf6dee4bfb757c253a82614f928809c34",
+    "24c5adf697c0a486f71c9325b653d032c993e47aff9b94ef7ea7caa221cb8c4c",
+)
+
+
+def compiler_identity(version: int | None = None) -> list:
+    """What stands for the compiler's code in a cache entry's name."""
+    version = COMPILER_OUTPUT_VERSION if version is None else version
+    if version == 1:
+        return list(_VERSION_1_SOURCE_HASHES)
+    return ["compiler-output-version", version]
+
+
+def compiler_sources_sha256() -> str:
+    """One hash over COMPILER_SOURCES as they are now (for the test that guards the constant)."""
+    digest = hashlib.sha256()
+    for name in COMPILER_SOURCES:
+        digest.update(name.encode() + b"\0" + (Path(__file__).parent / name).read_bytes() + b"\0")
+    return digest.hexdigest()
+
 
 def cache_path(docs_root: Path, project: Path, tex_name: str) -> Path | None:
     configured = os.environ.get("THOUGHTS_LATEX_CACHE_ROOT")
@@ -25,12 +77,6 @@ def cache_path(docs_root: Path, project: Path, tex_name: str) -> Path | None:
         executable = shutil.which(name)
         stat = Path(executable).resolve().stat() if executable else None
         tools.append((name, executable, (stat.st_size, stat.st_mtime_ns) if stat else None))
-    implementations = [Path(__file__), Path(__file__).with_name("latex_compiler.py"),
-                       Path(__file__).with_name("component_cache.py"),
-                       Path(__file__).parent / "renderer_tools/review_instrumentation.py",
-                       Path(__file__).parent / "renderer_tools/review_source_staging.py",
-                       Path(__file__).parent / "renderer_tools/review_macro_expansion.py",
-                       Path(__file__).parent / "renderer_tools/review_macro_definitions.py"]
     configuration = []
     for base in (docs_root, project):
         for name in (".latexmkrc", "latexmkrc"):
@@ -40,7 +86,7 @@ def cache_path(docs_root: Path, project: Path, tex_name: str) -> Path | None:
     from .source_owner import folder_owner
     key = hashlib.sha256(json.dumps([
         "isolated-latex-state-v1", folder_owner(project), tex_name, tools, configuration,
-        [hashlib.sha256(path.read_bytes()).hexdigest() for path in implementations],
+        compiler_identity(),
         {name: os.environ.get(name, "") for name in ("SOURCE_DATE_EPOCH", "TEXINPUTS", "BIBINPUTS", "BSTINPUTS")},
     ], sort_keys=True).encode()).hexdigest()
     return Path(configured) / f"{key}.zip"

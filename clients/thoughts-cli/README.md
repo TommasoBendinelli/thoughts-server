@@ -30,6 +30,7 @@ Pure standard library, Python 3.11 or later; runs with the system `python3`, no 
 | `thoughts_cli/review_cards.py` | create-review-card and move-review-card: the desktop's request checks and the card records |
 | `thoughts_cli/review_card_selection.py` | the selection rules, the card markers and a target on a pending proposal's text, copied unchanged from the server (a test keeps them identical) |
 | `thoughts_cli/card_merges.py` | merge-review-cards: the desktop's request checks; the server merges (`POST /v1/review-card-merges`) |
+| `thoughts_cli/card_passage_moves.py` | move-card-passage (move-review-card with `start_line == end_line`): a card linked to source markers moves with its marked passage, as the two linked proposals of `shell/proposalauthoring.cpp` authorCardMove |
 | `thoughts_cli/card_pending_moves.py` | a move onto a pending proposal (`POST /v1/review-card-pending-moves`), pending-card-moves, cancel-pending-card-move |
 | `thoughts_cli/api.py` | the public endpoints (`urllib`) |
 | `thoughts_cli/state.py` | `requests.json`, the request records |
@@ -58,7 +59,8 @@ thoughts-cli revise-proposal < revise.json                             # new tex
 thoughts-cli create-document < document.json                           # a new note in a Library Project
 thoughts-cli publish-build-inputs --document-id ID --publish --request-id UUID  # inputs of a note made earlier
 thoughts-cli create-review-card < card.json                            # a card whose answer is a source passage
-thoughts-cli move-review-card < move.json                              # a card on an imported PDF into a note
+thoughts-cli move-review-card < move.json                              # a card on an imported PDF into a note;
+                                                                       # start_line == end_line: a linked card's passage
 thoughts-cli merge-review-cards < merge.json                           # several cards of one note into one card
 thoughts-cli pending-card-moves --card-id UUID                         # card moves waiting for a proposal
 thoughts-cli cancel-pending-card-move --pending-move-id UUID           # the card stays where it is
@@ -109,9 +111,31 @@ error) carry `retryable: true`. Exit status as `thoughtsctl`: 0 success, 2 inval
 - `move-review-card`: `card_id`, `source`, `expected_source_sha256`, `start_line`, `end_line`,
   `request_id`. Only a card without source markers moves this way (a card on an imported PDF);
   it keeps its ID, question, schedule and review history. Result: `state: card_moved` and
-  `from_document`. A card with markers is refused with `linked_card`: it moves by cutting and
-  pasting its marked passage, as on the desktop. When the lines are proposed text of a pending
-  agent proposal, the move waits for it (below): result `state: waiting_for_proposal`.
+  `from_document`. When the lines are proposed text of a pending agent proposal, the move waits
+  for it (below): result `state: waiting_for_proposal`. A card with markers is refused with
+  `linked_card` when a line range is given: it moves with its marked passage, as follows.
+- `move-review-card` with `start_line` equal to `end_line` (the line of `source` before which
+  the passage goes), `explanation` and `conversation_id` (optional `conversation_url`), or the
+  same request as the desktop's `move-card-passage` with `line`: a card linked to source markers
+  (protocol/agent-proposals.md section 12). Nothing moves at once. The client writes two linked
+  pending proposals in one publication, `agent-<uuid>.cut` (the whole lines from the card's first
+  marker line to its last, with an empty replacement) in the card's source and
+  `agent-<uuid>.paste` (an insertion of the same text) before that line of `source`, which may be
+  the same source, another source, or one of another folder or Project, of the same format. The
+  user accepts or rejects them as one. Result: `state: move_proposed`, `card_id`, `source` and
+  `source_sha256` (the destination), `origin_source` and `origin_source_sha256`, `proposals`
+  (`proposal_id`, `role` cut or paste, `source`, `line`, `original_text`, `replacement`),
+  `also_moved_card_ids` (other cards whose markers lie wholly inside the passage). Refusals, with
+  nothing written: `server_unsupported` (no `review_card_move_pairs_v1`), `card_unavailable`,
+  `pdf_only_card`, `unsupported_card` (a whole-document card, markers in several sources),
+  `invalid_markers`, `format_mismatch`, `generated_source`, `source_conflict`,
+  `proposal_overlap` (the passage intersects a pending proposal, or the line lies inside one),
+  `split_card` (the passage holds only some of another card's markers), `invalid_range`,
+  `no_change`, `invalid_destination` (after acceptance the card's markers would not read back
+  there, for example in a preamble or inside a table) and `invalid_link` (a `thoughts-html:`,
+  Library PDF or same-folder source link of the passage would not resolve from its new place).
+  `remove-proposal` on either half withdraws both (`withdrawn_proposal_ids`, and `other_source`
+  when the other half is in another source); `revise-proposal` refuses a half (`move_proposal`).
 
 The source must be the main source of exactly one Library document (`GET /v1/library/projects`,
 its `source_file`); otherwise `document_unavailable` or `ambiguous_document`. The selection rules

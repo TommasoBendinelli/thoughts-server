@@ -49,7 +49,10 @@ def migrate_review_placements(session, store, publication, manifest):
     migrated = 0
     visuals = {}
     from .review_reanchor import _first_source_page_fingerprint
-    for entity in session.scalars(select(Entity).where(Entity.entity_type == 'review_card', Entity.deleted.is_(False))):
+    # Only cards still on one of the Project's retired PDFs can move; the database picks them.
+    on_retired_pdf = Entity.payload['primary']['pdf_stem'].as_string().in_(sorted(old))
+    for entity in session.scalars(select(Entity).where(
+            Entity.entity_type == 'review_card', Entity.deleted.is_(False), on_retired_pdf)):
         primary = entity.payload.get('primary') or {}
         previous = old.get(primary.get('pdf_stem'))
         if previous is None:
@@ -102,7 +105,13 @@ def migrate_comment_placements(session, store, publication, manifest):
             raise ValueError('A historical comment package failed verification')
         old[row.filename.removesuffix('.pdf')]=json.loads(raw)
     migrated=0
-    for entity in session.scalars(select(Entity).where(Entity.entity_type=='logical_comment',Entity.deleted.is_(False))):
+    if not old:
+        # No retired PDF in this Project: no comment has a placement to carry over.
+        # Before, every comment of the Library was read here for each published PDF.
+        return migrated
+    made_on_retired_pdf = Entity.payload['origin']['collection'].as_string().in_(sorted(old))
+    for entity in session.scalars(select(Entity).where(
+            Entity.entity_type=='logical_comment', Entity.deleted.is_(False), made_on_retired_pdf)):
         payload=entity.payload
         if payload.get('parent_id') or (payload.get('scope') or {}).get('state')!='pdf_only' or payload.get('pdf_placement'):
             continue

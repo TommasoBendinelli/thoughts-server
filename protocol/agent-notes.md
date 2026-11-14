@@ -111,6 +111,11 @@ the last two `""` when not given), `last_seen_at`. Updated on every reply-feed r
 `listen=true`; rows of a device unseen for 30 days are deleted when it announces again. See
 "Who hears a reply".
 
+`agent_notes.answer_by` and `agent_note_handling.answer_by` (migration 0031, both JSON null): the
+agent the user chose to answer the replies to a note, `{"role", "device_id", "conversation_id",
+"owner_id", "label"}`, and that choice as it was when a reply arrived. Null: the automatic choice.
+See "The user's choice".
+
 ## HTTP API (all JSON unless stated; `Authorization: Bearer <device token>`)
 
 Errors are `{"detail": "...", "error_code": "..."}` with codes `invalid_agent_note` (400),
@@ -119,8 +124,15 @@ Errors are `{"detail": "...", "error_code": "..."}` with codes `invalid_agent_no
 query parameter FastAPI's 422. Health advertises the capability `agent_notes_v1`, and
 `agent_note_listening_v1` for "Who hears a reply" (endpoint 11, `listen`/`conversation_id` on
 endpoint 8, `reply_listening` and `listening` in the answers of endpoints 1 and 7), and
-`agent_note_reply_photos_v1` for "Reply photos" (`photo` on endpoint 7 and in reply records), and
-`agent_note_links_v1` for "Links" (`links` on endpoint 1 and in note records).
+`agent_note_reply_photos_v1` for "Reply photos" (`photo` on endpoint 7 and in reply records),
+`agent_note_links_v1` for "Links" (`links` on endpoint 1 and in note records), and
+`agent_note_responder_v1` for "One responder" (`responder` on endpoint 8, endpoint 12, `responder`
+in listener records, `sender_device_id` in the feed's `note`), `agent_note_claims_v1` for "Who
+answers" (endpoints 13 and 14), `agent_note_owners_v1` for "Topic owners" (endpoints 15 to 17,
+owner scopes in conversation feeds and `conversation_id` on endpoint 12, `role`/`owner_id`/`label`
+in listener records), `agent_note_rules_v1` for "Answering rules" (endpoint 18), and
+`agent_note_answer_by_v1` for "The user's choice" (endpoint 19, `answer_by` and `candidates` in
+endpoint 11, `answer_by` in handling records).
 
 Image limits: PNG or JPEG (signature checked), decoded body <= 20 MiB, each side
 <= 8192 px, width x height <= 40 megapixels. Request bodies above 32 MiB are refused with 413
@@ -195,14 +207,59 @@ before parsing.
    notes the caller sent (or, with `note_id`, to that note when the caller sent it; with
    `conversation_id`, to notes whose `origin.conversation_id` is that value), `sequence >
    after`, oldest first, at most 50, each with `"note": {note_id, title, document_id,
-   review_card_id}`. `wait` 0..60 s long-poll as for the inbox. `{"replies": [...], "cursor": n}`.
+   review_card_id, sender_device_id}`. `wait` 0..60 s long-poll as for the inbox. `{"replies": [...], "cursor": n}`.
    `listen=true` records the caller as a reply listener for (`conversation_id`, `note_id`).
+   `responder=true`: replies to every device's notes, not only the caller's ("One responder");
+   with `listen=true` the caller listens for all of them. It cannot be combined with `note_id` or
+   a non-blank `conversation_id` (400 `invalid_agent_note`).
 9. `GET /v1/agent-notes/replies/{reply_id}/image`, `GET /v1/agent-notes/replies/{reply_id}/strokes`,
    `GET /v1/agent-notes/replies/{reply_id}/photo` (404 when the reply has none).
 10. `DELETE /v1/agent-notes/{note_id}` — soft delete; `204`. Any device may delete.
 11. `GET /v1/agent-notes/{note_id}/listening` — `{"note_id", "state": "listening" |
     "not_listening" | "unknown", "listeners": [{"device_id", "conversation_id", "note_id",
-    "last_seen_at"}], "checked_at"}`; `listeners` are the live ones that hear this note.
+    "last_seen_at", "responder"}], "answer_by": null | <agent>, "candidates": [<agent>],
+    "checked_at"}`; `listeners` are the live ones that hear this note. `answer_by` is the agent the
+    user chose to answer this note's replies, or null when the choice is automatic; with a choice,
+    `state` is `listening` while that agent is live and `not_listening` otherwise, and `listeners`
+    holds its listener record or nothing. `candidates` are the agents that could answer now ("The
+    user's choice"). An agent is `{"role": "sender" | "owner" | "responder", "device_id",
+    "conversation_id", "owner_id", "label", "live"}`.
+12. `GET /v1/agent-notes/pages?after=&wait=` — the pages the user sent to the agents: notes whose
+    `origin.kind` is `phone_page` (the phone's study mode, the Mac's Send Page to Agent), from any
+    device, not deleted, `sequence > after`, oldest first, at most 20. `wait` 0..60 s long-poll as
+    for the inbox. Without `after`: no notes and `cursor` = the current highest note sequence, where
+    a new reader starts. `{"notes": [...], "cursor": n}`. It records nothing (no inbox listener
+    row, so senders' `delivery.live` is unchanged). With `conversation_id`, only the pages of the
+    topics that conversation of the caller's device owns ("Topic owners").
+13. `GET /v1/agent-notes/handling/{item_id}` — a reply's (`item_id` = reply id) or page's
+    (`item_id` = its note id) handling: `{"item_id", "kind": "reply" | "page", "note_id",
+    "arrived_at", "covered_by": [<listener record> + "live"], "claim": null | {"device_id",
+    "conversation_id", "role", "claimed_at", "answer_note_id"}, "inferred_answer_note_id"}`. A
+    reply that arrived while the user had chosen who answers its note also has `"answer_by":
+    <agent>` (that choice, `live` as of now).
+14. `POST /v1/agent-notes/handling/{item_id}/claim` — `{"conversation_id"?, "responder"?: bool,
+    "only_if_covering"?: bool}`; `201` claimed now, `200` already the caller's (same device and
+    conversation), `409` with the handling record and `error_code` `agent_note_claimed` (another
+    agent has it), `agent_note_covered` (responder only: `retry_after` seconds) or
+    `agent_note_not_covering`. See "Who answers"; for a reply under the user's choice, "The user's
+    choice".
+15. `POST /v1/agent-notes/owners` — `{"conversation_id", "label"?, "document_ids"?,
+    "review_card_ids"?, "title_tags"?, "captures"?: bool}` (at least one of the last four);
+    `201` (`200` when that conversation already owns that scope) with the owner record
+    `{"owner_id", "device_id", "conversation_id", "label", "document_ids", "review_card_ids",
+    "title_tags", "captures", "last_seen_at", "live"}`.
+16. `GET /v1/agent-notes/owners` — `{"owners": [...], "checked_at"}`: every owner seen in the last
+    30 days, most recent first, with `live`.
+17. `DELETE /v1/agent-notes/owners/{owner_id}` (any device; `404` when unknown) and
+    `DELETE /v1/agent-notes/owners?conversation_id=` (every ownership of the caller's
+    conversation) — `204`.
+18. `GET /v1/agent-notes/rules` — `{"text", "sha256", "source_path", "revision", "updated_at",
+    "others"}`, or `404` `agent_note_not_found` when the Library has no rules note.
+19. `PUT /v1/agent-notes/{note_id}/answer-by` — `{"agent": {"role", "device_id", "conversation_id",
+    "owner_id"}}` (other fields of an agent are ignored), or `{"agent": null}` for the automatic
+    choice. Any device may call it; it is idempotent. `200` with the same body as endpoint 11.
+    `404` for an unknown or deleted note, `422` `invalid_agent_note` for a malformed body, `409`
+    `agent_note_answerer_unknown` when no listener row, live or not, is that agent.
 
 ### Who hears a reply
 
@@ -215,12 +272,107 @@ record nothing. A note's state:
 * `listening`: a listener of the note's sender device was seen in the last 90 s whose
   `note_id` is empty or the note and whose `conversation_id` is empty or the note's
   `origin.conversation_id` (exactly the listeners whose feed holds the note's replies).
-* `not_listening`: none is, but agents of that device announced listening in the last 30 days.
-* `unknown`: the sender's agents never announce it (older clients, the connector today);
-  clients show nothing.
+* `listening` also when a responder (below) was seen in the last 90 s, whatever device sent the note.
+* `not_listening`: none is, but agents of that device, or a responder, announced listening in the
+  last 30 days.
+* `unknown`: the sender's agents never announce it (older clients, the connector today) and no
+  responder does; clients show nothing.
 
 The phone shows `not_listening` on the note before the user replies, and the state in the
 reply's answer after Send.
+
+### One responder
+
+One agent may answer for every device: it polls endpoint 8 with `responder=true` (and
+`listen=true`), so its feed holds the replies to every note, whichever device sent it, and every
+note is `listening` while it re-polls within 90 s. Its listener row is one per device, stored with
+`note_id` `*` (real note IDs are UUIDs) and empty `conversation_id`; listener records show it as
+`"responder": true` with `note_id` null. It reads the user's pages with endpoint 12. The other
+agents keep their own feeds and listeners; a sender's own listener and a responder may both hear a
+note, so agents that leave replies to the responder should stop listening themselves.
+
+### Who answers
+
+Any agent may answer the user's replies and pages, but one answer per item, and the agent that
+is responsible goes first:
+
+* **Coverage at arrival.** When a reply is stored, the server records which live listeners
+  covered its note at that moment (`covered_by`): agents of the sender device whose feed holds
+  it (its conversation, or device-wide), and topic owners whose scope holds the note. Responders
+  are not listed. A page the user sends records the topic owners that cover it.
+* **Claims.** An agent claims an item before it answers it (endpoint 14); the first claim wins
+  (a conditional update), so two agents never both answer. The claimant is the device plus its
+  `conversation_id`. With `only_if_covering`, the claim succeeds only for an agent that covered
+  the item at arrival, covers it now, or (replies) sent the note from that conversation; tools
+  claim this way when they show a reply or page to their agent.
+* **The responder waits.** A claim with `responder: true` waits (`409 agent_note_covered`,
+  `retry_after`) while an agent in `covered_by` still listens, for up to 10 minutes after
+  arrival. It does not wait for replies to its own notes (same device and conversation as the
+  note's `origin.conversation_id`), nor for coverers that stopped listening.
+* **Answers seen as claims.** Agents with tools from before claims never claim. When an item has
+  no claim, a note sent after it arrived by one of its coverers counts as that coverer's claim
+  (`role: answered`, `answer_note_id`): from the same conversation when the coverer is one, else
+  from the same device on the same document or card. The user's pages and notes whose
+  `origin.responder` is true never count.
+
+A reply or page from before claims gets its handling row on first use, with `covered_by` empty.
+
+### The user's choice
+
+Without a choice, "Who answers" decides. The user may instead choose, per note, which agent answers
+its replies (endpoint 19, usually from the phone). The choice is one of three kinds of agent: a
+`sender` (a listening agent of a device, with its conversation, or device-wide when
+`conversation_id` is null), an `owner` (a topic owner, by `owner_id`), or the `responder` of a
+device. Endpoint 11 lists the `candidates`: the live ones only, each once, the sender listeners
+that cover the note first, then every live topic owner (those whose scope holds the note first),
+then the responder. Any agent with a listener row may be chosen, also one whose own notes and
+topics do not include the note.
+
+* **At arrival.** A reply keeps the choice its note had when it arrived (`answer_by` in its handling
+  row); `covered_by` then lists only the chosen agent's listener (live or not; none when it has no
+  listener row any more), and the `listening` of endpoint 7's answer describes that agent. A later
+  change of the choice, or the automatic choice again, is for the replies that arrive afterwards:
+  reply feeds are cursors, so an agent chosen later may already be past an earlier reply and would
+  never see it, while its being live would keep every other agent away.
+* **Delivery.** The chosen agent's reply feed (endpoint 8, its `conversation_id`, or none for a
+  device-wide sender) holds those replies even when its own notes and topics do not. A responder's
+  feed holds every reply anyway. The other agents' feeds are unchanged.
+* **Claims.** The chosen agent claims at once; a chosen responder does not wait for the agents in
+  `covered_by`. Every other claim is refused with `409` and `detail` "the user chose another agent
+  to answer this note": `agent_note_not_covering` for a sender or owner (always), and
+  `agent_note_covered` with `retry_after` for a responder while the chosen agent is live or until 10
+  minutes after arrival. After that a responder (only) may claim, so no reply is lost when the
+  chosen agent is gone. These are the codes on which tools already leave an item to another agent.
+* **Answers seen as claims** count for the chosen agent only; a chosen responder always claims.
+* **Lifetime.** Deleting the note removes its choice. Releasing a topic, or a listener row that
+  disappears, leaves the choice in place but not live: `answer_by.live` is false, the note is
+  `not_listening`, and a responder takes its replies as above.
+
+Pages the user sends are not replies: they are answered as in "Who answers", whatever is chosen.
+
+### Topic owners
+
+The user may make one conversation responsible for a topic: a project's documents, document IDs,
+review card IDs, title tags (a note is in the topic when its title contains the tag, in any case)
+and, optionally, the glasses captures (`captures`, read by the agent that watches the capture
+folders). The conversation claims it with endpoint 15. The ownership is a scoped reply listener
+(a row of `agent_note_reply_listeners` with `note_id` `topic:<owner_id>` and the scope): it is
+live while the conversation keeps polling endpoint 8 with `listen=true` and its `conversation_id`
+(each such poll refreshes every ownership of that conversation), and ends with endpoint 17.
+While it is live, every note in its scope is `listening` with a listener of `role: owner` and the
+topic's `label`, replies and pages in its scope record it in `covered_by`, the conversation's feed
+(endpoint 8 with its `conversation_id`) also holds the replies to every device's notes in the
+scope, and endpoint 12 with its `conversation_id` lists the pages in the scope.
+
+### Answering rules
+
+The user's rules for every agent that answers a reply or page live in one Library note named
+`agent-note-rules.md` (in any Project or docs folder). Endpoint 18 serves its current text as the
+user accepted it: pending agent proposals are rejected and Thoughts marker comments (card markers)
+removed. Tools hand this text to their agent with each reply or page, so agents on every device
+follow the same rules, and the user changes them by editing that note. With several such notes the
+most recently updated one is served and `others` names the rest. The server ships no default text
+and enforces one rule itself: when the user chose who answers a note, only that agent answers it.
 
 ### Reply photos
 

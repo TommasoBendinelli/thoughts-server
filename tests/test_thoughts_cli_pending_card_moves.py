@@ -184,4 +184,4 @@ def test_the_command_line_takes_the_new_commands():
     cancel = cli.request_from_options(cli.parser().parse_args(["cancel-pending-card-move", "--pending-move-id", card]))
     assert cancel == {"pending_move_id": card}
     from thoughts_cli import __version__
-    assert __version__ == "1.6.0"
+    assert __version__ == "1.7.0"

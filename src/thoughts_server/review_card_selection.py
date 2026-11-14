@@ -322,10 +322,15 @@ def _line_end(text: str, offset: int) -> int:
 def target_lines(path: str, accepted: str, region_start: int, region_end: int, start: int, stop: int,
                  card_id: str) -> tuple[int, int] | str:
     """The whole lines [first, end) of ``accepted`` covering [start, stop), when they lie inside the
-    proposed text [region_start, region_end) and the selection rules accept them; else why not."""
+    proposed text [region_start, region_end) and the selection rules accept them; else why not.
+
+    The line break right after the proposed text counts as its own: a proposal that ends right before
+    a review card marker keeps its last line break outside the wrapper (thoughts-cli authoring)."""
     first = _line_number(accepted, start)
     end = _line_number(accepted, max(start, stop - 1)) + 1
     line_start, line_stop = offsets(accepted, first, end)
+    if accepted[region_end:region_end + 1] == "\n" and not accepted[region_start:region_end].endswith("\n"):
+        region_end += 1
     if line_start < region_start or line_stop > region_end:
         return ("The proposed text does not stand on lines of its own once accepted (it shares a line with "
                 "text around it); the card cannot be moved onto it.")

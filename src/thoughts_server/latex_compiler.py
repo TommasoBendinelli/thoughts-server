@@ -490,7 +490,9 @@ def compile_source(
         with _recorder_slot(build_dir) as slot:
             command, call_env = build_sandbox.wrap(command, environment=env, cwd=working_directory,
                                                    writable=[docs_root, project],
-                                                   pid_offset=slot * build_sandbox.PID_STRIDE)
+                                                   pid_offset=slot * build_sandbox.PID_STRIDE,
+                                                   # Generated fonts are kept for the Library's next compiles.
+                                                   font_cache=build_sandbox.font_cache())
             compiler_output = run(command, cwd=working_directory, env=call_env)
     try:
         try:

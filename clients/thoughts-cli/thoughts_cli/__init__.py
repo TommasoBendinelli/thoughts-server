@@ -12,13 +12,14 @@ Library use (the claude.ai connector):
     client.run({"command": "create-document", ...})    # a new note in a Library Project
     client.run({"command": "publish-build-inputs", ...})  # the build inputs of a note's PDF
     client.run({"command": "merge-review-cards", ...})  # merge review cards (the server does it)
-    client.run({"command": "move-review-card", ...})    # onto a pending proposal: waits for its acceptance
+    client.run({"command": "move-review-card", ...})    # onto a pending proposal: waits for its acceptance;
+                                                        # start_line == end_line: a linked card, as a move pair
     client.run({"command": "pending-card-moves", ...})  # moves waiting for a proposal
 
 Pure stdlib; Python 3.11 or later.
 """
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 
 from .client import ThoughtsClient  # noqa: E402
 

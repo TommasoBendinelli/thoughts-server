@@ -30,7 +30,9 @@ that line), never its explanation, its original text or text outside the wrapper
 
 The server reads the selection in the source as it will be once that proposal alone is accepted
 (protocol/agent-proposals.md section 7): the part of the selection that is proposed text maps to
-whole lines of the accepted source, which must all be proposed text, and the ordinary selection rules
+whole lines of the accepted source, which must all be proposed text (the LF right after proposed text
+that does not end in one counts as its own: a proposal beside a review card marker keeps its last LF
+outside the wrapper, agent-proposals.md 8.1), and the ordinary selection rules
 of `move-review-card` apply there (`review_card_selection.py`, the desktop's `sourceSelectionError`:
 complete lines with text, outside other pending proposals and other cards' passages, LaTeX groups and
 environments closed, Markdown blocks whole). Those lines are the move's **target**; the answer shows
@@ -144,7 +146,7 @@ A refusal records nothing and answers `{"accepted": false, "error_code": ..., "d
 | 409 | `invalid_selection` | The lines are not (only) one proposal's proposed text, or the accepted text fails the selection rules; `detail` says why. |
 | 409 | `source_conflict` | The source is not at `expected_source_sha256`; `current_source_sha256` names its version. |
 | 409 | `invalid_source` | The source does not exist, is not UTF-8, holds NUL or exceeds 4 MiB. |
-| 409 | `card_unavailable`, `unsupported_card`, `linked_card` | The card cannot move this way (deleted, not approved, not placed by areas, already linked to source markers). |
+| 409 | `card_unavailable`, `unsupported_card`, `linked_card` | The card cannot move this way (deleted, not approved, not placed by areas, already linked to source markers: such a card moves with its marked passage, agent-proposals.md section 12). |
 | 409 | `document_unavailable`, `same_document` | The source is not one Library document's main source with a PDF, or the card already belongs to it. |
 | 409 | `pending_move_exists` | The card already waits for a proposal; `pending_move_id` names that move. |
 | 409 | `target_taken` | Another card already waits to be moved onto some of these lines; `pending_move_id` names it. |

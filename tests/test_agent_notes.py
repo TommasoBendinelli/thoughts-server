@@ -128,6 +128,7 @@ NOTE = "7d0f8a52-3f7c-4c55-9f1e-0d5c3c7d9a10"
         ("get", "/v1/agent-notes"),
         ("get", "/v1/agent-notes/inbox"),
         ("get", "/v1/agent-notes/replies"),
+        ("get", "/v1/agent-notes/pages"),
         ("get", f"/v1/agent-notes/{NOTE}"),
         ("get", f"/v1/agent-notes/{NOTE}/image"),
         ("post", f"/v1/agent-notes/{NOTE}/receipt"),
@@ -586,6 +587,7 @@ def test_reply_feed_lists_replies_to_the_callers_notes(client, auth_headers):
         "title": "Eigenvalues",
         "document_id": "doc-1",
         "review_card_id": "card-1",
+        "sender_device_id": "test-device",
     }
     assert feed["replies"][0]["stroke_count"] == 2
 
@@ -639,8 +641,8 @@ def test_migration_0022_creates_and_drops_the_agent_note_tables(tmp_path, monkey
         command.upgrade(config, "0022_agent_notes")
         inspector = sa.inspect(engine)
         assert agent_tables <= set(inspector.get_table_names())
-        # Columns later migrations add to these tables (0029: agent_notes.links).
-        later = {"agent_notes": {"links"}}
+        # Columns later migrations add to these tables (0029: agent_notes.links, 0031: answer_by).
+        later = {"agent_notes": {"links", "answer_by"}}
         for name in agent_tables:
             migrated = {column["name"] for column in inspector.get_columns(name)}
             assert migrated == set(Base.metadata.tables[name].columns.keys()) - later.get(name, set()), name
@@ -685,7 +687,7 @@ def test_stroke_document_round_trips_unchanged(client, auth_headers):
 
 # --- who hears a reply (agent_note_listening_v1) -------------------------------------------
 
-CONVERSATION = "3a7f52ca-b651-44dd-816e-2ac08f52f2c6"
+CONVERSATION = "0190a000-0000-7000-8000-00000000003b"
 OTHER_CONVERSATION = "0b6c6f1e-34d2-4e47-9f0a-6b1c2d3e4f50"
 
 
@@ -729,6 +731,10 @@ def test_listening_is_unknown_until_the_senders_agents_announce_it(client, auth_
             "conversation_id": CONVERSATION,
             "note_id": None,
             "last_seen_at": answer["listeners"][0]["last_seen_at"],
+            "responder": False,
+            "role": "sender",
+            "owner_id": None,
+            "label": None,
         }
     ]
 
@@ -853,7 +859,8 @@ def test_migration_0026_creates_and_drops_the_reply_listener_table(tmp_path, mon
         command.upgrade(config, "0026_agent_note_reply_listeners")
         inspector = sa.inspect(engine)
         migrated = {column["name"] for column in inspector.get_columns("agent_note_reply_listeners")}
-        assert migrated == set(Base.metadata.tables["agent_note_reply_listeners"].columns.keys())
+        # 0030 adds scope (a topic owner's).
+        assert migrated == set(Base.metadata.tables["agent_note_reply_listeners"].columns.keys()) - {"scope"}
         assert inspector.get_pk_constraint("agent_note_reply_listeners")["constrained_columns"] == [
             "device_id",
             "conversation_id",

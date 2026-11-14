@@ -75,7 +75,8 @@ A retired card:
 - is not offered for review: excluded from library-wide and per-document review sessions, the next-card choice, due and overdue counts, "Skip all due" targets and Today summaries;
 - is not counted as an active card in the Library review-card columns (clients count only active cards; deleted cards were already excluded);
 - keeps its review history, tags, group notes and answer note, its answer feedback, its source markers and answer location;
-- stays in re-anchoring and source linking on the server (its markers and PDF regions follow the source as before);
+- is pinned to the PDF version it was on when it was retired: the server no longer re-anchors it, links it to source or projects new publications onto it, so its `primary` (`pdf_sha256`, page, regions, `source_anchor` segments) stays as it was. Clients list and draw it only on that version (an earlier version opened from History), not on the current PDF, and show no placement problem for it;
+- comes back through the usual placement when it is restored: the server places a card that a `restore` (or an `undo_retire` of its retire) makes active again on its document's current publication, as a build places its cards;
 - is shown in History and the card's details with the state "Retired <date>", and in the card browser under the state/filter Retired;
 - can be answered from an older client that does not know retirement (§8). Such an answer is recorded as usual and does not restore the card.
 
@@ -83,7 +84,7 @@ A retired card:
 
 The server keeps no state table for retirement: it reads the events.
 `review_retirement.retired_review_cards(events)` implements §4 and `retired_review_card_ids(session)` reads it from the stored events.
-Re-anchoring and source linking treat retired cards as live cards; only `_deleted_review_card_ids` stops them.
+Re-anchoring, source linking and the projection of a publication's review anchors skip them, like deleted cards (`review_reanchor._frozen_review_card_ids`); `operations.apply_batch` places a card again on the current publication when a restore or undo makes it active (`review_reanchor.place_restored_cards`).
 Document deletion writes its usual delete events for retired cards too.
 
 ## 7. Clients

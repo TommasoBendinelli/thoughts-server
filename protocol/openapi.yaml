@@ -2771,6 +2771,122 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/handling/{item_id}:
+    get:
+      summary: Agent Note Handling
+      description: 'Who covered a reply or page (item_id: the reply id, or the page''s
+        note id) when it arrived, whether they still listen, and who claimed it (protocol/agent-notes.md,
+        Who answers).'
+      operationId: agent_note_handling_v1_agent_notes_handling__item_id__get
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteHandlingRecord'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/handling/{item_id}/claim:
+    post:
+      summary: Claim Agent Note Item
+      description: 'Claim a reply or page before answering it: the first claim wins,
+        so two agents never both answer (protocol/agent-notes.md, Who answers).'
+      operationId: claim_agent_note_item_v1_agent_notes_handling__item_id__claim_post
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteClaimAnswer'
+        '200':
+          description: Already claimed by the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteClaimAnswer'
+        '409':
+          description: agent_note_claimed, agent_note_covered (retry_after) or agent_note_not_covering
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteClaimAnswer'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversation_id:
+                  type: string
+                  maxLength: 128
+                responder:
+                  type: boolean
+                  description: 'Claim as the responder: wait for the agents that covered
+                    it.'
+                only_if_covering:
+                  type: boolean
+                  description: Claim only when the caller covers the item.
   /v1/agent-notes/inbox:
     get:
       summary: Agent Note Inbox
@@ -2842,13 +2958,276 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/owners:
+    post:
+      summary: Own Agent Note Topic
+      description: 'The caller''s conversation becomes responsible for a topic (protocol/agent-notes.md,
+        Topic owners): replies and pages of notes in its scope go to that conversation,
+        which hears them in its reply feed (and pages?conversation_id=) and stays the
+        owner while it keeps listening.'
+      operationId: own_agent_note_topic_v1_agent_notes_owners_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteOwnerRecord'
+        '200':
+          description: Claimed again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteOwnerRecord'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - conversation_id
+              properties:
+                conversation_id:
+                  type: string
+                  maxLength: 128
+                label:
+                  type: string
+                  maxLength: 200
+                document_ids:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 200
+                review_card_ids:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 200
+                title_tags:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 200
+                  description: A note is in the topic when its title contains one (any
+                    case).
+                captures:
+                  type: boolean
+                  description: The owner answers glasses captures too.
+    get:
+      summary: List Agent Note Owners
+      description: Every topic owner seen in the last 30 days, live or not, most recent
+        first.
+      operationId: list_agent_note_owners_v1_agent_notes_owners_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteOwnerList'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Release Agent Note Topics
+      description: End every topic ownership of the caller's conversation_id.
+      operationId: release_agent_note_topics_v1_agent_notes_owners_delete
+      parameters:
+      - name: conversation_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+          title: Conversation Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/owners/{owner_id}:
+    delete:
+      summary: Release Agent Note Topic
+      description: End one topic ownership (any device may).
+      operationId: release_agent_note_topic_v1_agent_notes_owners__owner_id__delete
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Owner Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/pages:
+    get:
+      summary: Agent Note Pages
+      description: 'Pages the user sent to the agents (notes with origin.kind phone_page,
+        from any device), oldest first, at most 20 (long-poll, wait 0..60 s). Without
+        after: no notes and cursor = the highest note sequence, where a new reader starts.
+        Records nothing.'
+      operationId: agent_note_pages_v1_agent_notes_pages_get
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: After
+      - name: wait
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 0
+          title: Wait
+      - name: conversation_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 128
+          - type: 'null'
+          title: Conversation Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNotePageFeed'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/agent-notes/replies:
     get:
       summary: Agent Note Replies
       description: 'Replies to notes the caller sent, oldest first (long-poll, wait
         0..60 s). conversation_id keeps notes whose origin.conversation_id is that conversation.
         listen=true: the caller is an agent that will act on these replies; the phone
-        shows it as listening while it re-polls within 90 s.'
+        shows it as listening while it re-polls within 90 s. responder=true: replies
+        to every device''s notes, and with listen=true the caller listens for all of
+        them (not with note_id or conversation_id).'
       operationId: agent_note_replies_v1_agent_notes_replies_get
       parameters:
       - name: after
@@ -2889,6 +3268,13 @@ paths:
           type: boolean
           default: false
           title: Listen
+      - name: responder
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Responder
       - name: authorization
         in: header
         required: false
@@ -3043,6 +3429,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/rules:
+    get:
+      summary: Agent Note Rules
+      description: 'The user''s answering rules for agents that answer replies and pages:
+        the Library note agent-note-rules.md as accepted (pending proposals left out).'
+      operationId: agent_note_rules_v1_agent_notes_rules_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteRules'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/agent-notes/{note_id}:
     get:
       summary: Get Agent Note
@@ -3122,6 +3546,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/{note_id}/answer-by:
+    put:
+      summary: Set Agent Note Answer By
+      description: The user chooses which agent answers the replies to the note, or
+        (agent null) leaves it automatic; any device may. Answers as GET .../listening
+        (protocol/agent-notes.md, The user's choice). Idempotent.
+      operationId: set_agent_note_answer_by_v1_agent_notes__note_id__answer_by_put
+      parameters:
+      - name: note_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Note Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteListeningAnswer'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: 'agent_note_answerer_unknown: no known listener is that agent'
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: 'invalid_agent_note: the body is not {agent: <agent> | null}'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - agent
+              properties:
+                agent:
+                  type:
+                  - object
+                  - 'null'
+                  description: One of the note's candidates (GET .../listening), or
+                    null for the automatic choice. label and live are ignored.
+                  required:
+                  - role
+                  - device_id
+                  properties:
+                    role:
+                      type: string
+                      enum:
+                      - sender
+                      - owner
+                      - responder
+                    device_id:
+                      type: string
+                      maxLength: 128
+                    conversation_id:
+                      type:
+                      - string
+                      - 'null'
+                      maxLength: 128
+                    owner_id:
+                      type:
+                      - string
+                      - 'null'
   /v1/agent-notes/{note_id}/image:
     get:
       summary: Agent Note Image
@@ -3168,7 +3670,8 @@ paths:
       summary: Agent Note Listening
       description: 'Whether an agent of the note''s sender waits to act on replies to
         it right now: listening, not_listening, or unknown (its agents never announce
-        listening).'
+        listening). answer_by: the agent the user chose to answer (then state and
+        listeners are that agent''s); candidates: who could.'
       operationId: agent_note_listening_v1_agent_notes__note_id__listening_get
       parameters:
       - name: note_id
@@ -6274,6 +6777,46 @@ components:
       - cursor
       - server_time
       title: AgentNoteInbox
+    AgentNoteAnswerer:
+      properties:
+        role:
+          type: string
+          enum:
+          - sender
+          - owner
+          - responder
+          title: Role
+        device_id:
+          type: string
+          title: Device Id
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+        owner_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Id
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        live:
+          type: boolean
+          title: Live
+      type: object
+      required:
+      - role
+      - device_id
+      - conversation_id
+      - owner_id
+      - label
+      - live
+      title: AgentNoteAnswerer
+      description: An agent that can answer the replies to a note ("The user's choice").
     AgentNoteListeningAnswer:
       properties:
         state:
@@ -6291,6 +6834,16 @@ components:
         note_id:
           type: string
           title: Note Id
+        answer_by:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteAnswerer'
+          - type: 'null'
+        candidates:
+          items:
+            $ref: '#/components/schemas/AgentNoteAnswerer'
+          type: array
+          title: Candidates
+          default: []
         checked_at:
           type: string
           title: Checked At
@@ -6461,6 +7014,316 @@ components:
       - replies
       - cursor
       title: AgentNoteReplyFeed
+    AgentNotePageFeed:
+      properties:
+        notes:
+          items:
+            $ref: '#/components/schemas/AgentNoteRecord'
+          type: array
+          title: Notes
+        cursor:
+          type: integer
+          title: Cursor
+      type: object
+      required:
+      - notes
+      - cursor
+      title: AgentNotePageFeed
+    AgentNoteRules:
+      properties:
+        text:
+          type: string
+          title: Text
+        sha256:
+          type: string
+          title: Sha256
+        source_path:
+          type: string
+          title: Source Path
+        revision:
+          type: integer
+          title: Revision
+        updated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated At
+        others:
+          items:
+            type: string
+          type: array
+          title: Others
+      type: object
+      required:
+      - text
+      - sha256
+      - source_path
+      - revision
+      - updated_at
+      - others
+      title: AgentNoteRules
+    AgentNoteClaimAnswer:
+      properties:
+        item_id:
+          type: string
+          title: Item Id
+        kind:
+          type: string
+          enum:
+          - reply
+          - page
+          title: Kind
+        note_id:
+          type: string
+          title: Note Id
+        arrived_at:
+          type: string
+          title: Arrived At
+        covered_by:
+          items:
+            $ref: '#/components/schemas/AgentNoteCoverer'
+          type: array
+          title: Covered By
+        claim:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteClaim'
+          - type: 'null'
+        inferred_answer_note_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Inferred Answer Note Id
+        answer_by:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteAnswerer'
+          - type: 'null'
+        claimed:
+          type: boolean
+          title: Claimed
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+        retry_after:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Retry After
+      type: object
+      required:
+      - item_id
+      - kind
+      - note_id
+      - arrived_at
+      - covered_by
+      - claim
+      - claimed
+      title: AgentNoteClaimAnswer
+    AgentNoteHandlingRecord:
+      properties:
+        item_id:
+          type: string
+          title: Item Id
+        kind:
+          type: string
+          enum:
+          - reply
+          - page
+          title: Kind
+        note_id:
+          type: string
+          title: Note Id
+        arrived_at:
+          type: string
+          title: Arrived At
+        covered_by:
+          items:
+            $ref: '#/components/schemas/AgentNoteCoverer'
+          type: array
+          title: Covered By
+        claim:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteClaim'
+          - type: 'null'
+        inferred_answer_note_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Inferred Answer Note Id
+        answer_by:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteAnswerer'
+          - type: 'null'
+      type: object
+      required:
+      - item_id
+      - kind
+      - note_id
+      - arrived_at
+      - covered_by
+      - claim
+      title: AgentNoteHandlingRecord
+    AgentNoteClaim:
+      properties:
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        claimed_at:
+          type: string
+          title: Claimed At
+        answer_note_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answer Note Id
+      type: object
+      required:
+      - device_id
+      - conversation_id
+      - role
+      - claimed_at
+      - answer_note_id
+      title: AgentNoteClaim
+    AgentNoteCoverer:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+        note_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note Id
+        last_seen_at:
+          type: string
+          title: Last Seen At
+        responder:
+          type: boolean
+          title: Responder
+          default: false
+        role:
+          type: string
+          enum:
+          - sender
+          - owner
+          - responder
+          title: Role
+          default: sender
+        owner_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Id
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        live:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Live
+      type: object
+      required:
+      - device_id
+      - conversation_id
+      - note_id
+      - last_seen_at
+      title: AgentNoteCoverer
+    AgentNoteOwnerList:
+      properties:
+        owners:
+          items:
+            $ref: '#/components/schemas/AgentNoteOwnerRecord'
+          type: array
+          title: Owners
+        checked_at:
+          type: string
+          title: Checked At
+      type: object
+      required:
+      - owners
+      - checked_at
+      title: AgentNoteOwnerList
+    AgentNoteOwnerRecord:
+      properties:
+        owner_id:
+          type: string
+          title: Owner Id
+        device_id:
+          type: string
+          title: Device Id
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        document_ids:
+          items:
+            type: string
+          type: array
+          title: Document Ids
+        review_card_ids:
+          items:
+            type: string
+          type: array
+          title: Review Card Ids
+        title_tags:
+          items:
+            type: string
+          type: array
+          title: Title Tags
+        captures:
+          type: boolean
+          title: Captures
+        last_seen_at:
+          type: string
+          title: Last Seen At
+        live:
+          type: boolean
+          title: Live
+      type: object
+      required:
+      - owner_id
+      - device_id
+      - conversation_id
+      - label
+      - document_ids
+      - review_card_ids
+      - title_tags
+      - captures
+      - last_seen_at
+      - live
+      title: AgentNoteOwnerRecord
     AgentNoteReplyListenerRecord:
       properties:
         device_id:
@@ -6479,6 +7342,28 @@ components:
         last_seen_at:
           type: string
           title: Last Seen At
+        responder:
+          type: boolean
+          title: Responder
+          default: false
+        role:
+          type: string
+          enum:
+          - sender
+          - owner
+          - responder
+          title: Role
+          default: sender
+        owner_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Id
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
       type: object
       required:
       - device_id
@@ -6774,10 +7659,14 @@ components:
           - type: string
           - type: 'null'
           title: Review Card Id
+        sender_device_id:
+          type: string
+          title: Sender Device Id
       type: object
       required:
       - note_id
       - title
       - document_id
       - review_card_id
+      - sender_device_id
       title: AgentNoteSummary

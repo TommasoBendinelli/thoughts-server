@@ -667,6 +667,7 @@ def apply_batch(
         try:
             results = []
             placement_updates = set()
+            restored_cards = set()
             needs_source_links = False
             for operation in operations:
                 note_only = False
@@ -715,6 +716,10 @@ def apply_batch(
                     # card move waiting for that proposal (pending_card_moves.py).
                     from .pending_card_moves import after_operation
                     after_operation(session, operation)
+                if (result.outcome == "applied" and operation.entity_type == "review_event"
+                        and operation.payload.get("queue_action") in {"restore", "undo_retire"}):
+                    # A restore, or an undo of a retire, may make a retired card active again.
+                    restored_cards.add(operation.payload.get("card_id"))
                 if operation.entity_type == "review_card" and result.outcome == "applied" and not note_only:
                     from .html_attachment_cards import is_attachment_card
                     # A card made in an HTML attachment is never linked to source markers.
@@ -728,8 +733,9 @@ def apply_batch(
                 from .review_source_link import queue_source_links
                 queue_source_links(session, object_store)
             if object_store is not None:
-                from .review_reanchor import project_updated_source_cards
+                from .review_reanchor import place_restored_cards, project_updated_source_cards
                 project_updated_source_cards(session, object_store, placement_updates)
+                place_restored_cards(session, object_store, restored_cards)
             session.commit()
             return results
         except Exception:

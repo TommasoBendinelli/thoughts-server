@@ -34,10 +34,15 @@ from sqlalchemy.orm import Session
 
 from . import __version__
 from .agent_notes import AGENT_NOTES_CHANNEL
+from .agent_notes import ANSWER_BY_CAPABILITY as AGENT_NOTE_ANSWER_BY_CAPABILITY
 from .agent_notes import CAPABILITY as AGENT_NOTES_CAPABILITY
 from .agent_notes import LISTENING_CAPABILITY as AGENT_NOTE_LISTENING_CAPABILITY
 from .agent_notes import LINKS_CAPABILITY as AGENT_NOTE_LINKS_CAPABILITY
 from .agent_notes import REPLY_PHOTOS_CAPABILITY as AGENT_NOTE_REPLY_PHOTOS_CAPABILITY
+from .agent_notes import CLAIMS_CAPABILITY as AGENT_NOTE_CLAIMS_CAPABILITY
+from .agent_notes import OWNERS_CAPABILITY as AGENT_NOTE_OWNERS_CAPABILITY
+from .agent_notes import RESPONDER_CAPABILITY as AGENT_NOTE_RESPONDER_CAPABILITY
+from .agent_notes import RULES_CAPABILITY as AGENT_NOTE_RULES_CAPABILITY
 from .agent_notes import register_agent_note_routes
 from .agent_proposals import (
     AgentProposalError,
@@ -225,6 +230,8 @@ SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 # library_revision (and the Library ETag) leave out each publication's HTML edition state.
 HTML_HINT_EXCLUDE = {"publications": {"__all__": set(HTML_HINT_FIELDS)}}
 SYNC_CHANGE_PAGE_LIMIT = 200
+# How long a Sync plan trusts that an object it verified is still in the store (see create_app).
+PLAN_OBJECT_FACTS_SECONDS = 60.0
 GZIP_LEVEL = 5
 # Besides what Starlette leaves alone by default (images, audio, video, archives, event streams).
 GZIP_EXCLUDED_CONTENT_TYPES = (
@@ -327,6 +334,17 @@ SERVER_CAPABILITIES = [
     AGENT_NOTE_REPLY_PHOTOS_CAPABILITY,
     # A note may carry links: rectangles of its image that open a web page or a Library PDF page.
     AGENT_NOTE_LINKS_CAPABILITY,
+    # One agent answers for every device: reply feed responder=true, GET /v1/agent-notes/pages.
+    AGENT_NOTE_RESPONDER_CAPABILITY,
+    # Who answers a reply or page: covered_by at arrival, POST /v1/agent-notes/handling/{id}/claim.
+    AGENT_NOTE_CLAIMS_CAPABILITY,
+    # A conversation responsible for a topic: /v1/agent-notes/owners (a scoped reply listener).
+    AGENT_NOTE_OWNERS_CAPABILITY,
+    # The user's answering rules from the Library note agent-note-rules.md: GET /v1/agent-notes/rules.
+    AGENT_NOTE_RULES_CAPABILITY,
+    # The user chooses which agent answers a note's replies: PUT /v1/agent-notes/{id}/answer-by,
+    # answer_by and candidates in GET /v1/agent-notes/{id}/listening.
+    AGENT_NOTE_ANSWER_BY_CAPABILITY,
     # Script-free HTML editions of source documents beside their PDFs (docs/html-edition.md):
     # html_status/html_edition_sha256 on publications, GET /v1/html-editions/{pdf_sha256},
     # cards and comments created in the HTML view, feedback with view "html".
@@ -442,9 +460,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Readings and document packages are content-addressed, so what a plan
     # needs from them is parsed once rather than on every Sync.
     content_summary_cache: dict[tuple[str, str], object] = {}
+    # Objects a Sync plan found present and intact, with their sizes, for one state of
+    # the Library. Invalidation rule: the set belongs to the Library's change key and
+    # is dropped when the key changes (any committed write of any process) and after
+    # PLAN_OBJECT_FACTS_SECONDS, because a file removed from the object store changes
+    # no row. Objects are immutable and content-addressed, so a remembered size is
+    # never wrong; a missing file is reported at most that much later than before.
+    plan_object_facts: dict = {"key": None, "since": 0.0, "present": set(), "sizes": {}}
+    plan_object_lock = threading.Lock()
+    # The capability combinations Sync plans were asked with: what the warm-up prepares.
+    plan_dependency_variants: set[tuple[bool, bool, bool]] = {(True, True, False)}
     # Only successful, settled render checks are reusable. A changed source,
     # publication, build, input snapshot or operation invalidates the decision.
     current_render_check_cache: dict[str, tuple[tuple, dict]] = {}
+    # Open source conflicts that still overlap with this server's merge rules, by the state
+    # they were checked in (stale_conflicts): re-merged only after that state changes.
+    conflict_recheck_memo: dict[str, tuple] = {}
     reader_plans = ReaderPlans()
     # Wakes trace streams and build waits: by NOTIFY from the workers on PostgreSQL,
     # and directly after commits made in this process.
@@ -469,9 +500,109 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_clients=active_settings.auth_tracked_clients,
     )
 
+    def plan_objects_for(key: tuple) -> tuple[set, dict]:
+        """The objects already verified for the Library state ``key``, and their sizes."""
+        now = time.monotonic()
+        with plan_object_lock:
+            if plan_object_facts["key"] != key or now - plan_object_facts["since"] > PLAN_OBJECT_FACTS_SECONDS:
+                plan_object_facts.update(key=key, since=now, present=set(), sizes={})
+            return plan_object_facts["present"], plan_object_facts["sizes"]
+
+    def warm_sync_plan() -> dict[str, int]:
+        """Compute what the first Sync plan after a start would otherwise wait for.
+
+        The Library listing for the current change key, and what a plan reads from
+        the stored artifacts: the dependencies of every publication's source artifact
+        (for the capability combinations plans are asked with) and the summaries of
+        the Project readings and their document packages. All of it is derived from
+        immutable, content-addressed objects or kept under the Library's change key,
+        so a warm entry is exactly what the plan itself would have computed. Nothing
+        is written to the database; an object that cannot be read is left to the plan,
+        which reports it.
+        """
+        from .project_reading import load_reading
+        warmed = {"source_artifacts": 0, "readings": 0, "packages": 0}
+
+        def dependencies(sha256: str, publication: str) -> None:
+            for variant in sorted(plan_dependency_variants):
+                key = (sha256, publication, *variant)
+                with source_dependency_lock:
+                    if key in source_dependency_cache:
+                        continue
+                try:
+                    manifest = json.loads(object_store.path(sha256).read_text(encoding="utf-8"))
+                    value = (manifest.get("review_placement_model_version"), tuple(reader_source_dependencies(
+                        manifest, publication, include_source_resources=variant[0],
+                        include_component_packages=variant[1], include_markdown_evidence=variant[2],
+                        read_object=lambda identity: object_store.path(identity).read_bytes(),
+                    )))
+                except (OSError, ValueError, SyncPlanError):
+                    continue
+                with source_dependency_lock:
+                    source_dependency_cache[key] = value
+                warmed["source_artifacts"] += 1
+
+        with database.session_factory() as session:
+            library_snapshot, _revision, _body = cached_library(session)
+            for publication in library_snapshot.publications:
+                artifact = publication.source_artifact_sha256
+                if (publication.metadata.get("kind", "source_linked") == "source_linked"
+                        and isinstance(artifact, str) and SHA256_PATTERN.fullmatch(artifact)):
+                    dependencies(artifact, publication.filename)
+            for entry in library_snapshot.project_readings:
+                try:
+                    with source_dependency_lock:
+                        reading = content_summary_cache.get(("reading", entry["sha256"]))
+                    if reading is None:
+                        reading = load_reading(object_store, entry["sha256"])
+                        with source_dependency_lock:
+                            content_summary_cache[("reading", entry["sha256"])] = reading
+                        warmed["readings"] += 1
+                    for document in reading.documents:
+                        with source_dependency_lock:
+                            summary = content_summary_cache.get(("package", document.package_sha256))
+                        if summary is None:
+                            package = json.loads(object_store.path(document.package_sha256).read_bytes())
+                            summary = (package.get("kind"), package.get("filename"),
+                                       package.get("placement_manifest_sha256"))
+                            with source_dependency_lock:
+                                content_summary_cache[("package", document.package_sha256)] = summary
+                            warmed["packages"] += 1
+                        if summary[0] == "thoughts-document-source-artifact" and isinstance(summary[1], str):
+                            dependencies(document.package_sha256, summary[1])
+                except (OSError, ValueError):
+                    continue
+        return warmed
+
     def render_state_revision(session: Session, target: str) -> tuple:
         """Return the cheap, cross-process revision for every render-state input."""
         return (*library_state(session).key, target, active_settings.toolchain_key)
+
+    def shared_aggregate_status(session: Session, *, fresh: bool = False):
+        """The aggregate render status, computed once for a state of the Library.
+
+        A Sync's render check and the render state it reads next both need it. It is
+        kept under the Library's change key as read from the database at the moment it
+        is asked for (after anything the request itself wrote), like every other kept
+        listing answer: a write committed by any process changes the key, and an
+        answer computed while the key changed is used once and not kept. Callers get
+        their own copy.
+
+        ``fresh``: the render check decides whether a PDF is built again, and what a
+        stored build says about that (its renderer, its failure) is not part of the
+        change key. It therefore computes the status itself every time, as it always
+        did, and leaves the result for the render state that the same Sync reads
+        next. Only that reader takes a kept answer.
+        """
+        def share(compute):
+            def current_key() -> tuple:
+                return (library_state(session).key, active_settings.toolchain_key)
+
+            if fresh:
+                listing_answers.forget("aggregate-render-status")
+            return copy.deepcopy(listing_answers.get("aggregate-render-status", current_key(), compute, current_key))
+
+        return share
 
     @contextmanager
     def worktree_quiet():
@@ -556,7 +687,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.database = database
         app.state.object_store = object_store
         app.state.settings = active_settings
+        app.state.warm_sync_plan = warm_sync_plan
         trace_event_broker.start(database.engine)
+        if active_settings.warm_sync_plan_at_startup:
+            def warm_in_background() -> None:
+                started = time.perf_counter()
+                try:
+                    warmed = warm_sync_plan()
+                except Exception:  # the warm-up is an optimization: a Sync computes what is missing
+                    SYNC_LOG.exception("Sync plan warm-up failed")
+                    return
+                SYNC_LOG.info(json.dumps({"event": "sync_plan_warm_v1", **warmed,
+                                          "duration_ms": round((time.perf_counter() - started) * 1000)}))
+
+            threading.Thread(target=warm_in_background, name="thoughts-sync-plan-warm", daemon=True).start()
         try:
             yield
         finally:
@@ -1749,6 +1893,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         known = set(request.known_object_sha256s)
         pdf_delta_bases = set(request.pdf_delta_base_sha256s)
         candidates: dict[str, dict] = {}
+        plan_state = library_state(session)
+        present, sizes = plan_objects_for(plan_state.key)
 
         def add_object(
             sha256: str | None,
@@ -1761,29 +1907,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if not isinstance(sha256, str) or not SHA256_PATTERN.fullmatch(sha256):
                 return
             if honor_known and sha256 in known:
-                # The client already holds it; only its presence here is checked.
-                if not object_store.path(sha256).is_file():
+                # The client already holds it; only its presence here is checked,
+                # once for a state of the Library (plan_object_facts).
+                if sha256 not in present:
+                    if not object_store.path(sha256).is_file():
+                        raise HTTPException(
+                            status_code=503,
+                            detail=f"Referenced sync object is unavailable: {sha256}",
+                        )
+                    present.add(sha256)
+                return
+            size_bytes = sizes.get(sha256)
+            if size_bytes is None:
+                record = session.get(ObjectRecord, sha256)
+                if record is None or not object_store.path(sha256).is_file():
                     raise HTTPException(
                         status_code=503,
                         detail=f"Referenced sync object is unavailable: {sha256}",
                     )
-                return
-            record = session.get(ObjectRecord, sha256)
-            if record is None or not object_store.path(sha256).is_file():
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"Referenced sync object is unavailable: {sha256}",
-                )
-            if not object_store.matches(sha256, record.size_bytes):
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"Referenced sync object failed identity verification: {sha256}",
-                )
+                if not object_store.matches(sha256, record.size_bytes):
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"Referenced sync object failed identity verification: {sha256}",
+                    )
+                size_bytes = sizes[sha256] = record.size_bytes
+                present.add(sha256)
             candidate = candidates.setdefault(
                 sha256,
                 {
                     "sha256": sha256,
-                    "size_bytes": record.size_bytes,
+                    "size_bytes": size_bytes,
                     "kind": kind,
                     "roles": set(),
                     "publications": set(),
@@ -1804,6 +1957,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                    MARKDOWN_EVIDENCE_OMITTED_CAPABILITY not in request.capabilities)
             with source_dependency_lock:
                 cached = source_dependency_cache.get(key)
+                plan_dependency_variants.add(key[2:])
             try:
                 manifest = None
                 if cached is None:
@@ -1888,7 +2042,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         latest = latest_sequence(session)
         # The Library and its serialized size come from the answer computed for the
         # current change key; a plan does not compute or serialize the Library again.
-        library_snapshot, library_revision, library_body = cached_library(session)
+        library_snapshot, library_revision, library_body = cached_library(session, plan_state)
         target = request.target_pdf_filename
         selected_publications = library_snapshot.publications
         metadata_download_bytes = 0
@@ -2995,9 +3149,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/v1/sources", response_model=SourceTreeSnapshot)
     def source_tree(
+        request: Request,
+        response: Response,
         _device: Device = Depends(current_device),
         session: Session = Depends(session_dependency),
     ) -> SourceTreeSnapshot:
+        # The list is large and one Sync asks for it several times. Its ETag is made of
+        # what every change of a listed field changes: a source changes only together
+        # with an operation (the highest sequence) and its own row (number of rows,
+        # deleted rows, sum of revisions, newest update), and the frontier is listed
+        # itself. It is read before the rows, so a list is never older than its ETag;
+        # with If-None-Match an unchanged list is answered 304 without reading a row.
+        revision = session.execute(select(
+            select(RenderFrontier.source_frontier).where(RenderFrontier.target == "all").scalar_subquery(),
+            select(func.max(Operation.server_sequence)).scalar_subquery(),
+            select(func.count(SourceFile.path)).scalar_subquery(),
+            select(func.count(SourceFile.path)).where(SourceFile.deleted.is_(True)).scalar_subquery(),
+            select(func.sum(SourceFile.revision)).scalar_subquery(),
+            select(func.max(SourceFile.updated_at)).scalar_subquery(),
+        )).one()
+        etag = '"' + hashlib.sha256(repr(("sources-v1", *(str(value) for value in revision))).encode()).hexdigest() + '"'
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers={"ETag": etag})
+        response.headers["ETag"] = etag
         frontier = int(
             session.scalar(
                 select(RenderFrontier.source_frontier).where(RenderFrontier.target == "all")
@@ -3042,6 +3216,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         _device: Device = Depends(current_device),
         session: Session = Depends(session_dependency),
     ) -> list[ConflictRecord]:
+        # Conflicts recorded by older merge rules close here when today's rules merge them,
+        # and a clash recorded twice is listed once (stale_conflicts). Whatever status is
+        # asked for: the desktop learns of a resolution by listing the resolved ones.
+        from .stale_conflicts import recheck_open_conflicts
+
+        try:
+            recheck_open_conflicts(
+                session, object_store, active_settings.worktree_root,
+                settings=active_settings, memo=conflict_recheck_memo,
+            )
+        except Exception:  # noqa: BLE001 - listing the conflicts must keep working
+            session.rollback()
+            SYNC_LOG.exception("Open source conflicts could not be re-checked")
         rows = session.scalars(
             select(SourceConflict).where(SourceConflict.status == status).order_by(SourceConflict.created_at)
         )
@@ -3352,6 +3539,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 request.request_id,
                 timings=timings,
                 store=object_store,
+                shared_aggregate=shared_aggregate_status(session, fresh=True),
             )
             stage_started = time.perf_counter()
             if result.get("build") is not None:
@@ -3403,7 +3591,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         state = library_state(session)
 
         def compute() -> tuple[dict, str]:
-            value = read_render_state(session, target, active_settings.toolchain_key, store=object_store)
+            value = read_render_state(session, target, active_settings.toolchain_key, store=object_store,
+                                      shared_aggregate=shared_aggregate_status(session))
             encoded = json.dumps(jsonable_encoder(value), sort_keys=True, separators=(",", ":"))
             return value, f'"{hashlib.sha256(encoded.encode("utf-8")).hexdigest()}"'
 

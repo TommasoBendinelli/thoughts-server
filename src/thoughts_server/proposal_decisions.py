@@ -199,15 +199,21 @@ def restore_proposal(path: str, text: str | None, snapshot: dict, line: int) -> 
         offset = text.find(value)
         while offset >= 0:
             end = offset + len(value)
-            at_line_start = offset == 0 or text[offset - 1] == "\n"
-            at_line_end = end == len(text) or text[end - 1] == "\n"
+            # Whole lines; beside a card marker (section 8.1) a text may also start with the LF that
+            # ends the line before it, or end right before its last LF.
+            at_line_start = offset == 0 or text[offset - 1] == "\n" or value.startswith("\n")
+            at_line_end = end == len(text) or text[end - 1] == "\n" or text[end] == "\n"
             free = not any(offset < span_end and span_start < end for span_start, span_end in blocked)
             if at_line_start and at_line_end and free:
                 candidates.add((offset, end))
             offset = text.find(value, offset + 1)
     if not candidates and (snapshot["after"] == "" or snapshot["before"] == ""):
-        # The start of line L, or the end of T when T has fewer lines.
+        # The start of line L, or the end of T when T has fewer lines; the end of line L (before
+        # its LF) when the other text starts with LF: that wrapper started there (section 8.1).
         position = starts[line - 1] if 1 <= line <= len(starts) else (0 if line < 1 else len(text))
+        if (snapshot["after"] or snapshot["before"]).startswith("\n") and 1 <= line <= len(starts):
+            newline = text.find("\n", position)
+            position = len(text) if newline < 0 else newline
         candidates.add((position, position))
     if not candidates:
         return RestoreResult(refused="text_changed")

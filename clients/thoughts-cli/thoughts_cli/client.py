@@ -41,10 +41,23 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from . import (authoring, build_inputs, build_status, card_merges, card_pending_moves, documents, figures, guards,
-               html_pages, pdf_links, pdf_moves, review_cards)
+from . import (
+    authoring,
+    build_inputs,
+    build_status,
+    card_merges,
+    card_passage_moves,
+    card_pending_moves,
+    documents,
+    figures,
+    guards,
+    html_pages,
+    pdf_links,
+    pdf_moves,
+    review_cards,
+)
 from .api import ApiError, ServerApi, TransportError, sha256_hex
-from .proposal_syntax import parse, source_format
+from .proposal_syntax import move_partner, parse, source_format
 from .state import Busy, RequestStore, default_state_dir, token_fingerprint
 
 EMPTY_SHA256 = sha256_hex(b"")
@@ -52,7 +65,7 @@ MAX_SEQUENCE_RECOVERIES = 3
 MAXIMUM_DEVICE_SEQUENCE = 2_147_483_647
 COMMANDS = (authoring.CREATE, authoring.CREATE_BATCH, authoring.REVISE, documents.CREATE_DOCUMENT,
             build_inputs.PUBLISH_BUILD_INPUTS, *review_cards.COMMANDS, card_merges.MERGE_REVIEW_CARDS, pdf_moves.MOVE_PDF,
-            build_status.BUILD_STATUS, *card_pending_moves.COMMANDS)
+            build_status.BUILD_STATUS, *card_pending_moves.COMMANDS, card_passage_moves.MOVE_CARD_PASSAGE)
 # A Library-project action refused because another device changed the Project
 # (thoughts_server.library_projects._mutate): read the catalogue again and resend.
 PROJECT_CHANGED = "changed on another device"
@@ -186,6 +199,8 @@ class ThoughtsClient:
             return self.create_document(request)
         if isinstance(request, dict) and request.get("command") == build_inputs.PUBLISH_BUILD_INPUTS:
             return self.publish_build_inputs(request)
+        if isinstance(request, dict) and request.get("command") == card_passage_moves.MOVE_CARD_PASSAGE:
+            return self.move_card_passage(request)
         if isinstance(request, dict) and request.get("command") in review_cards.COMMANDS:
             return self.review_card(request)
         if isinstance(request, dict) and request.get("command") == card_merges.MERGE_REVIEW_CARDS:
@@ -268,6 +283,8 @@ class ThoughtsClient:
                     (offsets[min(entry.start_line, last) - 1], offsets[min(entry.end_line, last) - 1], index)
                     for index, entry in enumerate(validated.entries)])
         authored = authoring.author(validated, path, text, **options)
+        # Withdrawing half of a card move withdraws the whole move, wherever its other half is (12).
+        partner_write = self._partner_withdrawal(validated, path, authored) if validated.remove else None
         if not validated.remove:
             by_id = parse(path, authored.updated).by_id()
             written = []
@@ -313,6 +330,12 @@ class ThoughtsClient:
             raise authoring.AuthoringRefused(
                 "source_conflict", "The source changed while the proposal was written; read it again.",
                 current_source_sha256=latest["sha256"])
+        other_writes = []
+        if partner_write is not None:
+            other_path, other_base, other_content = partner_write
+            self._unchanged(other_path, other_base, "The source of the move's other half changed while it was "
+                                                    "withdrawn; nothing was written. Retry with a new request_id.")
+            other_writes.append((other_path, other_base, other_content, self.api.upload(other_content)))
         sequence = self.api.device_sequence()
         next_sequence = int(sequence["next_device_sequence"])
         if not 1 <= next_sequence <= MAXIMUM_DEVICE_SEQUENCE:
@@ -334,7 +357,9 @@ class ThoughtsClient:
                 "base_sha256": base["sha256"] if base else empty_sha256,
                 "base_object_sha256": base["object_sha256"] if base else empty_sha256,
                 "client_timestamp": client_timestamp(), "content_sha256": figure_sha256,
-            } for index, (figure_source, base, _content, figure_sha256, _figure) in enumerate(figure_writes)],
+            } for index, (figure_source, base, _content, figure_sha256, _figure) in enumerate(figure_writes)] + [
+                self._upsert(other_path, other_base, other_sha256, next_sequence + 1 + len(figure_writes) + index)
+                for index, (other_path, other_base, _content, other_sha256) in enumerate(other_writes)],
         }
         if authored.claims:
             # The withdrawal travels as a decision claim on the upload that removes the wrapper
@@ -354,11 +379,15 @@ class ThoughtsClient:
             "status": "prepared", "request_sha256": digest, "command": validated.command, "source": path,
             "request_id": validated.request_id, "device_id": sequence.get("device_id"),
             "publication": publication, "content_sha256": content_sha256, "result": result,
-            "figure_sha256s": [figure_sha256 for _source, _base, _content, figure_sha256, _figure in figure_writes],
+            # The other files of the publication, kept until it is answered: figures, a move's other half.
+            "figure_sha256s": [figure_sha256 for _source, _base, _content, figure_sha256, _figure in figure_writes]
+                              + [other_sha256 for _path, _base, _content, other_sha256 in other_writes],
         }
         self.store.keep_content(content_sha256, content)
         for _source, _base, figure_content, figure_sha256, _figure in figure_writes:
             self.store.keep_content(figure_sha256, figure_content)
+        for _path, _base, other_content, other_sha256 in other_writes:
+            self.store.keep_content(other_sha256, other_content)
         self.store.put(key, record)
         return self._publish(key, record)
 
@@ -518,6 +547,9 @@ class ThoughtsClient:
         """Create a card from a source selection or move a card into a note (review_cards.py);
         never raises for a refusal."""
         try:
+            if review_cards.passage_move(request):
+                # A card linked to source markers: start_line == end_line is the line its passage goes before.
+                return self.move_card_passage(card_passage_moves.from_move_review_card(request))
             validated = review_cards.validate_request(request)
         except authoring.AuthoringRefused as refusal:
             return refusal.body()
@@ -698,6 +730,232 @@ class ThoughtsClient:
                 "Read the source again and select the passage.",
                 current_source_sha256=current["sha256"] if current and not current.get("deleted") else "")
         return authoring.AuthoringRefused("write_failed", f"The server refused the card, nothing was written: {error.detail}")
+
+    # ------------------------------------------------------------------ card moves by their markers
+
+    def move_card_passage(self, request: Any) -> dict[str, Any]:
+        """move-card-passage: move a card linked to source markers as two linked pending proposals
+        (card_passage_moves.py); never raises for a refusal."""
+        try:
+            validated = card_passage_moves.validate(request)
+        except authoring.AuthoringRefused as refusal:
+            return refusal.body()
+        digest = authoring.request_sha256(request)
+        key = f"{self.scope}#{validated.request_id}"
+        try:
+            with self.store.locked():
+                record = self.store.get(key)
+                if record is not None:
+                    if record.get("request_sha256") != digest:
+                        return error_body("request_conflict", "This request ID was already used with different arguments.")
+                    if record.get("status") == "applied":
+                        return {**record["result"], "replayed": True}
+                    # Prepared: the answer to its publication was lost; send the same one again.
+                    return self._publish_move(key, record)
+                return self._prepare_move(key, digest, validated)
+        except Busy as busy:
+            return error_body("busy", str(busy))
+        except authoring.AuthoringRefused as refusal:
+            return refusal.body()
+        except (ApiError, TransportError) as error:
+            return self._transport_failure(error)
+
+    def _prepare_move(self, key: str, digest: str, validated: card_passage_moves.MoveRequest) -> dict[str, Any]:
+        if card_passage_moves.CAPABILITY not in (self.api.health().get("capabilities") or []):
+            # An older server would decide a phone's half alone.
+            raise authoring.AuthoringRefused("server_unsupported", card_passage_moves.UNSUPPORTED_SERVER)
+        origin, question = card_passage_moves.card_source(
+            review_cards.card_projection(self.api.projections(), validated.card_id))
+        destination = validated.source
+        snapshot, raw = self._read(destination)
+        if origin == destination:
+            origin_snapshot, origin_raw = snapshot, raw
+        else:
+            try:
+                origin_snapshot, origin_raw = self._read(origin)
+            except authoring.AuthoringRefused as refusal:
+                if refusal.code != "invalid_source":
+                    raise
+                raise authoring.AuthoringRefused(
+                    "invalid_markers", f"The card's marked source {origin} is not in the Library.") from refusal
+        if source_format(origin) != source_format(destination):
+            raise authoring.AuthoringRefused(
+                "format_mismatch", "A marked passage moves only between sources of the same format (LaTeX to LaTeX, "
+                "Markdown to Markdown).")
+        texts = []
+        for content in (raw, origin_raw):
+            try:
+                text = content.decode("utf-8")
+            except UnicodeDecodeError:
+                text = None
+            if text is None or "\0" in text:
+                raise authoring.AuthoringRefused(
+                    "invalid_source", "Proposal authoring requires readable, valid UTF-8 sources without NUL.")
+            texts.append(text)
+        destination_text, origin_text = texts
+        for path, text in ((destination, destination_text), (origin, origin_text)):
+            if authoring.is_generated_source(authoring.owner_relative(path), text):
+                raise authoring.AuthoringRefused(
+                    "generated_source", f"{path} is generated; change its generator or the generator's inputs "
+                    "instead of proposing an edit here.")
+        if snapshot["sha256"] != validated.expected_source_sha256:
+            raise authoring.AuthoringRefused(
+                "source_conflict", "The source changed; read it again before preparing this move.",
+                current_source_sha256=snapshot["sha256"])
+        base_id = self.new_id() if self.new_id is not None else "agent-" + str(uuid.uuid4())
+        if self.uniqueness_scan:
+            pair = [base_id + card_passage_moves.CUT, base_id + card_passage_moves.PASTE]
+            if (other := self._ids_elsewhere("")(pair)) is not None:
+                raise authoring.AuthoringRefused("duplicate_id", f"This proposal ID also occurs in {other}.")
+        move = card_passage_moves.author(validated, origin, origin_text, destination_text, question,
+                                         now=self.now(), base_id=base_id)
+        result = move.result
+        if not move.same_file:
+            # Links in the moved text must resolve from its new place.
+            issues = card_passage_moves.source_link_issues(origin, destination, move.passage)
+            warnings: list[dict[str, Any]] = []
+            for check in (lambda: html_pages.check_links(self.api, destination, destination_text, move.updated_destination),
+                          lambda: pdf_links.check(self.api.library_projects, destination, destination_text,
+                                                  move.updated_destination)):
+                try:
+                    warnings += check() or []
+                except authoring.AuthoringRefused as refusal:
+                    if refusal.code != "invalid_link":
+                        raise
+                    issues += refusal.extra.get("links") or []
+            if issues:
+                raise card_passage_moves.link_refusal(issues)
+            if warnings:
+                result["warnings"] = warnings
+        # The card's source first, then the destination: one publication, all or nothing.
+        writes = [(origin, origin_snapshot, move.updated_origin.encode("utf-8"))]
+        if not move.same_file:
+            writes.append((destination, snapshot, move.updated_destination.encode("utf-8")))
+        digests = [self.api.upload(content) for _path, _base, content in writes]
+        # Read the versions again right before publishing, as for proposals: a change refuses.
+        for path, base, _content in writes:
+            self._unchanged(path, base, f"{path} changed while the move was written; read the source again.")
+        sequence = self.api.device_sequence()
+        next_sequence = int(sequence["next_device_sequence"])
+        if not 1 <= next_sequence <= MAXIMUM_DEVICE_SEQUENCE:
+            raise authoring.AuthoringRefused("write_failed", "The server returned an invalid device sequence.")
+        publication = {
+            "publication_id": str(uuid.uuid4()),
+            "mutations": [self._upsert(path, base, content_sha256, next_sequence + index)
+                          for index, ((path, base, _content), content_sha256)
+                          in enumerate(zip(writes, digests, strict=True))],
+        }
+        record = {
+            "status": "prepared", "request_sha256": digest, "command": card_passage_moves.MOVE_CARD_PASSAGE,
+            "source": destination, "origin_source": origin, "request_id": validated.request_id,
+            "card_id": validated.card_id, "device_id": sequence.get("device_id"), "publication": publication,
+            "content_sha256": digests[0], "figure_sha256s": digests[1:], "result": result,
+        }
+        for (_path, _base, content), content_sha256 in zip(writes, digests, strict=True):
+            self.store.keep_content(content_sha256, content)
+        self.store.put(key, record)
+        return self._publish_move(key, record)
+
+    def _publish_move(self, key: str, record: dict[str, Any]) -> dict[str, Any]:
+        destination, origin = record["source"], record["origin_source"]
+        answer = self._send_publication(key, record,
+                                        lambda error: self._proposal_publication_refused(destination, error))
+        applied = {item.get("path"): item for item in answer.get("results") or [] if isinstance(item, dict)}
+        paths = [mutation["path"] for mutation in record["publication"]["mutations"]]
+        if any((applied.get(path) or {}).get("outcome") not in ("applied", "duplicate", "merged") for path in paths):
+            self.store.delete(key)
+            raise authoring.AuthoringRefused(
+                "write_failed", f"Unexpected publication outcome {[(applied.get(path) or {}).get('outcome') for path in paths]!r}.")
+        result = dict(record["result"])
+        result.update({
+            "source_revision": applied[destination].get("revision"),
+            "origin_source_revision": applied[origin].get("revision"),
+            "source_frontier": answer.get("source_frontier"), "publication_id": answer.get("publication_id"),
+            "publication_outcome": applied[destination].get("outcome"),
+        })
+        if record.get("device_id"):
+            result["device_id"] = record["device_id"]
+        for path in paths:
+            if applied[path].get("outcome") != "merged":
+                continue
+            # A concurrent change was merged with the move: check its halves are intact and name the merged version.
+            halves = [dict(half) for half in result["proposals"] if half["source"] == path]
+            verified = self._verify_merged(path, applied[path], {"source_sha256": "", "proposals": [
+                {**half, "created_at": result["created_at"]} for half in halves]})
+            result["warnings"] = [*result.get("warnings", []), *verified["warnings"]]
+            for half in result["proposals"]:
+                if half["source"] == path:
+                    half["line"] = next(item["line"] for item in verified["proposals"]
+                                        if item["proposal_id"] == half["proposal_id"])
+            if path == destination:
+                result["source_sha256"] = verified["source_sha256"] or result["source_sha256"]
+            if path == origin:
+                result["origin_source_sha256"] = verified["source_sha256"] or result["origin_source_sha256"]
+        if self.render_check:
+            result["render_check"] = self._render_check(record["request_id"])
+        self.store.put(key, {**record, "status": "applied", "result": result})
+        for content_sha256 in (record.get("content_sha256"), *record.get("figure_sha256s", [])):
+            self.store.drop_content(content_sha256)
+        return result
+
+    def _partner_withdrawal(self, validated: authoring.AuthoringRequest, path: str,
+                            authored: authoring.Authored) -> tuple[str, dict[str, Any], bytes] | None:
+        """The other source a withdrawal writes: the other half of a card move, pending elsewhere.
+
+        Adds its claim and names it in the result. None when the proposal is no half of a move, its
+        partner was withdrawn in the same source, or is pending nowhere (a lone half is withdrawn alone)."""
+        partner = move_partner(validated.proposal_id)
+        if partner is None or "withdrawn_proposal_ids" in authored.result:
+            return None
+        located = self._locate_proposal(partner, skip=path)
+        if len(located) > 1:
+            raise authoring.AuthoringRefused(
+                "move_ambiguous", "The other half of this move is pending in more than one source; withdraw it there first.")
+        if not located:
+            return None
+        other_path, base, text = located[0]
+        updated, claim = authoring.withdraw_partner(other_path, text, partner)
+        content = updated.encode("utf-8")
+        authored.claims.append(claim)
+        authored.result.update(withdrawn_proposal_ids=[validated.proposal_id, partner], other_source=other_path,
+                               other_source_sha256=sha256_hex(content), message=authoring.MOVE_WITHDRAWN)
+        return other_path, base, content
+
+    def _locate_proposal(self, proposal_id: str, skip: str) -> list[tuple[str, dict[str, Any], str]]:
+        """Every canonical source but ``skip`` with a valid pending proposal of this ID: (path, its row, its text)."""
+        found = []
+        encoded = proposal_id.encode("utf-8")
+        for row in self.api.sources().get("sources", []):
+            if row.get("deleted") or row["path"] == skip or source_format(row["path"]) is None:
+                continue
+            try:
+                content = self.cache.get(row["object_sha256"])
+            except (ApiError, TransportError) as error:
+                raise authoring.AuthoringRefused(
+                    "read_failed", f"Cannot look for the move's other half in {row['path']}: {error}") from error
+            if encoded not in content:
+                continue
+            text = content.decode("utf-8", "replace")
+            if proposal_id in parse(row["path"], text).by_id():
+                found.append((row["path"], row, text))
+        return found
+
+    def _unchanged(self, path: str, base: dict[str, Any], message: str) -> None:
+        """Refuse (source_conflict) when the server's version of path is no longer ``base``."""
+        latest = self.api.source(path)
+        if (latest is None or latest.get("deleted") or latest["sha256"] != base["sha256"]
+                or latest["revision"] != base["revision"]):
+            raise authoring.AuthoringRefused(
+                "source_conflict", message,
+                current_source_sha256="" if latest is None or latest.get("deleted") else latest["sha256"])
+
+    @staticmethod
+    def _upsert(path: str, base: dict[str, Any], content_sha256: str, device_sequence: int) -> dict[str, Any]:
+        """One upsert mutation of a publication, on the version read."""
+        return {"action": "upsert", "operation_id": str(uuid.uuid4()), "device_sequence": device_sequence,
+                "path": path, "base_revision": int(base["revision"]), "base_sha256": base["sha256"],
+                "base_object_sha256": base["object_sha256"], "client_timestamp": client_timestamp(),
+                "content_sha256": content_sha256}
 
     def merge_review_cards(self, request: Any) -> dict[str, Any]:
         """merge-review-cards: the server merges the cards (card_merges.py); never raises for a refusal.

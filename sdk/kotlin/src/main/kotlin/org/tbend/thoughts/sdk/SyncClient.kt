@@ -582,6 +582,48 @@ class SyncClient(
         }
     }
 
+    /**
+     * The render state over this client's ordinary connections, which a caller's other requests
+     * keep alive ([renderState] builds a new HTTP client for every call, to time a fresh
+     * connection). With [ifNoneMatch], the ETag of an earlier answer, an unchanged state is answered
+     * 304 without a body and [RenderStateIfChangedCall.state] is null. The ETag names the render
+     * state only, not what the server adds to every answer (its clock, storage, duration).
+     */
+    fun renderStateIfChanged(target: String = "all", ifNoneMatch: String? = null): RenderStateIfChangedCall {
+        require(target == "all" || (target.endsWith(".pdf", ignoreCase = true) &&
+            !target.contains('/') && !target.contains('\\'))) { "Invalid render target" }
+        val encodedTarget = URLEncoder.encode(target, StandardCharsets.UTF_8)
+        val started = System.nanoTime()
+        val connection = connection("GET", "/v1/render-state?target=$encodedTarget")
+        if (!ifNoneMatch.isNullOrBlank()) {
+            connection.setRequestProperty("If-None-Match", "\"$ifNoneMatch\"")
+        }
+        val responseCode = connection.responseCode
+        val etag = entityTag(connection.getHeaderField("ETag"))
+        val serverDate = connection.getHeaderFieldDate("Date", 0L).takeIf { it > 0 }
+        if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
+            return RenderStateIfChangedCall(
+                state = null,
+                etag = etag.ifBlank { ifNoneMatch.orEmpty() },
+                timings = RenderStateTimings(
+                    serverMs = serverTimingMillis(connection.getHeaderField("Server-Timing")) ?: 0.0,
+                    totalMs = nanosToMillis(System.nanoTime() - started),
+                ),
+                serverDateEpochMillis = serverDate,
+            )
+        }
+        val state = parse(connection, RenderStateRecord::class.java)
+        return RenderStateIfChangedCall(
+            state = state,
+            etag = etag,
+            timings = RenderStateTimings(
+                serverMs = state.serverDurationMs,
+                totalMs = nanosToMillis(System.nanoTime() - started),
+            ),
+            serverDateEpochMillis = serverDate,
+        )
+    }
+
     fun build(jobId: String, waitMs: Int = 0): BuildRecord {
         require(waitMs in 0..30_000) { "Build wait must be between 0 and 30000 ms" }
         val waitQuery = if (waitMs > 0) "?wait_ms=$waitMs" else ""
@@ -749,5 +791,13 @@ private class RenderStateTimingListener : EventListener() {
 }
 
 private fun nanosToMillis(nanos: Long): Double = nanos / 1_000_000.0
+
+/** An ETag header's value without its quotes or weak-validator mark; blank when there is none. */
+internal fun entityTag(header: String?): String =
+    header.orEmpty().trim().removePrefix("W/").trim().trim('"')
+
+/** The first `dur` of a Server-Timing header (`render-state;dur=12.5`), in milliseconds. */
+internal fun serverTimingMillis(header: String?): Double? =
+    Regex("(?:^|[;,\\s])dur=([0-9]+(?:\\.[0-9]+)?)").find(header.orEmpty())?.groupValues?.get(1)?.toDoubleOrNull()
 
 class RangeResumeUnsupportedException : IOException("Server did not honor the object byte range")

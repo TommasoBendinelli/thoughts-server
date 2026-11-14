@@ -457,7 +457,15 @@ def _compile_projects(
     jobs: int,
     *,
     preview_proposal_id: str | None = None,
+    only: set[str] | None = None,
+    preparation: BuildPreparation | None = None,
 ) -> list[ProjectBuild]:
+    """Compile (or reuse from the component cache) the documents of ``projects``.
+
+    ``only`` limits the work to the manifest names it holds; the returned builds
+    then hold just those documents, in manifest order. ``preparation`` lets two
+    such calls of one render share the Project's staged sources.
+    """
     manifests = [(project, _manifest_sources(project)) for project in projects]
     from .project_documents import project_documents
     declared_sources = [[entry.source for entry in project_documents(project)] for project in projects]
@@ -467,6 +475,7 @@ def _compile_projects(
         (project_index, source_index, project, name)
         for project_index, (project, names) in enumerate(manifests)
         for source_index, name in enumerate(names)
+        if only is None or name in only
     ]
     total_documents = len(tasks)
     worker_count = max(1, min(jobs, total_documents))
@@ -480,11 +489,12 @@ def _compile_projects(
     )
     compiled: dict[tuple[int, int], SourceBuild] = {}
     remaining_by_project = {
-        index: len(names) for index, (_project, names) in enumerate(manifests)
+        index: sum(1 for task in tasks if task[0] == index) for index, _manifest in enumerate(manifests)
     }
     completed_documents = 0
     completed_projects = 0
-    preparation = BuildPreparation(preview_proposal_id)
+    if preparation is None:
+        preparation = BuildPreparation(preview_proposal_id)
     with ThreadPoolExecutor(
         max_workers=worker_count, thread_name_prefix="thoughts-render"
     ) as executor:
@@ -562,10 +572,59 @@ def _compile_projects(
             tuple(
                 compiled[(project_index, source_index)]
                 for source_index in range(len(names))
+                if (project_index, source_index) in compiled
             ),
         )
         for project_index, (project, names) in enumerate(manifests)
     ]
+
+
+# Set to 1 to give a build of some documents the whole-Project work it had before
+# (every document compile-checked and its links resolved); the published bytes
+# are the same either way (tests/test_render_scope.py).
+WHOLE_PROJECT_ENVIRONMENT = "THOUGHTS_RENDER_WHOLE_PROJECT"
+
+
+def _requested_manifest_sources(project: Path, requested: set[str]) -> set[str] | None:
+    """The manifest names of the documents a build must produce, or None for all of them.
+
+    None also when the build asks for every document of the Project, so that
+    case keeps the one compile pass it always had.
+    """
+    if not requested or os.environ.get(WHOLE_PROJECT_ENVIRONMENT) == "1":
+        return None
+    from .project_documents import project_documents
+    names = _manifest_sources(project)
+    wanted = {name for name, document in zip(names, project_documents(project), strict=True)
+              if document.output in requested}
+    return None if len(wanted) == len(names) else wanted
+
+
+def _linked_sibling_sources(docs_root: Path, project: Path, build: ProjectBuild, compiled: set[str]) -> set[str]:
+    """Documents of the same Project that ``build``'s documents link to and that are not compiled yet.
+
+    Resolving a \\SourceLink reads the target document's component PDF (its
+    labels are named destinations there: doc_links.validate_target), so a
+    build needs that PDF, from the component cache or compiled, for exactly
+    the documents its own documents name. A link whose target is not a selected
+    document stays inactive whether or not anything else is compiled.
+    """
+    from .project_documents import project_documents
+    names = _manifest_sources(project)
+    by_output = {document.output: name
+                 for name, document in zip(names, project_documents(project), strict=True)}
+    project_dir = docs_root.resolve() / build.project
+    linked: set[str] = set()
+    for source in build.sources:
+        for selector, _label in doc_links.tex_links_in_pdf(source.pdf, build.project):
+            try:
+                target = doc_links.target_for_selector(docs_root, selector)
+            except ValueError:
+                continue  # not selected or malformed: rewrite_links leaves it inactive
+            name = by_output.get(target.pdf_path.name) if target.project_dir == project_dir else None
+            if name is not None and name not in compiled:
+                linked.add(name)
+    return linked
 
 
 def _compile_project(
@@ -1016,6 +1075,28 @@ def _closure_expectations(docs_root: Path) -> dict[str, dict]:
     return expectations
 
 
+def _generated_tex_font(candidate: Path) -> bool:
+    """Whether the compiler read a font that TeX generated for itself.
+
+    A font that exists only as Metafont source (bbm, for one) is rendered into a
+    bitmap on first use and kept under ``TEXMFVAR/fonts``. Outside the sandbox
+    that is a system folder (/var/lib/texmf); inside it is the sandbox's own
+    ``TEXMFVAR`` (build_sandbox.SANDBOX_TEXMFVAR, backed by the Library's font
+    cache). Such a file is part of the TeX installation's output, not an input a
+    Project has to declare. Until 14 November 2026 the sandbox path was missing
+    here, so a sandboxed note using such a font compiled and then failed with
+    undeclared_build_input. Only the ``fonts`` subtree counts: nothing else a
+    document could leave in that folder becomes an accepted input.
+    """
+    from .build_sandbox import SANDBOX_TEXMFVAR, font_cache
+
+    roots = [Path(SANDBOX_TEXMFVAR) / "fonts"]
+    cache = font_cache()
+    if cache is not None:
+        roots.append(cache.resolve() / "fonts")
+    return any(candidate.is_relative_to(root) for root in roots)
+
+
 def _resolved_recorder_input(docs_root: Path, build: ProjectBuild, recorder: Path, raw: str) -> Path:
     candidate = Path(raw)
     candidates = (
@@ -1138,7 +1219,8 @@ def _verify_tex_closure(
             except ValueError:
                 system_roots = ("/usr", "/etc/texmf", "/etc/texlive", "/var/lib/texmf", "/var/cache/fontconfig",
                                 "/Library/Fonts", "/System/Library/Fonts")
-                if not any(candidate.is_relative_to(Path(root)) for root in system_roots):
+                if (not any(candidate.is_relative_to(Path(root)) for root in system_roots)
+                        and not _generated_tex_font(candidate)):
                     raise RenderError(f"undeclared_build_input: compiler read uncaptured host file {candidate}") from None
                 continue
             parts = PurePosixPath(relative).parts
@@ -1908,19 +1990,41 @@ def render(
             _prepare_comment_sidecars(docs_root, publication_root, selected)
 
         _progress("compiling", 0, len(selected), "projects", "Compiling documentation projects")
+        # A build of some documents of a Project compiles (or reuses) those documents
+        # and the documents they link to, not every document of the Project: nothing
+        # else reaches what it publishes. Rule: a document is compiled when the build
+        # must produce it, or when a document the build produces names it in a
+        # \SourceLink; links are resolved, and anchors cached, only for the documents
+        # the build produces. The comment helper above still sees every document: it
+        # can move a comment into another document's sidecar and write into a source
+        # file two documents share, so skipping it could change a requested PDF.
+        wanted = (
+            _requested_manifest_sources(selected[0], set(targets or []))
+            if preview_proposal_id is None and len(selected) == 1 else None
+        )
         with timed_stage('Compiling LaTeX projects'):
-            builds = (
-                _compile_projects(docs_root, selected, jobs)
-                if preview_proposal_id is None
-                else _compile_projects(
-                    docs_root,
-                    selected,
-                    jobs,
-                    preview_proposal_id=preview_proposal_id,
+            if wanted is not None:
+                preparation = BuildPreparation(None)
+                builds = _compile_projects(docs_root, selected, jobs, only=wanted, preparation=preparation)
+                linked = _linked_sibling_sources(docs_root, selected[0], builds[0], wanted)
+                compiled_builds = builds
+                if linked:
+                    compiled_builds = builds + _compile_projects(
+                        docs_root, selected, jobs, only=linked, preparation=preparation)
+            else:
+                builds = (
+                    _compile_projects(docs_root, selected, jobs)
+                    if preview_proposal_id is None
+                    else _compile_projects(
+                        docs_root,
+                        selected,
+                        jobs,
+                        preview_proposal_id=preview_proposal_id,
+                    )
                 )
-            )
+                compiled_builds = builds
         with timed_stage('Checking compiled input consistency'):
-            _validate_parallel_build_inputs(docs_root, builds)
+            _validate_parallel_build_inputs(docs_root, compiled_builds)
 
         if preview_proposal_id is not None:
             _remove_image_preview_tex_link_actions(builds)

@@ -34,6 +34,7 @@ from .proposal_syntax import (
     Proposal,
     ProposalRefused,
     decide,
+    move_partner,
     next_live_wrapper,
     parse,
     source_format,
@@ -73,7 +74,7 @@ ISSUE_MESSAGES = {
 CONFLICT_CODES = frozenset({
     "source_conflict", "request_conflict", "proposal_overlap", "duplicate_id", "no_change", "busy",
     "unclosed_group", "missing_argument", "malformed_marker", "unmatched_marker", "invalid_metadata",
-    "invalid_id", "nested_proposal", UNKNOWN_ID,
+    "invalid_id", "nested_proposal", UNKNOWN_ID, "move_ambiguous",
 })
 
 
@@ -334,6 +335,227 @@ def brace_repairs(source: str, entries: list[Entry]) -> list[tuple[Entry, dict[s
     return warnings
 
 
+# ------------------------------------------------------------------ review card marker lines
+
+# A review card's marker (\ReviewCardMaskStart{<card>}{<n>}% and \ReviewCardMaskEnd{<card>}{<n>}%) stands
+# alone on its line: card tools (merging, moving, reading a card's passage) refuse a source where one
+# shares its line with other text, a pending proposal's braces included.
+CARD_MARKER_LINE = re.compile(r"[ \t]*\\ReviewCardMask(?:Start|End)\{[^{}\n]*\}\{[^{}\n]*\}%?[ \t]*\r?")
+CARD_MARKER_LINE_CODE = "card_marker_line"
+
+
+def card_marker_line(line: str) -> bool:
+    """Whether one line (without its LF) is a review card marker."""
+    return "ReviewCardMask" in line and CARD_MARKER_LINE.fullmatch(line) is not None
+
+
+def _line_at(text: str, start: int) -> str:
+    """The line that starts at ``start``, without its LF."""
+    end = text.find("\n", start)
+    return text[start:] if end < 0 else text[start:end]
+
+
+def _hides_appended_text(line: str) -> bool:
+    """Whether TeX would not read text appended to this line as written: the line has a comment,
+    or ends in a backslash that would escape the first appended character."""
+    index = 0
+    while index < len(line):
+        if line[index] == "%":
+            return True
+        if line[index] == "\\":
+            if index + 1 == len(line):
+                return True
+            index += 2
+            continue
+        index += 1
+    return False
+
+
+def lay_out_beside_card_markers(source: str, entries: list[Entry], order: list[int], batch: bool, *,
+                                latex: bool = True) -> None:
+    """Where each new LaTeX wrapper goes, so that every review card marker stays alone on its line.
+
+    A wrapper replaces its whole lines exactly (``wrap_*`` = the range). When they end right before a
+    card marker line, its closing brace would sit on the marker's line, so the wrapper ends before their
+    last line break instead, which then follows it (2026-11-13):
+
+    - a replacement: the original and the replacement both leave out their final line break;
+    - a deletion or an insertion (one side empty): the wrapper takes the line break before its lines
+      instead and starts at the end of the previous line, which must be no card marker and must not
+      hide appended text (a comment).
+
+    Accepted or rejected, the source reads exactly as with the plain wrapper. A proposal of the same
+    request that ends where such a wrapper now starts ends early as well. A proposal that cannot be laid
+    out so is refused (card_marker_line) with what to do instead; nothing is written.
+    ``order`` lists the entries by their range, as the writer applies them."""
+    for entry in entries:
+        entry.wrap_start, entry.wrap_end = entry.start, entry.end
+        entry.wrap_original, entry.wrap_replacement = entry.before, entry.replacement
+    if not latex or "ReviewCardMask" not in source:
+        return
+    marker_at = -1
+    for position in range(len(order) - 1, -1, -1):
+        entry = entries[order[position]]
+        following = entries[order[position + 1]] if position + 1 < len(order) else None
+        pushed = following is not None and following.wrap_start < entry.wrap_end
+        if not pushed:
+            if entry.end >= len(source) or not card_marker_line(_line_at(source, entry.end)):
+                continue
+            marker_at = entry.end
+        _end_before_line_break(source, entries, order, position, marker_at, pushed, batch)
+
+
+def _end_before_line_break(source: str, entries: list[Entry], order: list[int], position: int, marker_at: int,
+                           pushed: bool, batch: bool) -> None:
+    """Lay out one wrapper so that it ends right before a line break (lay_out_beside_card_markers)."""
+    index = order[position]
+    entry = entries[index]
+    original, replacement = entry.before, entry.replacement
+    if text_refusal("tex", original):
+        return  # the writer refuses this original as before
+    line, marker = _line_of(source, marker_at), _line_at(source, marker_at).strip()
+    first, last = _line_of(source, entry.start), _line_of(source, entry.end) - 1
+    where = f"Line {line} is the review card marker {marker}, which must stay alone on its line"
+
+    def refuse(message: str) -> AuthoringRefused:
+        if pushed:
+            message = (f"Proposals {index + 1} and {order[position + 1] + 1} touch right before the review card "
+                       f"marker {marker} on line {line}, which must stay alone on its line: give them as one "
+                       "proposal (one range, one replacement).")
+        extra: dict[str, Any] = {"line": line, "reason": "marker_after_proposal"}
+        if batch:
+            extra["proposal_index"] = index
+        return AuthoringRefused(CARD_MARKER_LINE_CODE, message + " Nothing was written.", **extra)
+
+    if replacement and not replacement.endswith("\n"):
+        raise refuse(f"{where}, and the replacement does not end with a line break, so its last line would run "
+                     "into the marker. End the replacement with a line break.")
+    if original and replacement:
+        kept_original, kept_replacement = original[:-1], replacement[:-1]
+        if not text_refusal("tex", kept_original) and not text_refusal("tex", kept_replacement):
+            entry.wrap_end = entry.end - 1
+            entry.wrap_original, entry.wrap_replacement = kept_original, kept_replacement
+            return
+        if text_refusal("tex", kept_original):
+            if card_marker_line(_line_at(source, source.rfind("\n", 0, entry.end - 1) + 1)):
+                raise refuse(f"{where}, and the selected lines end with another card marker (line {last}). "
+                             "Select only lines between card markers.")
+            raise refuse(f"{where}. A pending proposal that ends right before it must end before the line break of "
+                         f"line {last}, but that line ends in a LaTeX comment (or a backslash), which would hide the "
+                         f"proposal's closing brace. Leave line {last} out of the range (end_line {last}) if it stays "
+                         "as it is, or ask the user to make this change.")
+        raise refuse(f"{where}. A pending proposal that ends right before it must end before the line break of its "
+                     "last line, but the replacement's last line ends in a LaTeX comment (or a backslash), which "
+                     "would hide the proposal's closing brace. Write that line without the trailing comment.")
+    # A deletion or an insertion: the line break before the range goes into the wrapper instead.
+    what = "deletion" if original else "insertion"
+    start = entry.start
+    if start == 0:
+        raise refuse(f"{where}, and a pending {what} at the start of the file cannot leave it so. "
+                     "Ask the user to make this change.")
+    previous_start = source.rfind("\n", 0, start - 1) + 1
+    previous = source[previous_start:start - 1]
+    if card_marker_line(previous):
+        if original:
+            raise refuse(f"{where}, and so is line {first - 1} before the selected lines: a pending deletion of "
+                         "every line between two card markers cannot leave them alone on their lines. Keep at "
+                         "least one of these lines (propose its new text instead), or ask the user to make "
+                         "this change.")
+        raise refuse(f"{where}, and so is line {first - 1}: a pending insertion between two card markers cannot "
+                     f"leave them alone on their lines. Insert the text before line {first - 1} or after line "
+                     f"{line}, or ask the user to add it.")
+    if _hides_appended_text(previous):
+        raise refuse(f"{where}. A pending {what} right before it must start at the end of line {first - 1}, but "
+                     f"that line ends in a LaTeX comment (or a backslash), which would hide the proposal. Include "
+                     f"line {first - 1} in the range with a replacement whose last line does not end in a "
+                     "comment, or ask the user to make this change.")
+    kept_original = "\n" + original[:-1] if original else ""
+    kept_replacement = "\n" + replacement[:-1] if replacement else ""
+    if text_refusal("tex", kept_original):
+        raise refuse(f"{where}. A pending deletion right before it must end before the line break of line {last}, "
+                     "but that line ends in a LaTeX comment (or a backslash), which would hide the proposal's "
+                     "closing brace. Ask the user to make this change.")
+    if text_refusal("tex", kept_replacement):
+        raise refuse(f"{where}. A pending insertion right before it must end before the line break of its last "
+                     "line, but the inserted text's last line ends in a LaTeX comment (or a backslash), which "
+                     "would hide the proposal's closing brace. Write that line without the trailing comment.")
+    entry.wrap_start, entry.wrap_end = start - 1, entry.end - 1
+    entry.wrap_original, entry.wrap_replacement = kept_original, kept_replacement
+
+
+def revised_replacement(source: str, found: Proposal, replacement: str) -> str:
+    """The replacement argument for a revision of a LaTeX wrapper laid out beside a card marker.
+
+    The new replacement is given for whole lines, as on create, and written as lay_out_beside_card_markers
+    writes it: a wrapper followed by a line break and a card marker line that starts after the text of the
+    previous line with an original and replacement that are empty or start with a line break took the line
+    break before its lines; one that starts a line with an original that does not end in a line break left
+    out its final line break. Any other wrapper takes the replacement as it is."""
+    after = found.end
+    if source[after:after + 1] != "\n" or not card_marker_line(_line_at(source, after + 1)):
+        return replacement
+    line, marker = _line_of(source, after + 1), _line_at(source, after + 1).strip()
+    where = f"Line {line} is the review card marker {marker}, which must stay alone on its line"
+    at_line_start = found.start == 0 or source[found.start - 1] == "\n"
+    original = found.original
+
+    def refuse(message: str) -> AuthoringRefused:
+        return AuthoringRefused(CARD_MARKER_LINE_CODE, message + " Nothing was written.", line=line,
+                                reason="marker_after_proposal", proposal_id=found.id)
+
+    if (not at_line_start and original[:1] in {"", "\n"} and found.replacement[:1] in {"", "\n"}) or (
+            at_line_start and ((original.startswith("\n") and found.replacement == "")
+                               or (original == "" and found.replacement.startswith("\n")))):
+        if not replacement:
+            return ""
+        if not replacement.endswith("\n"):
+            raise refuse(f"{where}, and the replacement does not end with a line break, so its last line would run "
+                         "into the marker. End the replacement with a line break.")
+        written = "\n" + replacement[:-1]
+    elif at_line_start and original and not original.endswith("\n"):
+        if not replacement:
+            raise refuse(f"{where}, and this pending proposal keeps its last line break outside its text, so an "
+                         "empty replacement would leave a blank line before the marker. To delete these lines, "
+                         "withdraw this proposal (remove_proposal) and propose the deletion again.")
+        written = replacement[:-1] if replacement.endswith("\n") else replacement
+    else:
+        return replacement
+    if text_refusal("tex", written):
+        raise refuse(f"{where}. This pending proposal ends right before it, so the replacement's last line break "
+                     "stays outside its text, but the replacement's last line ends in a LaTeX comment (or a "
+                     "backslash), which would hide the proposal's closing brace. Write that line without the "
+                     "trailing comment.")
+    return written
+
+
+def _lone_markers(text: str, spans: list[tuple[int, int]]) -> dict[str, list[int]]:
+    """The card marker lines of text that no span touches: marker -> their one-based line numbers."""
+    found: dict[str, list[int]] = {}
+    start = 0
+    for number, line in enumerate(text.split("\n"), 1):
+        end = start + len(line)
+        if card_marker_line(line) and not any(low < end and start < high for low, high in spans):
+            found.setdefault(line.strip(), []).append(number)
+        start = end + 1
+    return found
+
+
+def check_card_marker_lines(source: str, updated: str, replaced: list[tuple[int, int]],
+                            written: list[tuple[int, int]]) -> None:
+    """Refuse (card_marker_line) to write ``updated`` when a review card marker line of ``source`` outside
+    the ``replaced`` ranges no longer stands alone on its line outside the ``written`` wrappers."""
+    if "ReviewCardMask" not in source:
+        return
+    before, after = _lone_markers(source, replaced), _lone_markers(updated, written)
+    for marker, lines in before.items():
+        if len(after.get(marker, [])) < len(lines):
+            line = lines[0]
+            raise AuthoringRefused(
+                CARD_MARKER_LINE_CODE,
+                f"Line {line} is the review card marker {marker}, which must stay alone on its line, and the "
+                "proposal would put text on that line. Nothing was written.", line=line, reason="marker_line_shared")
+
+
 @dataclass
 class ProposalFields:
     id: str
@@ -423,6 +645,12 @@ class Entry:
     start: int = 0
     end: int = 0
     offset: int = 0
+    # Where the wrapper goes and what it holds: the range [start, end) with before and replacement,
+    # except beside a review card marker (lay_out_beside_card_markers).
+    wrap_start: int = 0
+    wrap_end: int = 0
+    wrap_original: str = ""
+    wrap_replacement: str = ""
 
 
 @dataclass
@@ -631,19 +859,30 @@ class Authored:
 
 def withdraw(request: AuthoringRequest, path: str, source: str, parsed: ParseResult, previous_sha256: str) -> Authored:
     """Withdraw one pending proposal: its wrapper becomes its captured original text (the desktop's
-    remove-proposal, which decides it as Reject would), and a withdraw claim names the exact wrapper."""
+    remove-proposal, which decides it as Reject would), and a withdraw claim names the exact wrapper.
+
+    Half of a card move (protocol/agent-proposals.md 12) is withdrawn with its other half when that is
+    pending in this source too; client.py withdraws a partner in another source (withdraw_partner)."""
     if not valid_proposal_id(request.proposal_id):
         raise AuthoringRefused("invalid_request", "Invalid proposal ID.")
-    found = parsed.by_id().get(request.proposal_id)
+    by_id = parsed.by_id()
+    found = by_id.get(request.proposal_id)
     if found is None:
         raise _proposal_error(parsed, request.proposal_id)
+    partner = move_partner(found.id)
+    withdrawn = [found] + ([by_id[partner]] if partner in by_id else [])
     try:
-        updated = decide(path, source, [found.id], "disregard")
+        updated = decide(path, source, [proposal.id for proposal in withdrawn], "disregard")
     except ProposalRefused as refusal:
         raise _proposal_error(parsed, request.proposal_id) from refusal
     remaining = parse(path, updated)
-    if (len(remaining.proposals) != len(parsed.proposals) - 1 or len(remaining.issues) != len(parsed.issues)
-            or found.id in remaining.by_id() or updated != source[:found.start] + found.original + source[found.end:]):
+    restored, cursor = [], 0
+    for proposal in sorted(withdrawn, key=lambda proposal: proposal.start):
+        restored += [source[cursor:proposal.start], proposal.original]
+        cursor = proposal.end
+    if (len(remaining.proposals) != len(parsed.proposals) - len(withdrawn) or len(remaining.issues) != len(parsed.issues)
+            or any(proposal.id in remaining.by_id() for proposal in withdrawn)
+            or updated != "".join(restored) + source[cursor:]):
         raise AuthoringRefused("invalid_proposal", "The original text could not be restored safely.")
     result: dict[str, Any] = {
         "schema_version": 1, "accepted": True, "terminal": True, "state": "proposal_removed", "source": path,
@@ -656,9 +895,33 @@ def withdraw(request: AuthoringRequest, path: str, source: str, parsed: ParseRes
         "message": "Proposal withdrawn and its original text restored on the server; "
                    "other devices receive it with their next Sync.",
     }
-    claim = {"proposal_id": found.id, "action": "withdraw", "source_file": path,
-             "wrapper_sha256": hashlib.sha256(source[found.start:found.end].encode("utf-8")).hexdigest()}
-    return Authored(updated, result, [claim])
+    if len(withdrawn) > 1:
+        result["withdrawn_proposal_ids"] = [found.id, partner]
+        result["message"] = MOVE_WITHDRAWN
+    claims = [{"proposal_id": proposal.id, "action": "withdraw", "source_file": path,
+               "wrapper_sha256": hashlib.sha256(source[proposal.start:proposal.end].encode("utf-8")).hexdigest()}
+              for proposal in withdrawn]
+    return Authored(updated, result, claims)
+
+
+MOVE_WITHDRAWN = ("Move withdrawn: both halves removed and their original text restored on the server; "
+                  "other devices receive it with their next Sync.")
+
+
+def withdraw_partner(path: str, source: str, partner_id: str) -> tuple[str, dict[str, str]]:
+    """The other half of a withdrawn card move, pending in another source: (that source with the half's
+    original text restored, its withdraw claim)."""
+    parsed = parse(path, source)
+    found = parsed.by_id().get(partner_id)
+    if found is None:
+        raise _proposal_error(parsed, partner_id)
+    updated = source[:found.start] + found.original + source[found.end:]
+    remaining = parse(path, updated)
+    if (len(remaining.proposals) != len(parsed.proposals) - 1 or len(remaining.issues) != len(parsed.issues)
+            or partner_id in remaining.by_id()):
+        raise AuthoringRefused("invalid_proposal", "The original text of the move's other half could not be restored safely.")
+    return updated, {"proposal_id": partner_id, "action": "withdraw", "source_file": path,
+                     "wrapper_sha256": hashlib.sha256(source[found.start:found.end].encode("utf-8")).hexdigest()}
 
 
 def author(
@@ -730,6 +993,8 @@ def author(
                 index = next(i for i, entry in enumerate(entries) if entry is repaired)
                 repair_warnings.append({**warning, **({"proposal_index": index} if request.batch else {})})
         created = format_timestamp(now)
+        # A review card marker line stays alone while the proposals are pending.
+        lay_out_beside_card_markers(source, entries, order, request.batch, latex=not markdown)
         # Original and replacement contents must round-trip byte-for-byte.
         pieces, cursor, shift = [], 0, 0
         for index in order:
@@ -737,25 +1002,32 @@ def author(
             fields = ProposalFields(
                 id=entry.id, created_at=created, conversation_id=conversation,
                 conversation_url=request.conversation_url, explanation=qt_trimmed(entry.explanation),
-                original=entry.before, replacement=entry.replacement)
+                original=entry.wrap_original, replacement=entry.wrap_replacement)
             block, refusal = format_markdown(fields) if markdown else format_latex(fields)
             if not block:
                 raise _writer_error(refusal)
-            pieces += [source[cursor:entry.start], block]
-            cursor = entry.end
-            entry.offset = entry.start + shift
-            shift += len(block) - (entry.end - entry.start)
+            pieces += [source[cursor:entry.wrap_start], block]
+            cursor = entry.wrap_end
+            entry.offset = entry.wrap_start + shift
+            shift += len(block) - (entry.wrap_end - entry.wrap_start)
         pieces.append(source[cursor:])
         updated = "".join(pieces)
     else:
         found = parsed.by_id().get(request.proposal_id)
         if found is None:
             raise _proposal_error(parsed, request.proposal_id)
+        # A half of a move carries the card's passage verbatim; changing one half alone would break the pair (12).
+        if move_partner(found.id) is not None:
+            raise AuthoringRefused(
+                "move_proposal", "This proposal is half of a card move and cannot be revised; withdraw it with "
+                "remove_proposal (which withdraws both halves) and move the card again.")
         entry = entries[0]
         # Revisions never rewrite creation metadata, including the original conversation.
         created = found.created_at
         entry.before = found.original
         entry.offset = found.start
+        entry.wrap_original, entry.wrap_replacement = found.original, entry.replacement
+        entry.start, entry.end = found.start, found.end
         if markdown:
             fields = ProposalFields(
                 id=found.id, created_at=found.created_at, conversation_id=found.conversation_id,
@@ -768,8 +1040,9 @@ def author(
         else:
             # Revise in place, keeping the wrapper's own layout and metadata.
             assert found.explanation_start is not None and found.explanation_end is not None
+            entry.wrap_replacement = revised_replacement(source, found, entry.replacement)
             updated = (source[:found.explanation_start] + entry.comment + "\n"
-                       + source[found.explanation_end:found.replacement_start] + entry.replacement
+                       + source[found.explanation_end:found.replacement_start] + entry.wrap_replacement
                        + source[found.replacement_end:])
     result_parse = parse(path, updated)
     written: list[Proposal] = []
@@ -777,8 +1050,8 @@ def author(
     for entry in entries:
         found = by_id.get(entry.id)
         expected_explanation = entry.comment if markdown else entry.comment + "\n"
-        if (found is None or found.start != entry.offset or found.original != entry.before
-                or found.replacement != entry.replacement or found.created_at != created
+        if (found is None or found.start != entry.offset or found.original != entry.wrap_original
+                or found.replacement != entry.wrap_replacement or found.created_at != created
                 or found.explanation != expected_explanation):
             raise AuthoringRefused(
                 "invalid_proposal",
@@ -792,6 +1065,10 @@ def author(
             "invalid_proposal",
             "The proposals changed other pending proposals; check balanced braces and include newlines "
             "after trailing comments.")
+    if not markdown:
+        # Every card marker outside the replaced text is still alone on its line (the layout's safety net).
+        check_card_marker_lines(source, updated, [(entry.start, entry.end) for entry in entries],
+                                [(found.start, found.end) for found in written])
     after_sha256 = hashlib.sha256(updated.encode("utf-8")).hexdigest()
     state = "proposals_created" if request.batch else "proposal_created" if request.create else "proposal_revised"
     result: dict[str, Any] = {

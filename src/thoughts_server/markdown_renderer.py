@@ -93,6 +93,15 @@ class MarkdownBuild:
                 shutil.rmtree(staging)
 
 
+def _xml_attribute_safe(svg: str) -> str:
+    """MathJax serializes as HTML, which leaves "<" bare in attribute values.
+
+    Its data-latex attribute holds the formula, so x_{<t} gave an SVG that is
+    not well-formed XML and the build failed. Escape "<" inside quoted values.
+    """
+    return re.sub(r'="([^"]*)"', lambda m: '="' + m.group(1).replace("<", "&lt;") + '"', svg)
+
+
 def _svg_font_longhands(data):
     """Work around WeasyPrint 70's size/family-only SVG font expander."""
     import xml.etree.ElementTree as ET
@@ -220,6 +229,7 @@ def _math_markup(fragments, snapshot, node_binary):
         # A space of \text{} is an empty path. It paints nothing, but the PDF
         # still holds it as a zero-size shape the drawing count below omits.
         svg = re.sub(r'<path\b[^>]*\bd=""[^>]*?(?:/>|>\s*</path>)', "", svg)
+        svg = _xml_attribute_safe(svg)
         dims = {key: re.search(r"\b" + key + r'="([^"]+)"', svg) for key in ("width", "height")}
         if not all(dims.values()):
             raise MarkdownError("MathJax returned SVG without dimensions")

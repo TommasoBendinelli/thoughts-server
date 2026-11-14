@@ -527,7 +527,9 @@ def _retarget(path: str, text: str, row: ReviewCardPendingMove) -> dict | str:
         return "proposal_revised"
     needle = target.get("text") or ""
     region = (proposal.start, proposal.start + len(replacement))
-    candidates = _occurrences(accepted, needle, *region) if needle else []
+    # The line break right after the proposed text belongs to it (review_card_selection.target_lines).
+    following = int(accepted[region[1]:region[1] + 1] == "\n" and not replacement.endswith("\n"))
+    candidates = _occurrences(accepted, needle, region[0], region[1] + following) if needle else []
     wanted = proposal.start + int(target.get("offset", 0))
     at = _nearest(candidates, wanted) if len(candidates) != 1 else candidates[0]
     if at is None:

@@ -228,5 +228,5 @@ def test_restore_algorithm(case):
 
 
 def test_fixture_counts():
-    # The spec ships 23 server scenarios, 4 attach cases and 19 restore cases.
-    assert (len(FIXTURES["scenarios"]), len(FIXTURES["attach"]), len(FIXTURES["restore"])) == (23, 4, 21)
+    # The spec ships 23 server scenarios, 4 attach cases and 27 restore cases.
+    assert (len(FIXTURES["scenarios"]), len(FIXTURES["attach"]), len(FIXTURES["restore"])) == (23, 4, 27)

@@ -325,6 +325,29 @@ r("restore-markdown-conversation-url", "Intro.\nNew line.\nOutro.\n",
   snap("agent-1", "Clarify.", "Old line.\n", "New line.\n", path=MD, url=LINK), 2,
   {"output": "Intro.\n" + v2("agent-1", "Clarify.", "Old line.\n", "New line.\n", url=LINK) + "Outro.\n"}, path=MD)
 
+# Beside a review card marker (section 8.1) the wrapper keeps one LF outside: its texts end right before an LF,
+# and for a deletion or an insertion they start with the LF that ends the line before them.
+CARD = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+OPEN, CLOSE = f"\\ReviewCardMaskStart{{{CARD}}}{{0}}%\n", f"\\ReviewCardMaskEnd{{{CARD}}}{{0}}%\n"
+KEPT = OPEN + "First claim.\n"
+r("restore-beside-marker-accepted", KEPT + "New claim.\n" + CLOSE, snap("agent-1", "Clarify.\n", "Old claim.", "New claim."), 3,
+  {"output": KEPT + tex("agent-1", "Clarify.\n", "Old claim.", "New claim.") + "\n" + CLOSE},
+  note="A text that ends right before an LF ends a line.")
+r("restore-beside-marker-rejected", KEPT + "Old claim.\n" + CLOSE, snap("agent-1", "Clarify.\n", "Old claim.", "New claim."), 3,
+  {"output": KEPT + tex("agent-1", "Clarify.\n", "Old claim.", "New claim.") + "\n" + CLOSE})
+DROP = snap("agent-1", "Drop.\n", "\nOld claim.", "")
+r("restore-beside-marker-deletion-accepted", KEPT + CLOSE, DROP, 2,
+  {"output": OPEN + "First claim." + tex("agent-1", "Drop.\n", "\nOld claim.", "") + "\n" + CLOSE},
+  note="The empty replacement's only candidate is the end of line L, where a wrapper that took the LF before its lines started.")
+r("restore-beside-marker-deletion-rejected", KEPT + "Old claim.\n" + CLOSE, DROP, 2,
+  {"output": OPEN + "First claim." + tex("agent-1", "Drop.\n", "\nOld claim.", "") + "\n" + CLOSE},
+  note="A text that starts with LF starts where the line before it ends.")
+ADD = snap("agent-1", "Add.\n", "", "\nAdded claim.")
+r("restore-beside-marker-insertion-accepted", KEPT + "Added claim.\n" + CLOSE, ADD, 2,
+  {"output": OPEN + "First claim." + tex("agent-1", "Add.\n", "", "\nAdded claim.") + "\n" + CLOSE})
+r("restore-beside-marker-insertion-rejected", KEPT + CLOSE, ADD, 2,
+  {"output": OPEN + "First claim." + tex("agent-1", "Add.\n", "", "\nAdded claim.") + "\n" + CLOSE})
+
 # Sanity: the restored outputs re-create the wrappers byte for byte where the source was written by the desktop writer.
 assert restore[0]["expect"]["output"] == BASE
 

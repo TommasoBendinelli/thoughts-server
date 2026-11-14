@@ -16,6 +16,15 @@ is for a server whose only user is its operator.
 The flag reaches the compiler either through ``THOUGHTS_SANDBOX_BUILDS`` (build
 and preview processes, which serve one Library) or through ``sandboxed()`` (a
 render inside the API process, which serves every Library).
+
+Fonts that exist only as Metafont sources (``bbm`` for example) are made by TeX
+on first use and kept under ``TEXMFVAR``. Inside the sandbox that was an empty
+temporary folder, so every compile of such a document made its fonts again (five
+seconds for a seven-line note). Each Library now has a font cache in its own
+state folder (``tex-font-cache``), mounted as the sandbox's ``TEXMFVAR``: the
+one place outside the document tree a compile can write, and the only part of
+the state folder it can see. It travels the same two ways as the flag
+(``THOUGHTS_TEX_FONT_CACHE`` and ``sandboxed(font_cache=...)``).
 """
 from __future__ import annotations
 
@@ -29,6 +38,11 @@ from pathlib import Path
 
 ENVIRONMENT_FLAG = "THOUGHTS_SANDBOX_BUILDS"
 _ACTIVE: ContextVar[bool] = ContextVar("thoughts_build_sandbox", default=False)
+# The Library's persistent TeX font cache (a folder), for the compiles of this process.
+FONT_CACHE_ENVIRONMENT = "THOUGHTS_TEX_FONT_CACHE"
+FONT_CACHE_FOLDER = "tex-font-cache"
+# Where TeX keeps generated fonts inside the sandbox, with or without a persistent cache.
+SANDBOX_TEXMFVAR = "/home/tex/texmf-var"
 
 # Only what TeX needs from the compiler's environment; never credentials.
 PASSED_VARIABLES = (
@@ -42,7 +56,18 @@ SYSTEM_READ_ONLY = ("/etc/texlive", "/etc/texmf", "/etc/fonts", "/etc/ld.so.cach
 
 
 # Sandboxed compiles that write to one build folder start their processes this
-# many process IDs apart (see ``wrap``).
+# many process IDs apart (see ``wrap``). Only a compile in a slot above zero pays
+# for it (about 0.15 s per slot), and a build of one note has one compile.
+#
+# The stride is not smaller because a compile's processes must stay inside its own
+# range: besides latexmk's passes those are the font scripts, about a hundred
+# processes for each Metafont font made, so a document that makes a few fonts
+# already comes close to 512. And the ranges now keep a second thing apart: the
+# font scripts install a font through a temporary file named after their process
+# ID in the shared font cache (``tfm$$.tmp``, ``pk$$.tmp``), so parallel compiles
+# must not run them under the same IDs either. A private output folder per
+# compile would avoid the recorder collision but not that one, and it would put
+# another path into every recorder, SyncTeX and log file.
 PID_STRIDE = 512
 # Uses ``count`` process IDs, then becomes the command. Perl is always present: latexmk is Perl.
 _PID_OFFSET_PROGRAM = (
@@ -77,26 +102,44 @@ def required() -> bool:
     return _ACTIVE.get() or flag_enabled(os.environ.get(ENVIRONMENT_FLAG))
 
 
+def font_cache_for(state_root: Path) -> Path:
+    """A Library's font cache: a folder of its own state folder."""
+    return Path(state_root) / FONT_CACHE_FOLDER
+
+
+def font_cache() -> Path | None:
+    """The font cache of the Library this process compiles for, if one was named."""
+    value = os.environ.get(FONT_CACHE_ENVIRONMENT, "").strip()
+    return Path(value) if value else None
+
+
 @contextmanager
-def sandboxed(enabled: bool = True):
+def sandboxed(enabled: bool = True, *, font_cache: Path | None = None):
     """Sandbox every compile started inside, in this and in any worker thread.
 
     Renders inside the API run one at a time (folder_import.IN_PROCESS_RENDER_LOCK),
     and their compiles may run on pool threads that do not inherit context
-    variables, so the flag is also set in the process environment meanwhile.
+    variables, so the flag is also set in the process environment meanwhile, and
+    with it the font cache of the Library being rendered.
     """
     token = _ACTIVE.set(enabled or _ACTIVE.get())
-    previous = os.environ.get(ENVIRONMENT_FLAG)
+    previous = {name: os.environ.get(name) for name in (ENVIRONMENT_FLAG, FONT_CACHE_ENVIRONMENT)}
     if enabled:
         os.environ[ENVIRONMENT_FLAG] = "true"
+        if font_cache is not None:
+            os.environ[FONT_CACHE_ENVIRONMENT] = str(font_cache)
+        else:
+            # Never another Library's cache left in the environment.
+            os.environ.pop(FONT_CACHE_ENVIRONMENT, None)
     try:
         yield
     finally:
         if enabled:
-            if previous is None:
-                os.environ.pop(ENVIRONMENT_FLAG, None)
-            else:
-                os.environ[ENVIRONMENT_FLAG] = previous
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
         _ACTIVE.reset(token)
 
 
@@ -120,14 +163,38 @@ def _inside(path: Path, roots: list[Path]) -> bool:
     return any(path == root or root in path.parents for root in roots)
 
 
+def _font_cache_folder(path: Path | None) -> Path | None:
+    """``path`` as a real folder to mount, made if missing; None when it cannot be one.
+
+    Without it the sandbox keeps its empty temporary ``TEXMFVAR``: slower, never wrong.
+    """
+    if path is None:
+        return None
+    path = Path(path)
+    try:
+        if not path.is_absolute() or path.is_symlink():
+            return None
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        return path.resolve() if path.is_dir() else None
+    except OSError:
+        return None
+
+
 def wrap(command: list[str], *, environment: dict[str, str], cwd: Path,
-         writable: list[Path], pid_offset: int = 0) -> tuple[list[str], dict[str, str]]:
+         writable: list[Path], pid_offset: int = 0,
+         font_cache: Path | None = None) -> tuple[list[str], dict[str, str]]:
     """``command`` (a latexmk call) inside bubblewrap; returns the command and its environment.
 
     ``writable`` are the Library's own folders the compile may change (its
     document tree). Search-path entries outside them are exposed read-only only
     when they belong to the server's code; anything else is left out, so a
     document cannot name a path that leads elsewhere.
+
+    ``font_cache`` (the Library's own, ``font_cache_for``) is mounted writable as
+    the sandbox's ``TEXMFVAR`` and nowhere else; nothing beside it is exposed.
+    TeX writes there only through its font scripts (``openout_any`` stays
+    paranoid), and the path inside the sandbox is the one it always was, so
+    recorder and log files name the same font files as before.
 
     Each sandbox has its own process-ID namespace, so every one numbers its
     processes from the same start. pdfTeX first names its recorder file
@@ -157,13 +224,16 @@ def wrap(command: list[str], *, environment: dict[str, str], cwd: Path,
         if Path(path).exists():
             sandbox += ["--ro-bind", path, path]
     sandbox += ["--dir", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", "/home/tex"]
+    fonts = _font_cache_folder(font_cache)
+    if fonts is not None:
+        sandbox += ["--bind", str(fonts), SANDBOX_TEXMFVAR]
     for path in readable:
         sandbox += ["--ro-bind", str(path), str(path)]
     for path in writable:
         sandbox += ["--bind", str(path), str(path)]
     sandbox += ["--chdir", str(Path(cwd).resolve()), "--clearenv",
                 "--setenv", "PATH", "/usr/bin:/bin", "--setenv", "HOME", "/home/tex",
-                "--setenv", "TEXMFVAR", "/home/tex/texmf-var",
+                "--setenv", "TEXMFVAR", SANDBOX_TEXMFVAR,
                 # Inside the sandbox nothing else is visible; keep TeX's own guards anyway.
                 "--setenv", "openout_any", "p", "--setenv", "shell_escape", "f"]
     for name, value in environment.items():

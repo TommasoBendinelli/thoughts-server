@@ -1549,6 +1549,117 @@
    "expect": {
     "output": "Intro.\n<!-- thoughts:agent-proposal:v2:start\nid: agent-1\ncreated_at: 2026-10-10T12:00:00.000Z\nconversation_id: 0b6c5b7e-1d2a-4c3b-9f8e-112233445566\nconversation_url: https://claude.ai/code/session_01ExampleSessionAbcdEfgh\nexplanation:\n| Clarify.\noriginal_text:\n| Old line.\n| \n-->\nNew line.\n<!-- thoughts:agent-proposal:v2:end agent-1 -->\nOutro.\n"
    }
+  },
+  {
+   "id": "restore-beside-marker-accepted",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\nNew claim.\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old claim.",
+    "after": "New claim.",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 3,
+   "expect": {
+    "output": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old claim.}{New claim.}\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n"
+   },
+   "note": "A text that ends right before an LF ends a line."
+  },
+  {
+   "id": "restore-beside-marker-rejected",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\nOld claim.\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Clarify.\n",
+    "before": "Old claim.",
+    "after": "New claim.",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 3,
+   "expect": {
+    "output": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\n\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Clarify.\n}{Old claim.}{New claim.}\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n"
+   }
+  },
+  {
+   "id": "restore-beside-marker-deletion-accepted",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Drop.\n",
+    "before": "\nOld claim.",
+    "after": "",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Drop.\n}{\nOld claim.}{}\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n"
+   },
+   "note": "The empty replacement's only candidate is the end of line L, where a wrapper that took the LF before its lines started."
+  },
+  {
+   "id": "restore-beside-marker-deletion-rejected",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\nOld claim.\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Drop.\n",
+    "before": "\nOld claim.",
+    "after": "",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Drop.\n}{\nOld claim.}{}\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n"
+   },
+   "note": "A text that starts with LF starts where the line before it ends."
+  },
+  {
+   "id": "restore-beside-marker-insertion-accepted",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\nAdded claim.\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Add.\n",
+    "before": "",
+    "after": "\nAdded claim.",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Add.\n}{}{\nAdded claim.}\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n"
+   }
+  },
+  {
+   "id": "restore-beside-marker-insertion-rejected",
+   "path": "docs-x/tex/source/a.tex",
+   "source": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n",
+   "snapshot": {
+    "proposal_id": "agent-1",
+    "source_file": "docs-x/tex/source/a.tex",
+    "comment": "Add.\n",
+    "before": "",
+    "after": "\nAdded claim.",
+    "created_at": "2026-10-10T12:00:00.000Z",
+    "conversation_id": "0b6c5b7e-1d2a-4c3b-9f8e-112233445566"
+   },
+   "line": 2,
+   "expect": {
+    "output": "\\ReviewCardMaskStart{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\nFirst claim.\\agentProposedEdit[created=2026-10-10T12:00:00.000Z,conversation_id=0b6c5b7e-1d2a-4c3b-9f8e-112233445566]{agent-1}{Add.\n}{}{\nAdded claim.}\n\\ReviewCardMaskEnd{9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d}{0}%\n"
+   }
   }
  ]
 }

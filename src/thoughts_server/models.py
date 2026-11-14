@@ -526,6 +526,9 @@ class AgentNote(Base):
     delivered_device_id: Mapped[str | None] = mapped_column(String(128))
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The agent the user chose to answer replies to this note: {role, device_id, conversation_id,
+    # owner_id, label}; null while the choice is automatic (protocol/agent-notes.md "The user's choice").
+    answer_by: Mapped[dict | None] = mapped_column(JSON)
 
 
 class AgentNoteReply(Base):
@@ -591,6 +594,36 @@ class AgentNoteReplyListener(Base):
     conversation_id: Mapped[str] = mapped_column(String(128), primary_key=True, default="")
     note_id: Mapped[str] = mapped_column(String(36), primary_key=True, default="")
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # A topic owner's row (note_id "topic:<owner id>"): which notes it answers
+    # (protocol/agent-notes.md "Topic owners"); null for every other listener.
+    scope: Mapped[dict | None] = mapped_column(JSON)
+
+
+class AgentNoteHandling(Base):
+    """Who covered a reply or a page the user sent when it arrived, and who answers it.
+
+    One row per reply (item_id = reply id) or page (item_id = the page's note id). ``covered_by``
+    lists the live listeners that covered the note at arrival (the sender's agent, topic owners);
+    the first claim wins (``claimed_*``), so two agents never both answer it
+    (protocol/agent-notes.md "Who answers").
+    """
+
+    __tablename__ = "agent_note_handling"
+    __table_args__ = (Index("ix_agent_note_handling_note", "note_id"),)
+
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    note_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    arrived_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    covered_by: Mapped[list | None] = mapped_column(JSON)
+    claimed_device_id: Mapped[str | None] = mapped_column(String(128))
+    claimed_conversation_id: Mapped[str | None] = mapped_column(String(128))
+    claimed_role: Mapped[str | None] = mapped_column(String(16))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # For a claim inferred from an answer (a later note of the agent that covered it).
+    answer_note_id: Mapped[str | None] = mapped_column(String(36))
+    # The note's answer_by when the reply arrived (replies only); null when the choice was automatic.
+    answer_by: Mapped[dict | None] = mapped_column(JSON)
 
 
 class ReviewCardPendingMove(Base):
