@@ -134,7 +134,7 @@ def compile_standalone(workspace: Path, source: str, timeout: int) -> dict:
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             process.wait()
-            raise RuntimeError(f"Standalone compilation on the server exceeded {timeout} seconds")
+            raise RuntimeError(f"Standalone compilation on the server exceeded {timeout} seconds") from None
     if code:
         raise RuntimeError("Standalone compilation on the server failed: " +
                            " ".join(log.read_text(errors="replace")[-3000:].split()))

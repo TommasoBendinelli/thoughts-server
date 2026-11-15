@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import subprocess
@@ -59,6 +60,10 @@ from .trace import valid_trace_id
 # value explicitly so uvicorn's FORWARDED_ALLOW_IPS environment default cannot
 # widen it.
 TRUSTED_PROXY_ADDRESSES = "127.0.0.1"
+# At a stop, requests still working this long after the waiting ones were ended (an
+# upload that is still arriving, say) are cancelled, so the API stops in seconds and
+# never runs into systemd's stop timeout (90 s, then SIGKILL).
+GRACEFUL_SHUTDOWN_SECONDS = 10
 
 
 def server_options(settings: Settings) -> dict:
@@ -67,7 +72,37 @@ def server_options(settings: Settings) -> dict:
         "port": settings.api_port,
         "proxy_headers": True,
         "forwarded_allow_ips": TRUSTED_PROXY_ADDRESSES,
+        "timeout_graceful_shutdown": GRACEFUL_SHUTDOWN_SECONDS,
     }
+
+
+class StoppingServer(uvicorn.Server):
+    """uvicorn's server, which ends the requests that wait as soon as it is told to stop.
+
+    uvicorn stops accepting connections, closes the idle ones and then waits for every
+    open one to answer. A long poll answers when its wait is over (up to 60 s), and the
+    trace stream of a build whose worker was stopped first never did, so a deploy waited
+    for systemd's stop timeout. The waiting requests are told here
+    (request_waits.HeldRequests) and answer at their next wake-up, which comes after the
+    first ``await`` of uvicorn's shutdown, when the connections are already marked to
+    close after their answer.
+    """
+
+    async def shutdown(self, sockets=None) -> None:
+        from .request_waits import stop_held_requests
+
+        stop_held_requests(self.config.app)
+        await super().shutdown(sockets=sockets)
+
+
+def run_server(app, options: dict) -> None:
+    """``uvicorn.run`` for one process, with ``StoppingServer``."""
+    server = StoppingServer(uvicorn.Config(app, **options))
+    with contextlib.suppress(KeyboardInterrupt):
+        server.run()
+    if not server.started:
+        # As uvicorn.run: the application did not start.
+        raise SystemExit(3)
 
 
 def server_main() -> None:
@@ -75,7 +110,7 @@ def server_main() -> None:
 
     # The API serves every Library; THOUGHTS_LIBRARY only selects one for workers and tools.
     settings = Settings.base_from_env()
-    uvicorn.run(create_server_app(settings), **server_options(settings))
+    run_server(create_server_app(settings), server_options(settings))
 
 
 def _explicit_token(token: str | None) -> str | None:

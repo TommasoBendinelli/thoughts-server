@@ -6,16 +6,121 @@ A request that waits for something slow (a compile, a build, a reply) must hold
 neither one of the API's shared worker threads nor a database connection while
 it waits: with many Libraries in one process, a handful of such waits would
 otherwise delay every other user's requests.
+
+Nor may it keep the server from stopping (``HeldRequests``), and the request log
+reports the time it was held apart from the time it worked (``note_held``).
 """
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Hashable
+import logging
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Hashable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
+
+LOG = logging.getLogger("uvicorn.error")
+
+
+class HeldRequests:
+    """Whether the waiting requests of one application must end: the server was told to stop.
+
+    uvicorn stops only once every open connection has answered, and a waiting request
+    answers when its wait is over: a reply long poll after up to 60 s, and the event
+    stream of a build whose worker was stopped first never. Every request that waits
+    (agent-note long polls, build waits, Sync state waits, trace streams) therefore
+    looks at ``stopping`` each time it wakes, and ``stop`` wakes them all, so that each
+    ends at once with the answer it gives when nothing happened during its wait (an
+    empty feed, the build as it stands, 304, the end of the stream).
+
+    ``stop`` is called on the event loop (cli.StoppingServer) and is idempotent.
+    """
+
+    def __init__(self) -> None:
+        self.stopping = False
+        self._wakes: list[Callable[[], None]] = []
+        self._stopped: set[asyncio.Future] = set()
+
+    def on_stop(self, wake: Callable[[], None]) -> None:
+        """Call ``wake`` (on the event loop) when the server stops, to wake waiters that sleep."""
+        self._wakes.append(wake)
+
+    def stop(self) -> None:
+        if self.stopping:
+            return
+        self.stopping = True
+        for stopped in self._stopped:
+            if not stopped.done():
+                stopped.set_result(None)
+        for wake in self._wakes:
+            try:
+                wake()
+            except Exception:  # noqa: BLE001 - every other waiter must still be woken
+                LOG.exception("A held request could not be woken for the shutdown")
+
+    async def unless_stopping(self, awaitable: Awaitable[Any]) -> Any:
+        """The result of ``awaitable``; ``ServerStopping`` if the server stops first.
+
+        For a request that waits on work running elsewhere (a proposal preview's compile):
+        the work goes on, only the request stops waiting for it.
+        """
+        if self.stopping:
+            raise ServerStopping
+        stopped = asyncio.get_running_loop().create_future()
+        self._stopped.add(stopped)
+        task = asyncio.ensure_future(awaitable)
+        try:
+            await asyncio.wait({task, stopped}, return_when=asyncio.FIRST_COMPLETED)
+            if task.done():
+                return task.result()
+            raise ServerStopping
+        finally:
+            self._stopped.discard(stopped)
+            if not task.done():
+                task.cancel()
+
+
+class ServerStopping(Exception):
+    """The server stops before what a request waited for was ready."""
+
+
+def stop_held_requests(app: Any) -> int:
+    """``HeldRequests.stop`` for ``app``: one Library's application, or a router of several.
+
+    Returns how many applications were told.
+    """
+    apps = getattr(app, "apps", None)
+    told = 0
+    for each in (apps.values() if isinstance(apps, dict) else (app,)):
+        held_requests = getattr(getattr(each, "state", None), "held_requests", None)
+        if isinstance(held_requests, HeldRequests):
+            held_requests.stop()
+            told += 1
+    return told
+
+
+def note_held(request: Any, seconds: float) -> None:
+    """Count ``seconds`` as time ``request`` was held waiting, not working.
+
+    The request log reports it as ``held_ms``, apart from ``duration_ms``: a long poll
+    that waited 25 s for nothing to happen is not a slow request.
+    """
+    state = request.state
+    state.held_seconds = getattr(state, "held_seconds", 0.0) + max(0.0, seconds)
+
+
+@asynccontextmanager
+async def held(request: Any) -> AsyncIterator[None]:
+    """``note_held`` for the time spent inside the block."""
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        note_held(request, time.monotonic() - started)
 
 
 async def release_session(session: Session) -> None:

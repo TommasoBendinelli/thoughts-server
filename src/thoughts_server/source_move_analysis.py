@@ -15,7 +15,8 @@ directory (tests and dry runs). The analysis decides
   loads) that the destination's preamble lacks, and a document-local preamble
   block that carries them; a destination folder without any project preamble
   receives a copy of the origin's instead, since every wrapped build loads it;
-* which bibliography entries the destination lacks;
+* which bibliography entries the destination lacks (a new, empty folder instead
+  receives the origin's project bibliography);
 * which semantic links (SourceLink/PdfLink and their Cross variants)
   must be rewritten in the moved files and in other documents so that no build
   fails on a link whose target changed Project.
@@ -786,6 +787,13 @@ class PlannedFile:
                 "used_by": self.used_by}
 
 
+def planned_folder(origin: Folder, owner: str, files: list[PlannedFile]) -> Folder:
+    """A new, empty destination folder as the move leaves it: exactly the files it places there."""
+    sources = {f.destination: f.source for f in files}
+    return Folder(owner, sources, lambda path: origin.bytes(sources[path]),
+                  lambda path: origin.sha256(sources[path]))
+
+
 def free_name(paths: frozenset[str] | set[str], wanted: str) -> str:
     if wanted not in paths:
         return wanted
@@ -810,11 +818,14 @@ def _package_commands(name: str, package_source: Callable[[str], str | None] | N
 def analyse(origin: Folder, destination: Folder, document: str, destination_document: str, *,
             other_documents: list[str], destination_documents: list[str],
             package_source: Callable[[str], str | None] | None = None,
-            document_format: str = "latex") -> dict:
+            document_format: str = "latex", new_folder: bool = False) -> dict:
     """Plan moving ``document`` (origin-relative) to ``destination_document`` (destination-relative).
 
     ``other_documents`` are the origin folder's other declared documents, and
     ``destination_documents`` the destination folder's declared documents.
+    ``new_folder``: the destination is a folder the move creates (empty), so it
+    also receives the origin's project style when the document loads it itself,
+    and the origin's project bibliography when the document or that style needs one.
     """
     text = origin.text(document)
     if text is None:
@@ -876,7 +887,12 @@ def analyse(origin: Folder, destination: Folder, document: str, destination_docu
     # project preamble files (an existing identical file is reused, a different
     # one is kept and the definitions are compared against it).
     style_copies: dict[str, str] = {}
-    if document_format == "latex" and not standalone(text) and origin_preamble and not destination_preamble:
+    # A standalone document that loads the project style itself needs it in a new folder too.
+    loads_style = not standalone(text) or (new_folder and any(r.resolved in origin_preamble for r in references))
+    style_reason = ("the new folder has no project style yet; copied so this document builds and looks as before"
+                    if new_folder else "the destination folder has no project style; copied so this document "
+                                       "builds and looks as before")
+    if document_format == "latex" and loads_style and origin_preamble and not destination_preamble:
         for path in sorted(origin_preamble):
             digest = origin.sha256(path) or ""
             existing = destination.sha256(path)
@@ -887,9 +903,7 @@ def analyse(origin: Folder, destination: Folder, document: str, destination_docu
                 elif path.endswith(".sty") and PurePosixPath(path).stem == PREAMBLE_ENTRY:
                     style_copies[path] = destination.text(path) or ""
                 continue
-            files.append(PlannedFile(path, path, "copy",
-                                     "the destination folder has no project style; copied so this document "
-                                     "builds and looks as before", digest))
+            files.append(PlannedFile(path, path, "copy", style_reason, digest))
             taken.add(path)
             style_copies[path] = origin.text(path) or ""
         destination_preamble = set(style_copies)
@@ -980,7 +994,8 @@ def analyse(origin: Folder, destination: Folder, document: str, destination_docu
         if style_copies:
             preamble["style_copied"] = sorted(p for p in style_copies
                                               if any(f.source == p and f.action == "copy" for f in files))
-        elif not destination_preamble:
+        elif not destination_preamble and not new_folder:
+            # A new folder lacks a style only when the origin had none either.
             preamble["destination_without_preamble"] = True
 
     # Bibliography entries the destination lacks.
@@ -988,7 +1003,23 @@ def analyse(origin: Folder, destination: Folder, document: str, destination_docu
     cited = []
     for value in moved_texts:
         cited += [k for k in cited_keys(value) if k not in cited]
-    if document_format == "latex" and cited and any(has_bibliography(t) for t in moved_texts):
+    uses_bibliography = document_format == "latex" and bool(cited) and any(has_bibliography(t) for t in moved_texts)
+    if new_folder and document_format == "latex":
+        # A new folder has no bibliography: it receives the origin's project
+        # bibliography whole, when the document cites from it or the copied
+        # style names it, so citations resolve exactly as before.
+        named = any(r.kind == "bibliography" and r.resolved for path in style_copies
+                    for r in file_references(origin, path))
+        if uses_bibliography or named:
+            placed_paths = {f.destination for f in files}
+            for path in origin_bibs:
+                if path in origin.paths and path not in placed_paths:
+                    files.append(PlannedFile(path, path, "copy", "the new folder has no bibliography yet; copied so "
+                                             "this document's citations resolve as before", origin.sha256(path) or "",
+                                             is_generated(path, origin.bytes(path))))
+                    taken.add(path)
+        destination = planned_folder(origin, destination.owner, files)
+    if uses_bibliography:
         bibliography["applies"] = True
         destination_bibs = project_bibliographies(destination, destination_preamble)
         destination_keys = set()

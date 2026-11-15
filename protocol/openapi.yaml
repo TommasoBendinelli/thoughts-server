@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: Thoughts Server
-  description: Fedora authority for repository operations, explicit sources, artifacts,
+  description: The authority for repository operations, explicit sources, artifacts,
     and builds. Every endpoint accepts an optional UUID in X-Thoughts-Trace-Id and
     echoes the validated or server-generated UUID in the response header.
   version: 0.7.0
@@ -646,9 +646,18 @@ paths:
     get:
       summary: Sync State
       description: Return the authoritative cursors needed to decide whether sync
-        work exists.
+        work exists. With If-None-Match naming the current state and wait_ms > 0
+        (sync_state_wait_v1), the answer waits until the state changes, at most
+        25000 ms, then 200 with the new state or 304.
       operationId: sync_state_v2_sync_state_get
       parameters:
+      - name: wait_ms
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Wait Ms
       - name: authorization
         in: header
         required: false
@@ -3467,6 +3476,248 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/handling/{item_id}/handover:
+    post:
+      summary: Hand Over Agent Note Item
+      description: 'A reply waker could not wake the session it keeps a reply or page
+        for: the item is no longer kept for it and the waker''s claim for that session
+        is given up, so the fallback answers (protocol/agent-notes.md, Wakers).'
+      operationId: hand_over_agent_note_item_v1_agent_notes_handling__item_id__handover_post
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteHandoverAnswer'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - machine
+              properties:
+                machine:
+                  type: string
+                reason:
+                  type: string
+                  maxLength: 200
+  /v1/agent-notes/wakers/{machine}:
+    put:
+      summary: Put Agent Note Waker
+      description: A reply waker's heartbeat (every 30 s or so), with the sessions of
+        its machine it can wake (protocol/agent-notes.md, Wakers). Live while it beats
+        within 2 minutes.
+      operationId: put_agent_note_waker_v1_agent_notes_wakers__machine__put
+      parameters:
+      - name: machine
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Machine
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteWakerRecord'
+        '201':
+          description: First beat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteWakerRecord'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 'With sessions: a full registration (it replaces the stored
+                one). Without: a heartbeat.'
+              properties:
+                sessions:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    required:
+                    - session_id
+                    properties:
+                      session_id:
+                        type: string
+                        maxLength: 128
+                      title:
+                        type: string
+                      folder:
+                        type: string
+                      state:
+                        type: string
+                        enum:
+                        - idle
+                        - busy
+                        - closed
+                      kind:
+                        type: string
+                      last_active_at:
+                        type: string
+                        format: date-time
+                      wakeable:
+                        type: boolean
+                fallback:
+                  type: object
+                  description: This waker wakes the session that answers what has no
+                    other home.
+                  properties:
+                    session_id:
+                      type: string
+                    title:
+                      type: string
+                fallback_after_seconds:
+                  type: number
+                  description: While this waker is offline, the responder waits this
+                    long after arrival (default 8 hours).
+                heartbeat_seconds:
+                  type: number
+                version:
+                  type: string
+                claude_version:
+                  type: string
+    delete:
+      summary: Forget Agent Note Waker
+      description: The caller's waker on this machine stops for good.
+      operationId: forget_agent_note_waker_v1_agent_notes_wakers__machine__delete
+      parameters:
+      - name: machine
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Machine
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/agent-notes/wakers:
+    get:
+      summary: List Agent Note Wakers
+      description: The reply wakers seen in the last 30 days, live ones first, with
+        the sessions each can wake.
+      operationId: list_agent_note_wakers_v1_agent_notes_wakers_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteWakerList'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/agent-notes/{note_id}:
     get:
       summary: Get Agent Note
@@ -3874,6 +4125,155 @@ paths:
                       maxLength: 128
                   description: A picture sent with the reply (e.g. from the glasses
                     camera); same limits as image.
+  /v1/push/registration:
+    put:
+      summary: Put Push Registration
+      description: 'Register this device''s FCM registration token for content-free
+        pings when agent notes arrive (protocol/push.md). One registration per device
+        and app; a token moves to the device that registers it last. Stored also while
+        push is off (then the answer has push: off).'
+      operationId: put_push_registration_v1_push_registration_put
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushRegistered'
+        '413':
+          description: push_request_too_large
+        '422':
+          description: invalid_push_registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - provider
+              - token
+              - app
+              properties:
+                provider:
+                  type: string
+                  enum:
+                  - fcm
+                token:
+                  type: string
+                  minLength: 1
+                  maxLength: 4096
+                app:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+    delete:
+      summary: Delete Push Registration
+      description: 'Remove this device''s registrations: the one with this token, or
+        all without a body.'
+      operationId: delete_push_registration_v1_push_registration_delete
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushRemoved'
+        '413':
+          description: push_request_too_large
+        '422':
+          description: invalid_push_registration
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum:
+                  - fcm
+                token:
+                  type: string
+                  minLength: 1
+                  maxLength: 4096
+  /v1/push/status:
+    get:
+      summary: Push Status
+      description: Whether the server sends push, and every device's registrations (never
+        their tokens).
+      operationId: push_status_v1_push_status_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushStatus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/push/test:
+    post:
+      summary: Push Test
+      description: 'Send one test ping to each of the caller''s own registrations now,
+        and answer what FCM said for each (sent: how many it accepted).'
+      operationId: push_test_v1_push_test_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushTestAnswer'
+        '409':
+          description: push_off
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   headers:
     XThoughtsTraceId:
@@ -6831,6 +7231,10 @@ components:
             $ref: '#/components/schemas/AgentNoteReplyListenerRecord'
           type: array
           title: Listeners
+        wake:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteWake'
+          - type: 'null'
         note_id:
           type: string
           title: Note Id
@@ -7097,6 +7501,10 @@ components:
           anyOf:
           - $ref: '#/components/schemas/AgentNoteAnswerer'
           - type: 'null'
+        wake_target:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteWake'
+          - type: 'null'
         claimed:
           type: boolean
           title: Claimed
@@ -7159,6 +7567,10 @@ components:
         answer_by:
           anyOf:
           - $ref: '#/components/schemas/AgentNoteAnswerer'
+          - type: 'null'
+        wake_target:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteWake'
           - type: 'null'
       type: object
       required:
@@ -7247,6 +7659,31 @@ components:
           - type: boolean
           - type: 'null'
           title: Live
+        woken:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Woken
+        machine:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Machine
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        waker_live:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Waker Live
+        handed_over_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Handed Over At
       type: object
       required:
       - device_id
@@ -7385,11 +7822,258 @@ components:
             $ref: '#/components/schemas/AgentNoteReplyListenerRecord'
           type: array
           title: Listeners
+        wake:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteWake'
+          - type: 'null'
       type: object
       required:
       - state
       - listeners
       title: AgentNoteReplyListening
+    AgentNoteWakerRecord:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        machine:
+          type: string
+          title: Machine
+        live:
+          type: boolean
+          title: Live
+        registered_at:
+          type: string
+          title: Registered At
+        last_seen_at:
+          type: string
+          title: Last Seen At
+        fallback:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Fallback
+        fallback_after_seconds:
+          type: integer
+          title: Fallback After Seconds
+        heartbeat_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Heartbeat Seconds
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        claude_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Claude Version
+        sessions:
+          items:
+            $ref: '#/components/schemas/AgentNoteWakeSession'
+          type: array
+          title: Sessions
+      type: object
+      required:
+      - device_id
+      - machine
+      - live
+      - registered_at
+      - last_seen_at
+      - fallback
+      - fallback_after_seconds
+      - heartbeat_seconds
+      - version
+      - claude_version
+      - sessions
+      title: AgentNoteWakerRecord
+    AgentNoteWakerList:
+      properties:
+        wakers:
+          items:
+            $ref: '#/components/schemas/AgentNoteWakerRecord'
+          type: array
+          title: Wakers
+        checked_at:
+          type: string
+          title: Checked At
+      type: object
+      required:
+      - wakers
+      - checked_at
+      title: AgentNoteWakerList
+    AgentNoteWakeSession:
+      properties:
+        session_id:
+          type: string
+          title: Session Id
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        folder:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Folder
+        state:
+          type: string
+          enum:
+          - idle
+          - busy
+          - closed
+          title: State
+        kind:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+        last_active_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Active At
+        wakeable:
+          type: boolean
+          title: Wakeable
+      type: object
+      required:
+      - session_id
+      - title
+      - folder
+      - state
+      - kind
+      - last_active_at
+      - wakeable
+      title: AgentNoteWakeSession
+    AgentNoteWake:
+      properties:
+        state:
+          type: string
+          enum:
+          - will_be_woken
+          - waker_offline
+          title: State
+        role:
+          type: string
+          enum:
+          - sender
+          - owner
+          - responder
+          title: Role
+        device_id:
+          type: string
+          title: Device Id
+        machine:
+          type: string
+          title: Machine
+        conversation_id:
+          type: string
+          title: Conversation Id
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        session_state:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session State
+        owner_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Id
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        waker_live:
+          type: boolean
+          title: Waker Live
+        fallback_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fallback At
+      type: object
+      required:
+      - state
+      - role
+      - device_id
+      - machine
+      - conversation_id
+      - title
+      - session_state
+      - owner_id
+      - label
+      - waker_live
+      - fallback_at
+      title: AgentNoteWake
+      description: The session a reply waker wakes for a reply or page ("Wakers").
+    AgentNoteHandoverAnswer:
+      properties:
+        item_id:
+          type: string
+          title: Item Id
+        kind:
+          type: string
+          enum:
+          - reply
+          - page
+          title: Kind
+        note_id:
+          type: string
+          title: Note Id
+        arrived_at:
+          type: string
+          title: Arrived At
+        covered_by:
+          items:
+            $ref: '#/components/schemas/AgentNoteCoverer'
+          type: array
+          title: Covered By
+        claim:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteClaim'
+          - type: 'null'
+        inferred_answer_note_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Inferred Answer Note Id
+        answer_by:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteAnswerer'
+          - type: 'null'
+        wake_target:
+          anyOf:
+          - $ref: '#/components/schemas/AgentNoteWake'
+          - type: 'null'
+        handed_over:
+          type: integer
+          title: Handed Over
+        released:
+          type: boolean
+          title: Released
+      type: object
+      required:
+      - item_id
+      - kind
+      - note_id
+      - arrived_at
+      - covered_by
+      - claim
+      - handed_over
+      - released
+      title: AgentNoteHandoverAnswer
     AgentNoteReplyPhotoRecord:
       properties:
         url:
@@ -7670,3 +8354,118 @@ components:
       - review_card_id
       - sender_device_id
       title: AgentNoteSummary
+    PushRegistered:
+      properties:
+        registered:
+          type: boolean
+          title: Registered
+        push:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Push
+      type: object
+      required:
+      - registered
+      title: PushRegistered
+    PushRegistrationRecord:
+      properties:
+        device_name:
+          type: string
+          title: Device Name
+        app:
+          type: string
+          title: App
+        registered_at:
+          type: string
+          title: Registered At
+        last_sent_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Sent At
+        last_result:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Result
+        this_device:
+          type: boolean
+          title: This Device
+      type: object
+      required:
+      - device_name
+      - app
+      - registered_at
+      - last_sent_at
+      - last_result
+      - this_device
+      title: PushRegistrationRecord
+    PushRemoved:
+      properties:
+        removed:
+          type: integer
+          title: Removed
+      type: object
+      required:
+      - removed
+      title: PushRemoved
+    PushStatus:
+      properties:
+        push:
+          type: string
+          title: Push
+        project_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Project Id
+        registrations:
+          items:
+            $ref: '#/components/schemas/PushRegistrationRecord'
+          type: array
+          title: Registrations
+      type: object
+      required:
+      - push
+      - project_id
+      - registrations
+      title: PushStatus
+    PushTestAnswer:
+      properties:
+        sent:
+          type: integer
+          title: Sent
+        results:
+          items:
+            $ref: '#/components/schemas/PushTestResult'
+          type: array
+          title: Results
+      type: object
+      required:
+      - sent
+      - results
+      title: PushTestAnswer
+    PushTestResult:
+      properties:
+        app:
+          type: string
+          title: App
+        registered_at:
+          type: string
+          title: Registered At
+        result:
+          type: string
+          title: Result
+        http_status:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Http Status
+      type: object
+      required:
+      - app
+      - registered_at
+      - result
+      - http_status
+      title: PushTestResult

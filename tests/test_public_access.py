@@ -252,7 +252,7 @@ def test_server_trusts_forwarded_headers_only_from_loopback(settings, monkeypatc
     calls = []
     monkeypatch.setenv("FORWARDED_ALLOW_IPS", "*")
     monkeypatch.setattr(cli.Settings, "from_env", classmethod(lambda _cls: settings))
-    monkeypatch.setattr(cli.uvicorn, "run", lambda app, **options: calls.append(options))
+    monkeypatch.setattr(cli, "run_server", lambda app, options: calls.append(options))
 
     cli.server_main()
 
@@ -262,6 +262,7 @@ def test_server_trusts_forwarded_headers_only_from_loopback(settings, monkeypatc
             "port": 8080,
             "proxy_headers": True,
             "forwarded_allow_ips": "127.0.0.1",
+            "timeout_graceful_shutdown": cli.GRACEFUL_SHUTDOWN_SECONDS,
         }
     ]
 
@@ -309,7 +310,7 @@ def test_bootstrap_tokens_shorter_than_32_characters_are_refused(monkeypatch, tm
     assert "short-secret-value" not in str(refused.value)
     assert "'mac'" in str(refused.value)
 
-    monkeypatch.setattr(cli.uvicorn, "run", lambda *_args, **_kwargs: pytest.fail("server started"))
+    monkeypatch.setattr(cli, "run_server", lambda *_args, **_kwargs: pytest.fail("server started"))
     with pytest.raises(ValueError):
         cli.server_main()
 

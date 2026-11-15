@@ -2477,7 +2477,7 @@ def test_targeted_build_satisfies_all_render_state_without_redundant_check(clien
     assert changed_documents["manual.pdf"] == {
         "filename": "manual.pdf",
         "status": "out_of_sync",
-        "reason": "Published source files changed after the latest server build.",
+        "reason": "Published source files changed after the server's latest build.",
         "build_id": initial["id"],
         "last_successful_build_at": manual_built_at,
         "publication": {

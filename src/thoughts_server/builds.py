@@ -1071,7 +1071,7 @@ def render_status(
     if job is None:
         return {
             "status": "out_of_sync",
-            "reason": "No completed server build is recorded for this PDF.",
+            "reason": "No completed build of this PDF is recorded on the server.",
             "source_frontier": source_frontier,
             "build": None,
             "publication": publication_identity,
@@ -1112,7 +1112,7 @@ def render_status(
     if relevant_source_change:
         return {
             "status": "out_of_sync",
-            "reason": "Published source files changed after the latest server build.",
+            "reason": "Published source files changed after the server's latest build.",
             "source_frontier": source_frontier,
             "build": record,
             "publication": publication_identity,
@@ -1120,7 +1120,7 @@ def render_status(
     if _lacks_listed_pages(session, publication, store):
         return {
             "status": "out_of_sync",
-            "reason": "The folder's HTML pages changed after the latest server build.",
+            "reason": "The folder's HTML pages changed after the server's latest build.",
             "source_frontier": source_frontier,
             "build": record,
             "publication": publication_identity,
@@ -1155,7 +1155,7 @@ def render_status(
     if current_input_identity is not None and current_input_identity != built_input_identity:
         return {
             "status": "out_of_sync",
-            "reason": "A generated build input changed after the latest server build.",
+            "reason": "A generated build input changed after the server's latest build.",
             "source_frontier": source_frontier,
             "build": record,
             "publication": publication_identity,
@@ -1182,7 +1182,8 @@ def render_status(
     if job.status in {"failed", "cancelled"}:
         return {
             "status": "error",
-            "reason": job.error or _document_failure_message(job, target) or "The latest server build failed for this PDF.",
+            "reason": (job.error or _document_failure_message(job, target)
+                       or "The server's latest build failed for this PDF."),
             "source_frontier": source_frontier,
             "build": record,
             "publication": publication_identity,
@@ -1190,7 +1191,8 @@ def render_status(
     if document_failed:
         return {
             "status": "attention" if job.status == "attention" else "error",
-            "reason": job.error or _document_failure_message(job, target) or "The latest server build needs attention for this PDF.",
+            "reason": (job.error or _document_failure_message(job, target)
+                       or "The server's latest build needs attention for this PDF."),
             "source_frontier": source_frontier,
             "build": record,
             "publication": publication_identity,
@@ -1198,7 +1200,7 @@ def render_status(
     if job.status not in {"succeeded", "attention"}:
         return {
             "status": "error",
-            "reason": job.error or f"The latest server build ended with status {job.status}.",
+            "reason": job.error or f"The server's latest build ended with status {job.status}.",
             "source_frontier": source_frontier,
             "build": record,
             "publication": publication_identity,
@@ -2696,7 +2698,7 @@ class BuildWorker:
                     component="build_worker",
                     phase="building",
                     state="running",
-                    message="The server's worker started the build.",
+                    message="The server started the build.",
                     metadata={"attempt": job.attempts},
                 )
             session.commit()
@@ -4762,7 +4764,7 @@ class BuildWorker:
                 safe = safe.replace(str(root), "project")
         safe = re.sub(r"(?:^|\s)/(?:[^\s:;]+/)*([^/\s:;]+)", r" \1", safe)
         safe = " ".join(safe.split())[:2000]
-        return safe or "Server build failed."
+        return safe or "The build failed on the server."
 
     def run_once(self) -> bool:
         """Run the next build if the host has a free build slot for this Library.

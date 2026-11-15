@@ -19,6 +19,7 @@ import base64
 import binascii
 import hashlib
 import json
+import logging
 import math
 import re
 import struct
@@ -46,10 +47,14 @@ from .models import (
     AgentNoteReply,
     AgentNoteReplyListener,
     AgentNoteReplyPhoto,
+    AgentNoteWaker,
     Entity,
     SourceFile,
 )
 from .object_store import ObjectStore
+from .request_waits import held
+
+LOG = logging.getLogger("uvicorn.error")
 
 CAPABILITY = "agent_notes_v1"
 # Agents announce that they listen for replies (reply feed listen=true); notes say whether one does.
@@ -74,6 +79,24 @@ RULES_CAPABILITY = "agent_note_rules_v1"
 ANSWER_BY_CAPABILITY = "agent_note_answer_by_v1"
 ANSWER_BY_ROLES = ("sender", "owner", "responder")
 ANSWER_BY_REFUSAL = "the user chose another agent to answer this note"
+# Reply wakers: a program on each machine wakes that machine's sessions when a reply or page is theirs
+# ("Wakers").
+WAKERS_CAPABILITY = "agent_note_wakers_v1"
+# A waker beats every 30 s or so; it is live while a beat came within this window (or three of its own
+# periods).
+WAKER_LIVE_WINDOW = timedelta(seconds=120)
+# A waker unseen this long is forgotten (its rows are deleted when a waker of the same device beats).
+WAKER_KNOWN_WINDOW = timedelta(days=30)
+# While the waker of a session is offline (its machine asleep), the responder waits this long after arrival,
+# unless that waker said otherwise (fallback_after_seconds).
+WAKE_FALLBACK = timedelta(hours=8)
+MIN_WAKE_FALLBACK_SECONDS = 60
+MAX_WAKE_FALLBACK_SECONDS = 7 * 24 * 3600
+MAX_WAKER_SESSIONS = 500
+WAKER_MACHINE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
+WAKE_SESSION_STATES = ("idle", "busy", "closed")
+# The order in which covering agents get a reply: the note's own session, then a topic owner.
+ROLE_PRECEDENCE = {"sender": 0, "owner": 1}
 OWNER_PREFIX = "topic:"
 # A responder leaves a reply or page this long to the agent that covered it when it arrived.
 COVERER_GRACE = timedelta(minutes=10)
@@ -813,13 +836,19 @@ def listening_answer(session: Session, note: AgentNote, now: datetime, choice: d
 
     With the user's ``choice`` of who answers (``answer_by``) only that agent counts: ``listening``
     with its listener while it is live, else ``not_listening`` with none.
+
+    ``wake`` ("Wakers"): the session a reply waker would wake for a reply arriving now (``will_be_woken``,
+    or ``waker_offline`` with ``fallback_at``); absent when none would. ``state`` keeps its meaning (only
+    listeners count), so older clients read the same answer as before.
     """
+    wake = wake_answer(session, note, now, choice)
     if choice is not None:
         chosen = [row for row in answerer_rows(session, choice, note.id)[:1] if listener_is_live(row, now)]
-        return {
+        answer = {
             "state": "listening" if chosen else "not_listening",
             "listeners": [reply_listener_record(row) for row in chosen],
         }
+        return {**answer, "wake": wake} if wake is not None else answer
     rows = [
         row
         for row in session.scalars(
@@ -842,13 +871,15 @@ def listening_answer(session: Session, note: AgentNote, now: datetime, choice: d
         if as_utc(row.last_seen_at) >= now - REPLY_LISTENER_LIVE_WINDOW and reply_listener_covers(row, note)
     ]
     state = "listening" if live else ("not_listening" if rows else "unknown")
-    return {"state": state, "listeners": [reply_listener_record(row) for row in live]}
+    answer = {"state": state, "listeners": [reply_listener_record(row) for row in live]}
+    return {**answer, "wake": wake} if wake is not None else answer
 
 
 def handling_record(
     item: AgentNoteHandling, session: Session | None = None, now: datetime | None = None
 ) -> dict:
-    """A reply's or page's handling: who covered it at arrival (live now or not) and the claim."""
+    """A reply's or page's handling: who covered it at arrival (live now or not), the claim, and the
+    session a waker wakes for it (``wake_target``)."""
     covered = []
     for entry in item.covered_by or []:
         stored = entry if isinstance(entry, dict) else {}
@@ -856,6 +887,9 @@ def handling_record(
     if session is not None and now is not None:
         for entry, stored in zip(covered, item.covered_by or [], strict=False):
             entry["live"] = coverer_live(session, stored, now)
+            if isinstance(stored, dict) and stored.get("woken"):
+                waker = stored_waker(session, stored)
+                entry["waker_live"] = waker is not None and waker_live(waker, now)
     claim = None
     if item.claimed_at is not None:
         claim = {
@@ -877,16 +911,380 @@ def handling_record(
     if choice is not None and session is not None and now is not None:
         # Only when the user had chosen who answers the note: the agent, and whether it listens now.
         record["answer_by"] = chosen_agent(session, choice, item.note_id, now)
+    if session is not None and now is not None:
+        # The session a reply waker wakes for it now ("Wakers"); absent when none, or when the coverer
+        # listens by itself.
+        target = wake_target(session, item.covered_by or [], choice, item.arrived_at, now)
+        if target is not None:
+            record["wake_target"] = target
     return record
 
 
-def coverer_live(session: Session, entry: object, now: datetime) -> bool:
-    """Whether a listener stored in covered_by still listens (re-polled within 90 s)."""
+def listener_entry_live(session: Session, entry: object, now: datetime) -> bool:
+    """Whether the listener stored in a covered_by entry still listens (re-polled within 90 s)."""
     key = entry.get("key") if isinstance(entry, dict) else None
     if not (isinstance(key, list) and len(key) == 3 and all(isinstance(part, str) for part in key)):
         return False
     row = session.get(AgentNoteReplyListener, tuple(key))
     return row is not None and listener_is_live(row, now)
+
+
+def coverer_live(session: Session, entry: object, now: datetime) -> bool:
+    """Whether an agent stored in covered_by still covers the item: its listener re-polled within 90 s, or
+    (a session a waker wakes) its waker is live, still lists it, and did not hand the item over."""
+    if listener_entry_live(session, entry, now):
+        return True
+    if not (isinstance(entry, dict) and entry.get("woken")) or entry.get("handed_over_at"):
+        return False
+    waker = stored_waker(session, entry)
+    if waker is None or not waker_live(waker, now):
+        return False
+    return waker_session(waker, entry.get("conversation_id")) is not None
+
+
+# --- wakers ("Wakers") ---------------------------------------------------------------------------
+
+
+def waker_live(row: AgentNoteWaker, now: datetime) -> bool:
+    """A waker is live while its heartbeat came within 2 minutes (or three of its own periods)."""
+    period = (row.info or {}).get("heartbeat_seconds")
+    window = WAKER_LIVE_WINDOW
+    if is_number(period) and period > 0:
+        window = max(window, timedelta(seconds=3 * float(period)))
+    return as_utc(row.last_seen_at) >= now - window
+
+
+def waker_fallback_after(row: AgentNoteWaker | None) -> timedelta:
+    """How long the responder waits, after an item arrived, for an offline waker's session."""
+    seconds = (row.info or {}).get("fallback_after_seconds") if row is not None else None
+    return timedelta(seconds=float(seconds)) if is_number(seconds) and seconds > 0 else WAKE_FALLBACK
+
+
+def waker_session(row: AgentNoteWaker, session_id: object) -> dict | None:
+    """The session record of a waker that it can wake, or None."""
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    for record in row.sessions or []:
+        if not isinstance(record, dict) or record.get("session_id") != session_id:
+            continue
+        if record.get("wakeable", True):
+            return record
+    return None
+
+
+def known_wakers(session: Session, now: datetime) -> list[AgentNoteWaker]:
+    """The wakers seen in the last 30 days: live ones first, then the most recently seen."""
+    rows = [
+        row for row in session.scalars(select(AgentNoteWaker))
+        if as_utc(row.last_seen_at) >= now - WAKER_KNOWN_WINDOW
+    ]
+    rows.sort(key=lambda row: (not waker_live(row, now), -as_utc(row.last_seen_at).timestamp()))
+    return rows
+
+
+def wakeable(
+    wakers: list[AgentNoteWaker], device_id: str | None, conversation_id: str | None
+) -> tuple[AgentNoteWaker, dict] | None:
+    """The waker (of the same device) that can wake this conversation, and its session record."""
+    if not device_id or not conversation_id:
+        return None
+    for row in wakers:
+        if row.device_id == device_id and (record := waker_session(row, conversation_id)) is not None:
+            return row, record
+    return None
+
+
+def fallback_waker(wakers: list[AgentNoteWaker]) -> tuple[AgentNoteWaker, dict] | None:
+    """The waker of the fallback session (the one that answers what has no other home), and that session."""
+    for row in wakers:
+        fallback = (row.info or {}).get("fallback")
+        session_id = fallback.get("session_id") if isinstance(fallback, dict) else None
+        if isinstance(session_id, str) and session_id:
+            return row, fallback
+    return None
+
+
+def stored_waker(session: Session, entry: dict) -> AgentNoteWaker | None:
+    device, machine = entry.get("device_id"), entry.get("machine")
+    if not isinstance(device, str) or not isinstance(machine, str):
+        return None
+    return session.get(AgentNoteWaker, (device, machine))
+
+
+def woken_entry(row: AgentNoteWaker, record: dict, base: dict | None, role: str,
+                owner: AgentNoteReplyListener | None = None) -> dict:
+    """A covered_by entry for a session a waker wakes; with ``base``, that listener's entry, marked."""
+    if base is not None:
+        entry = dict(base)
+    else:
+        scope = owner.scope if owner is not None and isinstance(owner.scope, dict) else {}
+        entry = {
+            "device_id": row.device_id,
+            "conversation_id": record["session_id"],
+            "note_id": None,
+            "last_seen_at": None,
+            "responder": False,
+            "role": role,
+            "owner_id": owner.note_id[len(OWNER_PREFIX):] if owner is not None else None,
+            "label": scope.get("label") if owner is not None else None,
+            "key": None,
+        }
+    entry.update({"woken": True, "machine": row.machine, "title": record.get("title")})
+    return entry
+
+
+def arrival_coverage(
+    session: Session, note: AgentNote, now: datetime, choice: dict | None = None
+) -> list[dict]:
+    """Who covers a reply or page of the note now, as stored in covered_by: the live listeners (the sender's
+    agents, topic owners) and the sessions a waker can wake (the note's own session, the topic owners'), the
+    note's own session first; with the user's choice, only the chosen agent."""
+    wakers = known_wakers(session, now)
+    targets: list[tuple[str, tuple[AgentNoteWaker, dict], AgentNoteReplyListener | None]] = []
+    if choice is None:
+        entries = [coverer_entry(row) for row in covering_listeners(session, note, now)]
+        own = wakeable(wakers, note.sender_device_id, note_conversation_id(note))
+        if own is not None:
+            targets.append(("sender", own, None))
+        owners = session.scalars(
+            select(AgentNoteReplyListener)
+            .where(AgentNoteReplyListener.note_id.startswith(OWNER_PREFIX))
+            .order_by(AgentNoteReplyListener.last_seen_at.desc())
+        ).all()
+        for owner in owners:
+            if not scope_matches(owner.scope, note):
+                continue
+            if (found := wakeable(wakers, owner.device_id, owner.conversation_id)) is not None:
+                targets.append(("owner", found, owner))
+    else:
+        entries = [coverer_entry(row) for row in answerer_rows(session, choice, note.id)[:1]]
+        if choice["role"] != "responder":
+            found = wakeable(wakers, choice["device_id"], choice.get("conversation_id"))
+            if found is not None:
+                owner = None
+                if choice["role"] == "owner":
+                    key = (choice["device_id"], choice.get("conversation_id") or "",
+                           OWNER_PREFIX + (choice.get("owner_id") or ""))
+                    owner = session.get(AgentNoteReplyListener, key)
+                targets.append((choice["role"], found, owner))
+    seen: set[tuple[str, str]] = set()
+    for role, (row, record), owner in targets:
+        identity = (row.device_id, record["session_id"])
+        if identity in seen:
+            continue
+        seen.add(identity)
+        index = next(
+            (
+                i for i, entry in enumerate(entries)
+                if (entry.get("device_id"), entry.get("conversation_id") or "") == identity
+                and not entry.get("woken")
+            ),
+            None,
+        )
+        if index is None:
+            entries.append(woken_entry(row, record, None, role, owner))
+        else:
+            entries[index] = woken_entry(row, record, entries[index], role, owner)
+    # The note's own session before topic owners, whatever order their listeners were seen in.
+    entries.sort(key=lambda entry: ROLE_PRECEDENCE.get(entry.get("role"), 2))
+    return entries
+
+
+def wake_deadline(session: Session, entry: dict, arrived_at: datetime, now: datetime) -> datetime | None:
+    """Until when a covering agent keeps an item from the responder: 10 minutes after arrival while it
+    listens or its waker is live; while its waker is offline, that waker's fallback time (8 hours); None when
+    it covers no more (stopped listening, handed over, forgotten by its waker)."""
+    arrived = as_utc(arrived_at)
+    deadlines = []
+    if listener_entry_live(session, entry, now):
+        deadlines.append(arrived + COVERER_GRACE)
+    if entry.get("woken") and not entry.get("handed_over_at"):
+        waker = stored_waker(session, entry)
+        if waker is not None and waker_session(waker, entry.get("conversation_id")) is not None:
+            if waker_live(waker, now):
+                # A waker back from being offline (the machine woke up) gets its 10 minutes from then.
+                deadlines.append(max(arrived, waker_online_since(waker) or arrived) + COVERER_GRACE)
+            else:
+                deadlines.append(arrived + waker_fallback_after(waker))
+    return max(deadlines) if deadlines else None
+
+
+def chosen_wake_hold(session: Session, entry: object, arrived_at: datetime, now: datetime) -> datetime | None:
+    """For a reply under the user's choice: until when a chosen session that a waker wakes keeps it from
+    the responder (while its waker is live, or for the fallback time while it is offline); None when it does
+    not."""
+    if not isinstance(entry, dict) or not entry.get("woken") or entry.get("handed_over_at"):
+        return None
+    waker = stored_waker(session, entry)
+    if waker is None or waker_session(waker, entry.get("conversation_id")) is None:
+        return None
+    if waker_live(waker, now):
+        return now + REPLY_LISTENER_LIVE_WINDOW
+    until = as_utc(arrived_at) + waker_fallback_after(waker)
+    return until if until > now else None
+
+
+def waker_online_since(row: AgentNoteWaker) -> datetime | None:
+    value = (row.info or {}).get("online_since")
+    if not isinstance(value, str):
+        return None
+    try:
+        return as_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    except ValueError:
+        return None
+
+
+def target_record(row: AgentNoteWaker, session_id: str, title: object, role: str, now: datetime,
+                  arrived_at: datetime, entry: dict | None = None) -> dict:
+    """The session a waker wakes for an item (``wake_target``, ``wake``)."""
+    live = waker_live(row, now)
+    record = waker_session(row, session_id) or {}
+    return {
+        "state": "will_be_woken" if live else "waker_offline",
+        "role": role,
+        "device_id": row.device_id,
+        "machine": row.machine,
+        "conversation_id": session_id,
+        "title": record.get("title") or (title if isinstance(title, str) else None),
+        "session_state": record.get("state"),
+        "owner_id": (entry or {}).get("owner_id") if role == "owner" else None,
+        "label": (entry or {}).get("label") if role == "owner" else None,
+        "waker_live": live,
+        # While the waker is offline: when the fallback session answers instead.
+        "fallback_at": None if live else rfc3339(as_utc(arrived_at) + waker_fallback_after(row)),
+    }
+
+
+def wake_target(
+    session: Session, covered_by: list, choice: dict | None, arrived_at: datetime, now: datetime
+) -> dict | None:
+    """The session a waker wakes for an item: the first agent in covered_by (the note's own session, then
+    topic owners) that still covers it, when a waker wakes it; None when that agent listens by itself. A
+    session whose waker stayed offline past its fallback time, or handed the item over, is passed by. With
+    nobody left (or the responder chosen), the fallback session, when a waker wakes one."""
+    wakers = known_wakers(session, now)
+    responder_chosen = choice is not None and choice.get("role") == "responder"
+    for entry in covered_by:
+        if not isinstance(entry, dict) or responder_chosen:
+            continue
+        if entry.get("woken") and not entry.get("handed_over_at"):
+            waker = stored_waker(session, entry)
+            deadline = wake_deadline(session, entry, arrived_at, now)
+            if waker is not None and deadline is not None and (waker_live(waker, now) or deadline > now):
+                role = entry.get("role") or "sender"
+                return target_record(
+                    waker, entry["conversation_id"], entry.get("title"), role, now, arrived_at, entry
+                )
+        if listener_entry_live(session, entry, now) and entry.get("role") != "responder":
+            return None  # it hears the item by itself
+    fallback = fallback_waker(wakers)
+    if fallback is None:
+        return None
+    row, chosen = fallback
+    return target_record(row, chosen["session_id"], chosen.get("title"), "responder", now, arrived_at)
+
+
+def wake_answer(session: Session, note: AgentNote, now: datetime, choice: dict | None = None) -> dict | None:
+    """``wake`` of a listening answer: the session a waker would wake for a reply (or page) arriving now."""
+    return wake_target(session, arrival_coverage(session, note, now, choice), choice, now, now)
+
+
+def parse_waker(machine: str, body: bytes) -> dict:
+    """The body of PUT /v1/agent-notes/wakers/{machine}: a full registration (``sessions``, with the waker's
+    own details) or, without ``sessions``, a heartbeat that keeps what was registered."""
+    if not WAKER_MACHINE.fullmatch(machine or ""):
+        raise invalid(
+            "machine must be 1 to 64 letters, digits, '.', '_' or '-', starting with a letter or digit"
+        )
+    payload = parse_json_object(body) if body.strip() else {}
+    if "sessions" not in payload:
+        return {}
+    sessions = payload["sessions"]
+    if not isinstance(sessions, list):
+        raise invalid("sessions must be a list")
+    if len(sessions) > MAX_WAKER_SESSIONS:
+        raise invalid(f"sessions has {len(sessions)} entries; at most {MAX_WAKER_SESSIONS} are allowed")
+    records: dict[str, dict] = {}
+    for index, value in enumerate(sessions):
+        record = parse_wake_session(value, f"sessions[{index}]")
+        records.setdefault(record["session_id"], record)
+    info: dict[str, Any] = {}
+    fallback = payload.get("fallback")
+    if fallback is not None:
+        if not isinstance(fallback, dict):
+            raise invalid("fallback must be an object with session_id and title")
+        session_id = optional_text(fallback, "session_id", MAX_CONVERSATION_ID_CHARACTERS)
+        if session_id is None:
+            raise invalid("fallback.session_id is required")
+        title = short_text(fallback.get("title"), MAX_TITLE_CHARACTERS)
+        info["fallback"] = {"session_id": session_id, "title": title}
+    for field, low, high in (("fallback_after_seconds", MIN_WAKE_FALLBACK_SECONDS, MAX_WAKE_FALLBACK_SECONDS),
+                             ("heartbeat_seconds", 5, 600)):
+        value = payload.get(field)
+        if value is None:
+            continue
+        if not is_number(value):
+            raise invalid(f"{field} must be a number")
+        info[field] = int(max(low, min(high, value)))
+    for field in ("version", "claude_version"):
+        if (value := optional_text(payload, field, 64)) is not None:
+            info[field] = value
+    return {"sessions": list(records.values()), "info": info}
+
+
+def short_text(value: object, limit: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = " ".join(value.split())
+    if len(value) > limit:
+        value = value[: limit - 1] + "…"
+    return value or None
+
+
+def parse_wake_session(value: object, where: str) -> dict:
+    if not isinstance(value, dict):
+        raise invalid(f"{where} must be a JSON object")
+    session_id = optional_text(value, "session_id", MAX_CONVERSATION_ID_CHARACTERS)
+    if session_id is None:
+        raise invalid(f"{where}.session_id is required")
+    state = value.get("state", "closed")
+    if state not in WAKE_SESSION_STATES:
+        raise invalid(f"{where}.state must be idle, busy or closed")
+    wakeable_value = value.get("wakeable", True)
+    if not isinstance(wakeable_value, bool):
+        raise invalid(f"{where}.wakeable must be true or false")
+    last_active = value.get("last_active_at")
+    if last_active is not None:
+        try:
+            last_active = rfc3339(datetime.fromisoformat(str(last_active).replace("Z", "+00:00")))
+        except ValueError:
+            raise invalid(f"{where}.last_active_at must be an RFC 3339 time") from None
+    return {
+        "session_id": session_id,
+        "title": short_text(value.get("title"), MAX_TITLE_CHARACTERS),
+        "folder": short_text(value.get("folder"), 512),
+        "state": state,
+        "kind": short_text(value.get("kind"), 32),
+        "last_active_at": last_active,
+        "wakeable": wakeable_value,
+    }
+
+
+def waker_record(row: AgentNoteWaker, now: datetime) -> dict:
+    info = row.info or {}
+    return {
+        "device_id": row.device_id,
+        "machine": row.machine,
+        "live": waker_live(row, now),
+        "registered_at": rfc3339(row.registered_at),
+        "last_seen_at": rfc3339(row.last_seen_at),
+        "fallback": info.get("fallback"),
+        "fallback_after_seconds": int(waker_fallback_after(row).total_seconds()),
+        "heartbeat_seconds": info.get("heartbeat_seconds"),
+        "version": info.get("version"),
+        "claude_version": info.get("claude_version"),
+        "sessions": [record for record in row.sessions or [] if isinstance(record, dict)],
+    }
 
 
 def inferred_answer(
@@ -1098,9 +1496,31 @@ class AgentNoteReplyListenerRecord(BaseModel):
     label: str | None = None
 
 
+class AgentNoteWake(BaseModel):
+    """The session a reply waker wakes for a reply or page ("Wakers")."""
+
+    # will_be_woken: its waker is live; waker_offline: its machine is asleep or the waker stopped
+    # (fallback_at says when the fallback answers instead).
+    state: Literal["will_be_woken", "waker_offline"]
+    # sender (the note's own session), owner (a topic owner's session) or responder (the fallback session).
+    role: Literal["sender", "owner", "responder"]
+    device_id: str
+    machine: str
+    conversation_id: str
+    title: str | None
+    # idle, busy (a running session) or closed (resumed when woken), as its waker last said.
+    session_state: str | None
+    owner_id: str | None
+    label: str | None
+    waker_live: bool
+    fallback_at: str | None
+
+
 class AgentNoteReplyListening(BaseModel):
     state: Literal["listening", "not_listening", "unknown"]
     listeners: list[AgentNoteReplyListenerRecord]
+    # Who a reply waker would wake for a reply arriving now; null when none would ("Wakers").
+    wake: AgentNoteWake | None = None
 
 
 class AgentNoteAnswerer(BaseModel):
@@ -1185,6 +1605,13 @@ class AgentNoteOwnerList(BaseModel):
 
 class AgentNoteCoverer(AgentNoteReplyListenerRecord):
     live: bool | None = None
+    # A session a reply waker wakes ("Wakers"): its machine and title, whether its waker is live, and when
+    # the waker handed the item over (it could not wake the session).
+    woken: bool | None = None
+    machine: str | None = None
+    title: str | None = None
+    waker_live: bool | None = None
+    handed_over_at: str | None = None
 
 
 class AgentNoteClaim(BaseModel):
@@ -1205,6 +1632,42 @@ class AgentNoteHandlingRecord(BaseModel):
     inferred_answer_note_id: str | None = None
     # Only on a reply that arrived while the user had chosen who answers its note.
     answer_by: AgentNoteAnswerer | None = None
+    # The session a reply waker wakes for it now; null when the agent that covers it listens by itself.
+    wake_target: AgentNoteWake | None = None
+
+
+class AgentNoteHandoverAnswer(AgentNoteHandlingRecord):
+    handed_over: int
+    released: bool
+
+
+class AgentNoteWakeSession(BaseModel):
+    session_id: str
+    title: str | None
+    folder: str | None
+    state: Literal["idle", "busy", "closed"]
+    kind: str | None
+    last_active_at: str | None
+    wakeable: bool
+
+
+class AgentNoteWakerRecord(BaseModel):
+    device_id: str
+    machine: str
+    live: bool
+    registered_at: str
+    last_seen_at: str
+    fallback: dict[str, Any] | None
+    fallback_after_seconds: int
+    heartbeat_seconds: int | None
+    version: str | None
+    claude_version: str | None
+    sessions: list[AgentNoteWakeSession]
+
+
+class AgentNoteWakerList(BaseModel):
+    wakers: list[AgentNoteWakerRecord]
+    checked_at: str
 
 
 class AgentNoteClaimAnswer(AgentNoteHandlingRecord):
@@ -1392,6 +1855,62 @@ ANSWER_BY_BODY = {
         }
     },
 }
+WAKER_BODY = {
+    "required": False,
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "description": "With sessions: a full registration (it replaces the stored one). "
+                "Without: a heartbeat.",
+                "properties": {
+                    "sessions": {
+                        "type": "array",
+                        "maxItems": MAX_WAKER_SESSIONS,
+                        "items": {
+                            "type": "object",
+                            "required": ["session_id"],
+                            "properties": {
+                                "session_id": {"type": "string", "maxLength": MAX_CONVERSATION_ID_CHARACTERS},
+                                "title": {"type": "string"},
+                                "folder": {"type": "string"},
+                                "state": {"type": "string", "enum": list(WAKE_SESSION_STATES)},
+                                "kind": {"type": "string"},
+                                "last_active_at": {"type": "string", "format": "date-time"},
+                                "wakeable": {"type": "boolean"},
+                            },
+                        },
+                    },
+                    "fallback": {
+                        "type": "object",
+                        "description": "This waker wakes the session that answers what has no other home.",
+                        "properties": {"session_id": {"type": "string"}, "title": {"type": "string"}},
+                    },
+                    "fallback_after_seconds": {
+                        "type": "number",
+                        "description": "While this waker is offline, the responder waits this long "
+                        "after arrival (default 8 hours).",
+                    },
+                    "heartbeat_seconds": {"type": "number"},
+                    "version": {"type": "string"},
+                    "claude_version": {"type": "string"},
+                },
+            }
+        }
+    },
+}
+HANDOVER_BODY = {
+    "required": True,
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "required": ["machine"],
+                "properties": {"machine": {"type": "string"}, "reason": {"type": "string", "maxLength": 200}},
+            }
+        }
+    },
+}
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     status: {"description": code} for code, status in ERROR_STATUS.items()
 }
@@ -1448,9 +1967,21 @@ class AgentNoteService:
         self.broker = AgentNoteBroker()
         # Whether a database listener forwards other processes' notifications to the broker.
         self.listener_connected = listening or (lambda: False)
+        # The server stops: every long poll answers what it has now (request_waits.HeldRequests).
+        self.stopping = False
+        self._stop_wakes: set[asyncio.Task] = set()
+        # Called with the sender's device ID after each new note is committed (push.PushService.note_created).
+        self.note_created_hooks: list[Callable[[str], None]] = []
 
     def recheck_seconds(self) -> float:
         return DATABASE_RECHECK_SECONDS if self.listener_connected() else POLLING_RECHECK_SECONDS
+
+    def stop(self) -> None:
+        """End every long poll now, with what it has (usually nothing). Call on the event loop."""
+        self.stopping = True
+        task = asyncio.get_running_loop().create_task(self.broker.notify())
+        self._stop_wakes.add(task)
+        task.add_done_callback(self._stop_wakes.discard)
 
     # Writes run in worker threads (asyncio.to_thread); each opens its own short session.
 
@@ -1512,7 +2043,8 @@ class AgentNoteService:
             )
             session.add(note)
             if isinstance(origin, dict) and origin.get("kind") == PHONE_PAGE_KIND:
-                # A page the user sends: which topic owners cover it now ("Who answers").
+                # A page the user sends: which topic owners cover it now, listening or woken by a waker
+                # ("Who answers", "Wakers").
                 now = utc_now()
                 session.add(
                     AgentNoteHandling(
@@ -1520,7 +2052,7 @@ class AgentNoteService:
                         kind="page",
                         note_id=note_id,
                         arrived_at=note.created_at,
-                        covered_by=[coverer_entry(row) for row in covering_listeners(session, note, now)],
+                        covered_by=arrival_coverage(session, note, now),
                     )
                 )
             try:
@@ -1534,7 +2066,17 @@ class AgentNoteService:
                 if existing is None:
                     raise
                 return 200, self._create_answer(session, existing)
+            self._announce_note(device_id)
             return 201, self._create_answer(session, note)
+
+    def _announce_note(self, device_id: str) -> None:
+        """A new note of ``device_id`` is committed, so it is in the other devices' inboxes now: tell the
+        hooks (the push sender, protocol/push.md). They only take note; nothing they do fails the note."""
+        for hook in self.note_created_hooks:
+            try:
+                hook(device_id)
+            except Exception:  # noqa: BLE001
+                LOG.exception("agent notes: a note-created hook failed")
 
     @staticmethod
     def _existing_note(session: Session, note_id: str, content_sha256: str) -> AgentNote | None:
@@ -1729,15 +2271,12 @@ class AgentNoteService:
                     capture=photo[1],
                 )
                 session.add(stored_photo)
-            # Who covers the note as the reply arrives: its sender's agents, topic owners ("Who answers").
+            # Who covers the note as the reply arrives: its sender's agents, topic owners, listening or woken
+            # by a waker ("Who answers", "Wakers"). The user's choice: the reply keeps it, and names only that
+            # agent.
             choice = stored_choice(note.answer_by)
-            if choice is None:
-                covered = [coverer_entry(row) for row in covering_listeners(session, note, utc_now())]
-                chosen = {}
-            else:
-                # The user chose who answers this note: the reply keeps that choice, and names only it.
-                covered = [coverer_entry(row) for row in answerer_rows(session, choice, note_id)[:1]]
-                chosen = {"answer_by": dict(choice)}
+            covered = arrival_coverage(session, note, utc_now(), choice)
+            chosen = {} if choice is None else {"answer_by": dict(choice)}
             session.add(
                 AgentNoteHandling(
                     item_id=reply_id,
@@ -2215,7 +2754,13 @@ class AgentNoteService:
                 # responder takes it once that agent is gone: not live, 10 minutes after arrival.
                 remaining = (as_utc(item.arrived_at) + COVERER_GRACE - now).total_seconds()
                 rows = answerer_rows(session, choice, note.id)
-                held = remaining > 0 or (bool(rows) and listener_is_live(rows[0], now))
+                # A chosen session that a waker wakes is not gone while its waker is live, nor while that
+                # waker is offline for less than its fallback time ("Wakers").
+                holds = [chosen_wake_hold(session, entry, item.arrived_at, now) for entry in entries]
+                woken_until = [until for until in holds if until is not None]
+                held = remaining > 0 or (bool(rows) and listener_is_live(rows[0], now)) or bool(woken_until)
+                if woken_until and remaining <= 0:
+                    remaining = max((until - now).total_seconds() for until in woken_until)
                 if held or not responder:
                     record = handling_record(item, session, now)
                     session.commit()
@@ -2233,16 +2778,24 @@ class AgentNoteService:
             if chosen:
                 pass  # the user's choice answers at once: a chosen responder does not wait for coverers
             elif responder and not sender:
-                waiting = [entry for entry in entries if coverer_live(session, entry, now)]
-                remaining = (as_utc(item.arrived_at) + COVERER_GRACE - now).total_seconds()
-                if waiting and remaining > 0:
+                # A coverer that listens, or whose waker is live, has 10 minutes from arrival; one whose waker
+                # is offline (its machine asleep) has that waker's fallback time ("Wakers").
+                deadlines = [deadline for entry in entries
+                             if (deadline := wake_deadline(session, entry, item.arrived_at, now)) is not None
+                             and deadline > now]
+                if deadlines:
+                    woken = any(
+                        entry.get("woken") and not listener_entry_live(session, entry, now)
+                        for entry in entries
+                    )
                     record = handling_record(item, session, now)
                     session.commit()
                     return 409, {
                         "claimed": False,
                         "error_code": "agent_note_covered",
-                        "detail": "the agent that covered it when it arrived still listens; it answers first",
-                        "retry_after": math.ceil(remaining),
+                        "detail": "the agent that covered it when it arrived still listens; it answers first"
+                        if not woken else "a waker wakes the session that covers it; it answers first",
+                        "retry_after": math.ceil((max(deadlines) - now).total_seconds()),
                         **record,
                     }
             elif not responder and only_if_covering and not sender and not mine_at_arrival and not live_now:
@@ -2290,6 +2843,97 @@ class AgentNoteService:
                 **record,
             }
 
+    def handover(self, device_id: str, item_id: str, body: bytes) -> tuple[int, dict]:
+        """A waker could not wake its session for an item: the item is no longer kept for it, and a claim the
+        waker made for that session is given up, so the responder (the fallback session) answers at once."""
+        payload = parse_json_object(body) if body.strip() else {}
+        machine = payload.get("machine")
+        if not isinstance(machine, str) or not WAKER_MACHINE.fullmatch(machine):
+            raise invalid("machine is required: the waker's machine name")
+        reason = optional_text(payload, "reason", MAX_LABEL_CHARACTERS)
+        now = utc_now()
+        with self.database.session_factory() as session:
+            item, note = self._handling(session, item_id)
+            entries = [dict(entry) if isinstance(entry, dict) else entry for entry in item.covered_by or []]
+            mine = [entry for entry in entries if isinstance(entry, dict) and entry.get("woken")
+                    and entry.get("device_id") == device_id and entry.get("machine") == machine]
+            for entry in mine:
+                if not entry.get("handed_over_at"):
+                    entry["handed_over_at"] = rfc3339(now)
+                    entry["handover_reason"] = reason
+            conversations = {entry.get("conversation_id") or "" for entry in mine}
+            released = (
+                item.claimed_at is not None
+                and item.claimed_role != "answered"
+                and item.claimed_device_id == device_id
+                and (item.claimed_conversation_id or "") in conversations
+            )
+            if released:
+                item.claimed_device_id = item.claimed_conversation_id = item.claimed_role = None
+                item.claimed_at = None
+            item.covered_by = entries
+            session.flush()
+            notify_other_processes(session)
+            session.commit()
+            session.expire_all()
+            item = session.get(AgentNoteHandling, item_id)
+            record = handling_record(item, session, now)
+            return 200, {**record, "handed_over": len(mine), "released": released}
+
+    def register_waker(self, device_id: str, machine: str, body: bytes) -> tuple[int, dict]:
+        """A waker's heartbeat; with ``sessions``, also what it can wake now (protocol "Wakers")."""
+        registration = parse_waker(machine, body)
+        now = utc_now()
+        for _attempt in range(2):
+            with self.database.session_factory() as session:
+                row = session.get(AgentNoteWaker, (device_id, machine))
+                created = row is None
+                back_online = created or not waker_live(row, now)
+                if created:
+                    row = AgentNoteWaker(
+                        device_id=device_id, machine=machine, registered_at=now, last_seen_at=now,
+                        info={}, sessions=[],
+                    )
+                    session.add(row)
+                info = dict(row.info or {})
+                if registration:
+                    kept = {key: info[key] for key in ("online_since",) if key in info}
+                    info = {**registration["info"], **kept}
+                    row.sessions = registration["sessions"]
+                if back_online:
+                    info["online_since"] = rfc3339(now)
+                row.info = info
+                row.last_seen_at = now
+                others = session.scalars(
+                    select(AgentNoteWaker).where(AgentNoteWaker.device_id == device_id)
+                ).all()
+                for other in others:
+                    if other is not row and as_utc(other.last_seen_at) < now - WAKER_KNOWN_WINDOW:
+                        session.delete(other)
+                try:
+                    session.commit()
+                except IntegrityError:
+                    session.rollback()  # a concurrent first beat inserted the row
+                    continue
+                return (201 if created else 200), waker_record(row, now)
+        raise AgentNoteError("agent_note_conflict", "the waker changed while it was registered; try again")
+
+    def list_wakers(self) -> dict:
+        now = utc_now()
+        with self.database.session_factory() as session:
+            return {"wakers": [waker_record(row, now) for row in known_wakers(session, now)],
+                    "checked_at": rfc3339(now)}
+
+    def forget_waker(self, device_id: str, machine: str) -> bool:
+        """The waker stops for good: its sessions are no longer kept for it (an offline one still is)."""
+        with self.database.session_factory() as session:
+            row = session.get(AgentNoteWaker, (device_id, machine))
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+            return True
+
     def rules(self) -> dict:
         """The answering rules: the Library note agent-note-rules.md as accepted (``Answering rules``)."""
         with self.database.session_factory() as session:
@@ -2331,9 +2975,11 @@ class AgentNoteService:
         items, cursor = await asyncio.to_thread(page)
         while not items:
             remaining = deadline - time.monotonic()
-            if remaining <= 0 or await request.is_disconnected():
+            # When the server stops, the poll answers as when its wait is over.
+            if remaining <= 0 or self.stopping or await request.is_disconnected():
                 break
-            generation = await self.broker.wait(generation, min(self.recheck_seconds(), remaining))
+            async with held(request):
+                generation = await self.broker.wait(generation, min(self.recheck_seconds(), remaining))
             items, cursor = await asyncio.to_thread(page)
         return items, cursor
 
@@ -2611,6 +3257,53 @@ def register_agent_note_routes(
              "note agent-note-rules.md as accepted (pending proposals left out).")
     def agent_note_rules(_device=Depends(current_device)) -> JSONResponse:  # noqa: B008
         return JSONResponse(service.rules())
+
+    @app.post(
+        "/v1/agent-notes/handling/{item_id}/handover",
+        response_model=AgentNoteHandoverAnswer,
+        responses=ERROR_RESPONSES,
+        openapi_extra={"requestBody": HANDOVER_BODY},
+        description="A reply waker could not wake the session it keeps a reply or page for: the item is no "
+        "longer kept for it and the waker's claim for that session is given up, so the fallback answers "
+        "(protocol/agent-notes.md, Wakers).",
+    )
+    async def hand_over_agent_note_item(
+        item_id: str, request: Request, device=Depends(current_device)  # noqa: B008
+    ) -> JSONResponse:
+        wanted = path_uuid(item_id, "reply or page")
+        body = await read_body(request)
+        status, answer = await asyncio.to_thread(service.handover, device.id, wanted, body)
+        await service.broker.notify()
+        return JSONResponse(status_code=status, content=answer)
+
+    @app.put(
+        "/v1/agent-notes/wakers/{machine}",
+        response_model=AgentNoteWakerRecord,
+        responses={201: {"model": AgentNoteWakerRecord, "description": "First beat"}, **ERROR_RESPONSES},
+        openapi_extra={"requestBody": WAKER_BODY},
+        description="A reply waker's heartbeat (every 30 s or so), with the sessions of its machine it can "
+        "wake (protocol/agent-notes.md, Wakers). Live while it beats within 2 minutes.",
+    )
+    async def put_agent_note_waker(
+        machine: str, request: Request, device=Depends(current_device)  # noqa: B008
+    ) -> JSONResponse:
+        device_id = device.id
+        body = await read_body(request)
+        status, answer = await asyncio.to_thread(service.register_waker, device_id, machine, body)
+        return JSONResponse(status_code=status, content=answer)
+
+    @app.get("/v1/agent-notes/wakers", response_model=AgentNoteWakerList, responses=ERROR_RESPONSES,
+             description="The reply wakers seen in the last 30 days, live ones first, with the sessions each "
+             "can wake.")
+    def list_agent_note_wakers(_device=Depends(current_device)) -> JSONResponse:  # noqa: B008
+        return JSONResponse(service.list_wakers())
+
+    @app.delete("/v1/agent-notes/wakers/{machine}", status_code=204, response_class=Response,
+                responses=ERROR_RESPONSES, description="The caller's waker on this machine stops for good.")
+    def forget_agent_note_waker(machine: str, device=Depends(current_device)) -> Response:  # noqa: B008
+        if not service.forget_waker(device.id, machine):
+            raise AgentNoteError("agent_note_not_found", "no such waker")
+        return Response(status_code=204)
 
     @app.get(
         "/v1/agent-notes/replies/{reply_id}/image",

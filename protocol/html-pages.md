@@ -33,7 +33,7 @@ PDF's source artifact carries the pages of its folder.
   added or changed on the server is therefore in the next build of each of the folder's PDFs, and a
   client opens it from the PDF's source artifact.
 - **Rebuilds.** A PDF of the folder is out of date (render state `out_of_sync`, "The folder's HTML
-  pages changed after the latest server build.", selected by the next render check) when the list
+  pages changed after the server's latest build.", selected by the next render check) when the list
   changed after its build, or when its recorded `html_attachment` resources miss a listed page or
   carry another version of one, although no compiler reads the list. A publication without recorded
   resources is not judged by its pages.

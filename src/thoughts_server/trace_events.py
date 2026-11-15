@@ -199,7 +199,10 @@ def link_trace_build(
         session.add(link)
         session.flush()
     phase = "build_reused" if reused else "build_queued"
-    message = f"Reusing server build {job.id}." if reused else f"The server accepted build {job.id}."
+    # The desktop app recognises this text (documentsyncpresentation.cpp, reusedBuildPattern),
+    # which also accepts the older "Reusing server build <id>." and "Reusing Fedora build <id>.";
+    # keep the wording in step with that pattern.
+    message = f"Reusing the server's build {job.id}." if reused else f"The server accepted build {job.id}."
     append_trace_event(
         session,
         trace_id=trace_id,
@@ -415,6 +418,9 @@ class TraceEventBroker:
         self._stop = threading.Event()
         self._connection = None
         self._listening = False
+        # Called on the event loop at every wake-up, by waiters that do not sleep on the
+        # condition (sync_state_waits): they decide themselves whether to read again.
+        self._wake_listeners: list[Callable[[], None]] = []
 
     @property
     def generation(self) -> int:
@@ -425,10 +431,17 @@ class TraceEventBroker:
         """Whether a database listener currently delivers other processes' notifications."""
         return self._listening
 
+    def on_wake(self, listener: Callable[[], None]) -> None:
+        """Call ``listener`` (on the event loop, without arguments) after every wake-up."""
+        self._wake_listeners.append(listener)
+
     async def _wake(self) -> None:
         async with self._condition:
             self._generation += 1
             self._condition.notify_all()
+        for listener in self._wake_listeners:
+            with suppress(Exception):
+                listener()
 
     async def notify(self) -> None:
         """Wake the waiters of this process after a commit made here."""

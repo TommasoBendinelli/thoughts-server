@@ -11,6 +11,11 @@ from urllib.parse import urlsplit
 from .build_sandbox import default_from_environment
 
 DEFAULT_PUBLIC_BASE_URL = "https://thoughts.example.org"
+# Push to the phones (protocol/push.md): the Firebase service account, read when
+# THOUGHTS_FCM_CREDENTIALS_FILE is unset and this file exists, and the FCM HTTP v1 origin
+# (THOUGHTS_FCM_ENDPOINT, for tests).
+DEFAULT_FCM_CREDENTIALS_FILE = Path("/etc/thoughts/fcm-service-account.json")
+DEFAULT_FCM_ENDPOINT = "https://fcm.googleapis.com"
 # Bearer tokens are the only credential on a publicly reachable server.
 MINIMUM_TOKEN_LENGTH = 32
 
@@ -100,6 +105,11 @@ class Settings:
     # the background when the API starts, so the first Sync after a restart does not wait
     # for it. From the environment this is on (THOUGHTS_WARM_SYNC_PLAN=false turns it off).
     warm_sync_plan_at_startup: bool = False
+    # Push to the phones (protocol/push.md): the Firebase service-account JSON, or None for no push. Read
+    # once when the API starts; a missing or invalid file turns push off and the server still starts.
+    fcm_credentials_file: Path | None = None
+    # The origin FCM messages are sent to (the OAuth token URL comes from the credentials file).
+    fcm_endpoint: str = DEFAULT_FCM_ENDPOINT
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -207,6 +217,10 @@ class Settings:
             ),
             workers_on_demand=os.environ.get("THOUGHTS_WORKERS_ON_DEMAND", "").strip().lower() in {"1", "true", "yes"},
             worker_idle_exit_seconds=float(os.environ.get("THOUGHTS_WORKER_IDLE_EXIT_SECONDS", "60")),
+            fcm_credentials_file=fcm_credentials_file_from_env(),
+            fcm_endpoint=(
+                os.environ.get("THOUGHTS_FCM_ENDPOINT", "").strip().rstrip("/") or DEFAULT_FCM_ENDPOINT
+            ),
         )
 
     def worker_database(self):
@@ -240,6 +254,24 @@ def proposal_decisions_strict_from_env() -> bool:
     """
     value = os.environ.get("THOUGHTS_PROPOSAL_DECISIONS_STRICT", "false")
     return value.strip().lower() in {"1", "true", "yes"}
+
+
+def fcm_credentials_file_from_env() -> Path | None:
+    """``THOUGHTS_FCM_CREDENTIALS_FILE``, or DEFAULT_FCM_CREDENTIALS_FILE when unset and it exists.
+
+    A path that is set is returned even when it does not exist: the API then says at startup that push
+    is off because the file cannot be read.
+    """
+    value = os.environ.get("THOUGHTS_FCM_CREDENTIALS_FILE", "").strip()
+    if value:
+        return Path(value).expanduser()
+    try:
+        DEFAULT_FCM_CREDENTIALS_FILE.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    except OSError:
+        pass  # there but not readable by this user: the API says so at startup
+    return DEFAULT_FCM_CREDENTIALS_FILE
 
 
 def _positive_int(name: str, default: int) -> int:

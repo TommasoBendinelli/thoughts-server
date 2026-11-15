@@ -111,6 +111,10 @@ the last two `""` when not given), `last_seen_at`. Updated on every reply-feed r
 `listen=true`; rows of a device unseen for 30 days are deleted when it announces again. See
 "Who hears a reply".
 
+`agent_note_wakers` (migration 0032): PK (`device_id`, `machine`), `registered_at`, `last_seen_at`, `info`
+JSON (what the waker says about itself, and `online_since`), `sessions` JSON (the sessions it can wake). See
+"Wakers".
+
 `agent_notes.answer_by` and `agent_note_handling.answer_by` (migration 0031, both JSON null): the
 agent the user chose to answer the replies to a note, `{"role", "device_id", "conversation_id",
 "owner_id", "label"}`, and that choice as it was when a reply arrived. Null: the automatic choice.
@@ -132,7 +136,10 @@ answers" (endpoints 13 and 14), `agent_note_owners_v1` for "Topic owners" (endpo
 owner scopes in conversation feeds and `conversation_id` on endpoint 12, `role`/`owner_id`/`label`
 in listener records), `agent_note_rules_v1` for "Answering rules" (endpoint 18), and
 `agent_note_answer_by_v1` for "The user's choice" (endpoint 19, `answer_by` and `candidates` in
-endpoint 11, `answer_by` in handling records).
+endpoint 11, `answer_by` in handling records), and `agent_note_wakers_v1` for "Wakers" (endpoints 20 to 23,
+`wake` in listening answers, `wake_target` and woken entries in handling records). A server that can push
+to the phones also lists `push_fcm_v1`: each new note then pings the other devices' phones
+(protocol/push.md).
 
 Image limits: PNG or JPEG (signature checked), decoded body <= 20 MiB, each side
 <= 8192 px, width x height <= 40 megapixels. Request bodies above 32 MiB are refused with 413
@@ -260,6 +267,22 @@ before parsing.
     choice. Any device may call it; it is idempotent. `200` with the same body as endpoint 11.
     `404` for an unknown or deleted note, `422` `invalid_agent_note` for a malformed body, `409`
     `agent_note_answerer_unknown` when no listener row, live or not, is that agent.
+20. `PUT /v1/agent-notes/wakers/{machine}` — a reply waker's heartbeat (`machine`: 1 to 64 letters, digits,
+    `.`, `_`, `-`). With `"sessions": [{"session_id", "title"?, "folder"?, "state": "idle" | "busy" | "closed",
+    "kind"?, "last_active_at"?, "wakeable"?: bool}]` (at most 500) it is a full registration and replaces the
+    stored one, with `"fallback"?: {"session_id", "title"}`, `"fallback_after_seconds"?` (60 s to 7 days,
+    default 8 hours), `"heartbeat_seconds"?`, `"version"?`, `"claude_version"?`; without `sessions` it only
+    beats and keeps what was registered. `201` on the first beat, else `200`, with the waker record
+    `{"device_id", "machine", "live", "registered_at", "last_seen_at", "fallback", "fallback_after_seconds",
+    "heartbeat_seconds", "version", "claude_version", "sessions"}`.
+21. `GET /v1/agent-notes/wakers` — `{"wakers": [...], "checked_at"}`: every waker seen in the last 30 days, live
+    ones first.
+22. `DELETE /v1/agent-notes/wakers/{machine}` — the caller's waker on that machine stops for good; `204`, `404`
+    when unknown.
+23. `POST /v1/agent-notes/handling/{item_id}/handover` — `{"machine", "reason"?}`: the caller's waker on that
+    machine could not wake the session it keeps the item for. Its woken entries get `handed_over_at` and
+    `handover_reason`; a claim that device made for one of those sessions is given up (not an `answered` one).
+    `200` with the handling record plus `"handed_over": n, "released": bool`.
 
 ### Who hears a reply
 
@@ -349,6 +372,43 @@ topics do not include the note.
   `not_listening`, and a responder takes its replies as above.
 
 Pages the user sends are not replies: they are answered as in "Who answers", whatever is chosen.
+
+### Wakers
+
+A reply waker is a program on one machine (the server, the Mac) that wakes that machine's Claude Code sessions
+when a reply or a page is theirs, so a session needs no running watcher to answer. It beats every 30 s or so
+(endpoint 20) with the sessions it can wake: running ones (it messages them) and closed ones it may resume. A
+waker is live while it beat within 2 minutes (or three of its own `heartbeat_seconds`). One waker may name a
+`fallback` session: the one that answers what has no other home (for example a standing session on the
+server). It also polls
+the reply feed as the responder, as the one responder did.
+
+* **Coverage at arrival.** Besides the live listeners, `covered_by` lists the sessions a waker of the right
+  device can wake: the note's own session (`origin.conversation_id`, registered by a waker of the note's sender
+  device), then the sessions of topic owners whose scope holds the note (their listeners need not be live). Such an
+  entry has `"woken": true`, the waker's `machine` and the session's `title`; when the session also listens, its
+  listener entry is marked so. With the user's choice, only the chosen agent's entry, marked when a waker wakes
+  it. Entries are ordered the note's own session first, then topic owners.
+* **The wake target.** A handling record has `wake_target`: the first entry that still covers the item when a
+  waker wakes it, `{"state": "will_be_woken" | "waker_offline", "role", "device_id", "machine",
+  "conversation_id", "title", "session_state", "owner_id", "label", "waker_live", "fallback_at"}`. An entry that
+  only listens (no waker wakes it) covers it by itself, so there is no `wake_target`. An entry whose waker stays
+  offline past its fallback time, or handed the item over, is passed by. With nobody left, or the responder
+  chosen, it is the fallback session (`role: responder`), when a waker names one. A waker acts only on a
+  `wake_target` of its own machine and device: it claims the item for that session (endpoint 14 with its
+  `conversation_id`), then wakes it; the session's own claim later answers `200` (already its own).
+* **The responder waits.** A responder's claim waits (`agent_note_covered`, `retry_after`) for a woken entry for
+  10 minutes after arrival while its waker is live (10 minutes after the waker came back online, when it was
+  offline), and while the waker is offline, until `fallback_after_seconds` (8 hours) after arrival, so the
+  fallback answers a sleeping machine's replies only then. Under the user's choice, a chosen session a live
+  waker wakes keeps the reply as long as its waker is live, and for the fallback time while it is offline.
+* **Hand-over.** A waker that cannot wake the session (it is gone, not resumable, or the wake failed) calls
+  endpoint 23; the responder then claims at once.
+* **What the phone shows.** Listening answers (endpoints 1, 7 and 11) carry `wake`, the `wake_target` a reply
+  arriving now would get, absent when there is none. `state` and `listeners` keep their meaning (only listeners
+  count), so older clients read the same answer as before. A client shows "<title> will be woken (on <machine>)"
+  for `will_be_woken` and, for `waker_offline`, that the machine is offline and the fallback answers at
+  `fallback_at`. Every field is absent from every answer until a waker registers.
 
 ### Topic owners
 
@@ -448,6 +508,10 @@ about 4x the pen. The server checks only structure and size (<= 2 MiB, <= 5000 s
   on tap.
 * **Not listening.** A periodic WorkManager job (15 min, network required) asks the inbox
   with `wait=0`, stores new notes, notifies, and retries unsent replies.
+* **Push.** A server with `push_fcm_v1` sends the phone a content-free FCM ping (`{"kind":
+  "agent_notes", "at"}`, nothing about the note) whenever a new note is in its inbox, so the phone can
+  ask the inbox at once without the live channel running. The phone registers its FCM token with
+  `PUT /v1/push/registration`. See protocol/push.md.
 * **Annotation.** One finger draws; two fingers pan and zoom. Tools: pen, highlighter,
   eraser (whole strokes); colours black, red, blue, green, orange; undo and redo. The draft
   is kept on disk until sent, so it survives rotation and process death.
@@ -500,5 +564,5 @@ with `wait_seconds` do pass it ("Who hears a reply").
 
 ## Not in scope
 
-FCM push, desktop (C++) Library UI for notes, editing a note after sending, text
+Desktop (C++) Library UI for notes, editing a note after sending, text
 recognition of handwriting.

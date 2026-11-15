@@ -626,6 +626,52 @@ class AgentNoteHandling(Base):
     answer_by: Mapped[dict | None] = mapped_column(JSON)
 
 
+class AgentNoteWaker(Base):
+    """A reply waker: the program on one machine that wakes that machine's Claude Code sessions when a reply,
+    a page or a capture is theirs (protocol/agent-notes.md "Wakers").
+
+    One row per device and machine, refreshed by its heartbeat. ``sessions`` lists the sessions it can wake
+    ([{session_id, title, folder, state, kind, last_active_at, wakeable}]); ``info`` holds what it says about
+    itself (its fallback session, how long others wait for it while it is offline, versions).
+    """
+
+    __tablename__ = "agent_note_wakers"
+
+    device_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    machine: Mapped[str] = mapped_column(String(64), primary_key=True)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    info: Mapped[dict | None] = mapped_column(JSON)
+    sessions: Mapped[list | None] = mapped_column(JSON)
+
+
+class PushRegistration(Base):
+    """Where a device receives content-free push pings (protocol/push.md).
+
+    One row per device, provider and app; a token belongs to one row only, so a token seen on another
+    device moves there. Uniqueness is on ``token_sha256``: a token may be up to 4096 characters, more than
+    a PostgreSQL index entry holds. ``last_result`` is the outcome of the last send (``ok`` or ``error:
+    <short>``); a token the provider no longer knows is deleted instead.
+    """
+
+    __tablename__ = "push_registrations"
+    # The unique constraint also serves lookups by device (its first column).
+    __table_args__ = (
+        UniqueConstraint("device_id", "provider", "app", name="uq_push_registrations_device_app"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)
+    app: Mapped[str] = mapped_column(String(200), nullable=False)
+    token: Mapped[str] = mapped_column(Text, nullable=False)
+    token_sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_result: Mapped[str | None] = mapped_column(String(64))
+
+
 class ReviewCardPendingMove(Base):
     """A review card move that waits for the agent proposal whose proposed text is the card's new
     answer (pending_card_moves.py, protocol/review-card-pending-moves.md).

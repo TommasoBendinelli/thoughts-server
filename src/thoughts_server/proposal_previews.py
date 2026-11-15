@@ -175,7 +175,9 @@ def _run_preview_job(
                     code,
                     log.name,
                 )
-                raise ProposalPreviewError(error or "The server could not render the requested proposal preview")
+                raise ProposalPreviewError(
+                    error or "The server could not render the requested proposal preview"
+                )
             result = json.loads(result_path.read_text(encoding="utf-8"))
             if (
                 result.get("artifact_sha256") != artifact_sha256

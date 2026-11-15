@@ -43,6 +43,7 @@ from .agent_notes import CLAIMS_CAPABILITY as AGENT_NOTE_CLAIMS_CAPABILITY
 from .agent_notes import OWNERS_CAPABILITY as AGENT_NOTE_OWNERS_CAPABILITY
 from .agent_notes import RESPONDER_CAPABILITY as AGENT_NOTE_RESPONDER_CAPABILITY
 from .agent_notes import RULES_CAPABILITY as AGENT_NOTE_RULES_CAPABILITY
+from .agent_notes import WAKERS_CAPABILITY as AGENT_NOTE_WAKERS_CAPABILITY
 from .agent_notes import register_agent_note_routes
 from .agent_proposals import (
     AgentProposalError,
@@ -96,6 +97,7 @@ from .html_edition.jobs import HTML_HINT_FIELDS, edition_states, strip_html_hint
 from .html_edition.jobs import revision_key as html_jobs_revision_key
 from .library_url_imports import CAPABILITY as LIBRARY_IMPORT_PDF_CAPABILITY
 from .pending_card_moves import CAPABILITY as REVIEW_CARD_PENDING_MOVES_CAPABILITY
+from .push import PushService, register_push_routes
 from .review_card_merge import CAPABILITY as REVIEW_CARD_MERGE_CAPABILITY
 from .models import (
     AgentProposalResolution,
@@ -119,7 +121,9 @@ from .operations import OperationConflict, apply_batch, latest_device_sequence, 
 from .proposal_previews import ProposalPreviewError, ProposalPreviewTimeout, proposal_preview_record
 from .proposal_renders import dispatch_accepted_pdf_rebuilds_for_render_check
 from .reader_plans import ReaderPlanError, ReaderPlans
-from .request_waits import BatchedLookups, DedicatedJobs, release_session
+from .request_waits import BatchedLookups, DedicatedJobs, HeldRequests, ServerStopping, held, release_session
+from .sync_state_waits import CAPABILITY as SYNC_STATE_WAIT_CAPABILITY
+from .sync_state_waits import SyncStateWaits, wait_seconds as sync_state_wait_seconds
 from .schemas import (
     HtmlEditionRecord,
     DocumentRegistrationRequest,
@@ -322,6 +326,9 @@ SERVER_CAPABILITIES = [
     "review_reanchor_v1",
     "scoped_builds_v2",
     "sync_state_v2",
+    # GET /v2/sync/state?wait_ms= with If-None-Match: answered when the state changes, at most
+    # 25 s later (sync_state_waits).
+    SYNC_STATE_WAIT_CAPABILITY,
     "sync_transfer_plan_v2",
     "sync_trace_v1",
     "trace_events_v1",
@@ -345,6 +352,9 @@ SERVER_CAPABILITIES = [
     # The user chooses which agent answers a note's replies: PUT /v1/agent-notes/{id}/answer-by,
     # answer_by and candidates in GET /v1/agent-notes/{id}/listening.
     AGENT_NOTE_ANSWER_BY_CAPABILITY,
+    # Reply wakers wake the session a reply or page belongs to: /v1/agent-notes/wakers, wake in listening
+    # answers, wake_target in handling records, POST /v1/agent-notes/handling/{id}/handover.
+    AGENT_NOTE_WAKERS_CAPABILITY,
     # Script-free HTML editions of source documents beside their PDFs (docs/html-edition.md):
     # html_status/html_edition_sha256 on publications, GET /v1/html-editions/{pdf_sha256},
     # cards and comments created in the HTML view, feedback with view "html".
@@ -447,6 +457,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_overflow=active_settings.database_max_overflow,
     )
     object_store = ObjectStore(active_settings.object_root)
+    # Content-free pings to the phones when agent notes arrive (protocol/push.md): on only when the FCM
+    # credentials load now, and only then is push_fcm_v1 advertised.
+    push = PushService(active_settings, database)
+    capabilities = [*SERVER_CAPABILITIES, *push.capabilities]
     standalone_validations = StandaloneValidations(active_settings, object_store, database.session_factory)
     proposal_worker = AgentProposalWorker(active_settings, database.session_factory, object_store)
     # Answers of the Library listings, each kept while the Library's change key
@@ -480,6 +494,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Wakes trace streams and build waits: by NOTIFY from the workers on PostgreSQL,
     # and directly after commits made in this process.
     trace_event_broker = TraceEventBroker((TRACE_EVENT_CHANNEL, BUILD_STATE_CHANNEL))
+    # Every request that waits ends at once when the server stops (request_waits.HeldRequests).
+    held_requests = HeldRequests()
+    held_requests.on_stop(trace_event_broker.notify_threadsafe)
     # Proposal previews compile for minutes: on their own small pool, never on the
     # worker threads every other request shares.
     preview_jobs = DedicatedJobs(active_settings.preview_parallel_jobs, "proposal-preview")
@@ -689,6 +706,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = active_settings
         app.state.warm_sync_plan = warm_sync_plan
         trace_event_broker.start(database.engine)
+        push.start()
         if active_settings.warm_sync_plan_at_startup:
             def warm_in_background() -> None:
                 started = time.perf_counter()
@@ -707,6 +725,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             trace_event_broker.close()
             preview_jobs.close()
             await asyncio.to_thread(standalone_validations.close)
+            # Pings waiting for their coalescing window go out now; the sender then stops.
+            await asyncio.to_thread(push.close)
             database.close()
 
     # The interactive documentation and the schema are public pages; a production
@@ -717,10 +737,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="Thoughts Server",
         version=__version__,
-        description="Thoughts server: repository operations, explicit sources, artifacts, and builds.",
+        description="The authority for repository operations, explicit sources, artifacts, and builds.",
         lifespan=lifespan,
         **documentation,
     )
+    app.state.held_requests = held_requests
 
     from fastapi.exception_handlers import http_exception_handler
     from sqlalchemy.exc import SQLAlchemyError
@@ -800,6 +821,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
                 raise
         response.headers["X-Thoughts-Trace-Id"] = trace_id
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            # A write this process answered may have changed the Sync state: the requests
+            # waiting for it look now instead of at their next recheck.
+            sync_state_waits.poke()
+        # A request that waits (a long poll, a build or Sync state wait) is not slow:
+        # duration_ms is the time it worked, held_ms the time it waited (request_waits.held).
+        held_seconds = getattr(request.state, "held_seconds", 0.0)
         SYNC_LOG.info(
             json.dumps(
                 {
@@ -809,7 +837,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "route": request.url.path,
                     "target": request.query_params.get("target", ""),
                     "status": response.status_code,
-                    "duration_ms": round((time.monotonic() - started) * 1000, 3),
+                    "duration_ms": round(max(0.0, time.monotonic() - started - held_seconds) * 1000, 3),
+                    "held_ms": round(held_seconds * 1000, 3),
                     "bytes_in": int(request.headers.get("content-length") or 0),
                     "bytes_out": int(response.headers.get("content-length") or 0),
                     "error_code": "" if response.status_code < 400 else f"http_{response.status_code}",
@@ -929,7 +958,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HealthResponse(
             status="ok",
             version=__version__,
-            capabilities=SERVER_CAPABILITIES,
+            capabilities=capabilities,
             storage=server_storage_usage(),
         )
 
@@ -1022,7 +1051,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HealthResponse(
             status="ready",
             version=__version__,
-            capabilities=SERVER_CAPABILITIES,
+            capabilities=capabilities,
             storage=server_storage_usage(),
         )
 
@@ -1846,13 +1875,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/v2/sync/state", response_model=SyncState)
-    def sync_state(
-        request: Request,
-        _device: Device = Depends(current_device),
-        session: Session = Depends(session_dependency),
-    ) -> Response:
-        """Return the authoritative cursors needed to decide whether sync work exists."""
+    def sync_state_answer(session: Session) -> tuple[bytes, str]:
+        """The body of ``GET /v2/sync/state`` and its ETag."""
         # An idle poll reads the Library's change key and answers from the Library
         # computed for that key; with If-None-Match it is answered 304.
         state = library_state(session)
@@ -1875,8 +1899,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 source_frontier=source_frontier,
             ).model_dump(mode="json")
         ).body
-        etag = f'"{hashlib.sha256(body).hexdigest()}"'
-        if request.headers.get("if-none-match") == etag:
+        return body, f'"{hashlib.sha256(body).hexdigest()}"'
+
+    def read_sync_state() -> tuple[bytes, str]:
+        with database.session_factory() as short:
+            return sync_state_answer(short)
+
+    # Requests that wait for the state to change (?wait_ms=): one shared watch reads it,
+    # woken by the database listener and by this process's writes (trace_requests).
+    sync_state_waits = SyncStateWaits(read_sync_state)
+    trace_event_broker.on_wake(sync_state_waits.poke)
+    held_requests.on_stop(sync_state_waits.stop)
+    app.state.sync_state_waits = sync_state_waits
+    app.state.trace_event_broker = trace_event_broker
+
+    @app.get("/v2/sync/state", response_model=SyncState)
+    async def sync_state(
+        request: Request,
+        wait_ms: int = Query(default=0),
+        _device: Device = Depends(current_device),
+        session: Session = Depends(session_dependency),
+    ) -> Response:
+        """Return the authoritative cursors needed to decide whether sync work exists.
+
+        With If-None-Match naming the current state and ``wait_ms`` > 0, the answer waits
+        until the state changes, at most 25 s (sync_state_waits); otherwise it is at once.
+        """
+        body, etag = await run_in_threadpool(sync_state_answer, session)
+        known = request.headers.get("if-none-match")
+        seconds = sync_state_wait_seconds(wait_ms)
+        if known == etag and seconds > 0 and not held_requests.stopping:
+            device_id = _device.id
+            # Nothing of the request's session is needed while it waits.
+            await release_session(session)
+            async with held(request):
+                changed = await sync_state_waits.wait(device_id, etag, seconds, request.is_disconnected)
+            if changed is not None:
+                body, etag = changed
+        if known == etag:
             return Response(status_code=304, headers={"ETag": etag})
         return Response(body, media_type="application/json", headers={"ETag": etag})
 
@@ -2930,14 +2990,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
 
         try:
-            return await preview_jobs.run(
+            return await held_requests.unless_stopping(preview_jobs.run(
                 (artifact_sha256, proposal_id),
                 render,
                 timeout=min(240, active_settings.build_timeout_seconds),
-            )
+            ))
         except TimeoutError as error:
             raise HTTPException(
                 status_code=504, detail="Proposal preview timed out waiting for an existing render"
+            ) from error
+        except ServerStopping as error:
+            # As a preview that takes too long: the client asks again, once the server is back.
+            raise HTTPException(
+                status_code=504, detail="The server is restarting; ask for the preview again"
             ) from error
         except ProposalPreviewTimeout as error:
             raise HTTPException(status_code=504, detail=str(error)) from error
@@ -3690,11 +3755,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         deadline = time.monotonic() + (wait_ms / 1_000)
         while current not in TERMINAL_STATUSES:
             remaining = deadline - time.monotonic()
-            if remaining <= 0 or await request.is_disconnected():
+            # When the server stops, the build is answered as it stands, as after the wait.
+            if remaining <= 0 or held_requests.stopping or await request.is_disconnected():
                 break
-            generation = await trace_event_broker.wait(
-                generation, min(wait_recheck_seconds(1.0, 0.05), remaining)
-            )
+            async with held(request):
+                generation = await trace_event_broker.wait(
+                    generation, min(wait_recheck_seconds(1.0, 0.05), remaining)
+                )
             current = await build_statuses.lookup(job_id)
             if current is None:
                 raise HTTPException(status_code=404, detail="Build not found")
@@ -3784,7 +3851,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             nonlocal cursor
             yield b"retry: 1000\n\n"
             heartbeat_at = time.monotonic() + 15
-            while not await request.is_disconnected():
+            # When the server stops the stream ends, as when the client goes away: a client
+            # reads the events it missed again from its last event ID. Without this, the
+            # stream of a build whose worker was stopped first kept the server from stopping.
+            while not held_requests.stopping and not await request.is_disconnected():
                 # Read the generation before the database, so a commit in between still wakes us.
                 generation = trace_event_broker.generation
                 page = await run_in_threadpool(read_page, cursor)
@@ -3957,7 +4027,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ), build_ids
 
         try:
-            while True:
+            while not held_requests.stopping:
                 # No client or SDK uses this socket. It is kept for compatibility, but its
                 # database reads run in a worker thread, never on the event loop.
                 generation = trace_event_broker.generation
@@ -3974,6 +4044,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     )
                     last_payload = payload_key
                 await trace_event_broker.wait(generation, 1.0)
+            # The server stops (held_requests): 1012, "service restart".
+            await websocket.close(code=1012)
         except Exception:
             return
 
@@ -3984,5 +4056,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # The Library's one listener connection also wakes the agent-note long polls
     # when another process commits a note or a reply.
     trace_event_broker.forward(AGENT_NOTES_CHANNEL, agent_notes.broker.notify)
+    held_requests.on_stop(agent_notes.stop)
+    # /v1/push: each new note pings the other devices' phones (protocol/push.md).
+    register_push_routes(app, push, current_device)
+    agent_notes.note_created_hooks.append(push.note_created)
 
     return app

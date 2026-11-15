@@ -713,3 +713,263 @@ def test_document_with_doccode_builds_after_moving_into_a_folder_without_style(l
         assert closure["project"] == DESTINATION
         texts[target] = "".join(p.extract_text() for p in PdfReader(source.pdf).pages)
     assert "Formula task" in texts["origin_moved.pdf"] and "Markdown fences" in texts["origin_moved.pdf"]
+
+
+# --------------------------------------------------- a Project without a source folder
+
+READING_ID = "new:0190a000-0000-7000-8000-00000000000a"
+
+
+def _create_project(library, key, name):
+    """What the desktop's "create project" sends: the Project has only its hidden default folder."""
+    return mutate(*library, {"action": "create", "name": name, "operation_id": str(uuid.uuid4()),
+                             "project_id": key, "base_revision": 0})
+
+
+def _mac_plan_request(document_id, destination_id, destination_path):
+    """part/sourcedocumentmove.h planRequest(), as the move dialog sends it."""
+    return {"action": "plan_move_source_document", "project_id": ORIGIN_ID, "document_id": document_id,
+            "destination_project_id": destination_id, "carry_preamble": True, "destination_path": destination_path}
+
+
+def _mac_operation(plan, base_revision):
+    """operationValues() queued by LibraryProjectStore::enqueue, minus the keys serverPayload() keeps on the desktop."""
+    return {"document_id": plan["document_id"], "destination_project_id": plan["destination"]["project_id"],
+            "destination_revision": plan["destination"]["revision"], "destination_path": plan["destination"]["path"],
+            "carry_preamble": True, "plan_digest": plan["plan_digest"], "action": "move_source_document",
+            "operation_id": str(uuid.uuid4()), "project_id": ORIGIN_ID, "base_revision": base_revision}
+
+
+def _expected_folder(name, document_id):
+    from thoughts_server.source_folder_names import import_folder_name
+    seed = uuid.uuid5(uuid.NAMESPACE_URL, f"thoughts:moved-document-folder:{READING_ID}:{document_id}")
+    return import_folder_name(name, str(seed))
+
+
+def test_move_into_a_project_without_source_folder_creates_its_first_folder(library, moved):
+    """A Project made with "create project" has only its hidden default folder.
+
+    The server used to refuse ("The destination project has no source folder").
+    The move now creates the Project's first connected folder in the same
+    transaction, with the origin's style and bibliography, and replays exactly
+    what the desktop sends.
+    """
+    session, store, root = library
+    _create_project(library, READING_ID, "Reading")
+    request = _mac_plan_request(moved["moved"], READING_ID, "tex/source/moved.tex")
+    plan = mutate(*library, request)["plan"]
+    folder = plan["destination"]["folder"]
+    assert folder == _expected_folder("Reading", moved["moved"]) and folder.startswith("docs-reading-")
+    assert plan["destination"]["new_folder"] is True and plan["destination"]["folder_name"] == "Reading"
+    assert not plan["destination"]["collision"]
+    # The plan and a retried operation name the same folder.
+    assert mutate(*library, request)["plan"] == plan
+    files = {f["destination"]: f for f in plan["files"]}
+    for style in ("tex/support/manual_style.sty", "tex/support/manual_style_override.sty"):
+        assert files[style]["action"] == "copy" and files[style]["transfer"] == "fedora"
+        assert "new folder" in files[style]["reason"]
+    assert files["tex/support/references.bib"]["action"] == "copy"
+    assert "new folder" in files["tex/support/references.bib"]["reason"]
+    assert files["tex/fragments/only.tex"]["action"] == "move"
+    assert files["tex/assets/only.pdf"]["transfer"] == "desktop"
+    # The copied style provides every definition, and the copied bibliography every citation.
+    assert plan["preamble"]["carried"] == "" and plan["preamble"]["missing"] == []
+    assert plan["bibliography"]["missing"] == [] and plan["bibliography"]["unavailable"] == []
+    assert plan["warnings"] == []
+    assert plan["link_edits"][f"{ORIGIN}/tex/source/other.tex"][0]["replacement"] == \
+        f"\\CrossSourceLink{{{folder}/tex/source/moved.tex}}"
+
+    operation = _mac_operation(plan, plan["source"]["revision"])
+    result = mutate(*library, operation)
+    new = f"{folder}/tex/source/moved.tex"
+    assert session.get(SourceFile, f"{ORIGIN}/tex/source/moved.tex").deleted
+    text = _text(library, new)
+    assert analysis.CARRIED_BEGIN not in text
+    assert text == MOVED.replace("\\SourceLink{tex/source/other.tex}", "\\CrossSourceLink{docs-origin/tex/source/other.tex}")
+    assert _text(library, f"{folder}/tex/support/manual_style.sty") == ORIGIN_STYLE
+    assert _text(library, f"{folder}/tex/support/manual_style_override.sty") == OVERRIDE
+    assert _text(library, f"{folder}/tex/support/references.bib") == _text(library, f"{ORIGIN}/tex/support/references.bib")
+    assert _text(library, f"{folder}/tex/fragments/only.tex") == "Only here.\n"
+    assert session.get(SourceFile, f"{ORIGIN}/tex/fragments/only.tex").deleted
+    assert not session.get(SourceFile, f"{ORIGIN}/tex/support/manual_style.sty").deleted
+
+    # The folder is declared as an imported folder is, and the document keeps identity and PDF.
+    destination = pc.canonical_for_project(session, store, READING_ID)
+    binding = next(f for f in destination["source_folders"] if f["path"] == folder)
+    assert uuid.UUID(binding["document_id"]).version == 4
+    assert binding["folder_id"] == str(uuid.uuid5(uuid.NAMESPACE_URL, "thoughts:source-folder:" + binding["document_id"]))
+    assert [f["path"] for f in destination["source_folders"]] == [pc.configured_default_folder(destination), folder]
+    declared = next(d for d in destination["documents"] if d["document_id"] == moved["moved"])
+    assert declared == {"document_id": moved["moved"], "format": "latex", "included": True,
+                        "source": {"folder_id": binding["folder_id"], "path": "tex/source/moved.tex"}}
+    assert destination["rendering"][moved["moved"]] == {"output": "origin_moved.pdf"}
+    assert destination["document_names"][moved["moved"]] == "moved"
+    origin = pc.canonical_for_project(session, store, ORIGIN_ID)
+    assert [d["document_id"] for d in origin["documents"]] == [moved["other"]]
+    identity = session.get(DocumentIdentity, moved["moved"])
+    assert (identity.filename, identity.source_path) == ("origin_moved.pdf", new)
+    card = session.get(Entity, ("review_card", "cards", "card-1"))
+    assert card.payload["primary"]["source_anchor"]["segments"][0]["source_file"] == new
+    assert card.payload["project"] == READING_ID
+    comment = session.get(Entity, ("logical_comment", "comments", "comment-1"))
+    assert comment.payload["scope"]["source_file"] == new and comment.payload["contents"] == "Keep me"
+
+    # The catalogue lists the folder under the Project's name, with the document.
+    reading = next(p for p in result["projects"] if p["id"] == READING_ID)
+    assert reading["source_folders"] == [{"project": folder, "folder": "Reading"}]
+    assert [d["document_id"] for d in reading["documents"]] == [moved["moved"]]
+    assert reading["documents"][0]["filename"] == "origin_moved.pdf"
+    from thoughts_server.source_document_moves import declared_project_for
+    assert declared_project_for(session, store, "origin_moved.pdf", folder)
+    # Same receipt and recovery as every move, and the worktree follows.
+    receipt = session.get(Entity, ("library_project_receipt", "library", operation["operation_id"]))
+    assert receipt.payload["move_pending"] is False
+    assert receipt.payload["moved_document"]["created_folder"] == folder
+    assert pc.configured_manifest_path(destination) in receipt.payload["source_paths"]
+    assert (root / new).read_text() == text and (root / folder / "tex/support/references.bib").is_file()
+    assert json.loads((root / pc.configured_manifest_path(destination)).read_text()) == destination
+    assert mutate(*library, operation) == result
+
+    # The next move into the Project goes into that folder, as into any connected folder.
+    again = mutate(*library, {**_mac_plan_request(moved["other"], READING_ID, "tex/source/other.tex")})["plan"]
+    assert again["destination"]["folder"] == folder and "new_folder" not in again["destination"]
+
+
+def test_new_folder_plan_is_refused_once_the_project_got_a_folder_elsewhere(library, moved):
+    """The digest covers the new folder: a plan reviewed before the Project got a folder is not applied elsewhere."""
+    session, store, root = library
+    _create_project(library, READING_ID, "Reading")
+    plan = mutate(*library, _mac_plan_request(moved["moved"], READING_ID, "tex/source/moved.tex"))["plan"]
+    # Another device gives the Project a folder of its own meanwhile (as an import or a folder move does).
+    configuration = pc.canonical_for_project(session, store, READING_ID)
+    configuration["source_folders"].append({"folder_id": str(uuid.uuid4()), "path": "docs-elsewhere",
+                                            "document_id": str(uuid.uuid4())})
+    _put(session, store, root, "docs-elsewhere/tex/source/notes.tex", "\\begin{document}\nNotes\n\\end{document}\n")
+    _save_source(session, store, root, str(uuid.uuid4()), pc.manifest_path(READING_ID), (json.dumps(configuration) + "\n").encode())
+    session.commit()
+    replanned = mutate(*library, _mac_plan_request(moved["moved"], READING_ID, "tex/source/moved.tex"))["plan"]
+    assert replanned["destination"]["folder"] == "docs-elsewhere" and replanned["plan_digest"] != plan["plan_digest"]
+    with pytest.raises(ValueError, match="changed after you reviewed"):
+        mutate(*library, _mac_operation(plan, plan["source"]["revision"]))
+    assert not session.get(SourceFile, f"{ORIGIN}/tex/source/moved.tex").deleted
+    assert session.get(SourceFile, f"{plan['destination']['folder']}/tex/source/moved.tex") is None
+    assert [f["path"] for f in pc.canonical_for_project(session, store, READING_ID)["source_folders"]][1:] == ["docs-elsewhere"]
+
+
+def test_new_folder_name_avoids_every_used_name_and_a_stale_plan_is_refused(library, moved):
+    session, store, root = library
+    _create_project(library, READING_ID, "Reading")
+    plan = mutate(*library, _mac_plan_request(moved["moved"], READING_ID, "tex/source/moved.tex"))["plan"]
+    folder = plan["destination"]["folder"]
+    # Another device creates a folder of that name (in another case) before the move arrives.
+    _put(session, store, root, folder.upper().replace("DOCS-", "docs-") + "/notes.md", "# Taken\n")
+    session.commit()
+    replanned = mutate(*library, _mac_plan_request(moved["moved"], READING_ID, "tex/source/moved.tex"))["plan"]
+    longer = replanned["destination"]["folder"]
+    assert longer.startswith(folder) and len(longer) == len(folder) + 2 and replanned["destination"]["new_folder"]
+    with pytest.raises(ValueError, match="changed after you reviewed"):
+        mutate(*library, _mac_operation(plan, plan["source"]["revision"]))
+    assert session.get(SourceFile, f"{folder}/tex/source/moved.tex") is None
+    # The plan reviewed again moves the document into the longer name.
+    mutate(*library, _mac_operation(replanned, replanned["source"]["revision"]))
+    assert session.get(SourceFile, f"{longer}/tex/source/moved.tex") is not None
+
+
+def test_moves_into_a_connected_folder_keep_their_plan_and_digest(library, moved):
+    """Nothing changes for a Project that has a folder: no new keys, and the digest of the earlier shape."""
+    import hashlib
+    plan = _plan(library, moved)
+    assert set(plan["destination"]) == {"project_id", "project_name", "folder", "path", "revision", "collision",
+                                        "suggested_path"}
+    shape = {"document": plan["source"]["path"], "destination": plan["destination"]["path"],
+             "files": sorted((f["source"], f["destination"], f["action"], f["transfer"]) for f in plan["files"]),
+             "carried": plan["preamble"]["carried"],
+             "bibliography": sorted(e["key"] for e in plan["bibliography"]["missing"]),
+             "edited": sorted(plan["link_edits"])}
+    assert plan["plan_digest"] == hashlib.sha256(json.dumps(shape, sort_keys=True).encode()).hexdigest()
+    # A destination folder that is named but not the Project's is still refused, never created.
+    _create_project(library, READING_ID, "Reading")
+    with pytest.raises(ValueError, match="has no source folder"):
+        mutate(*library, {**_mac_plan_request(moved["moved"], READING_ID, "tex/source/moved.tex"),
+                          "destination_folder": "docs-reading-000000"})
+
+
+def test_markdown_note_moves_into_a_project_without_source_folder(library):
+    session, store, root = library
+    note_id, sibling_id = str(uuid.uuid4()), str(uuid.uuid4())
+    for path, content in {f"{ORIGIN}/markdown/source/note.md": "# Note\n\n[sibling](sibling.md) ![figure](img/only.png)\n",
+                          f"{ORIGIN}/markdown/source/sibling.md": "# Sibling\n\n[note](note.md)\n",
+                          f"{ORIGIN}/markdown/source/img/only.png": b"PNG"}.items():
+        _put(session, store, root, path, content)
+    _project(session, store, root, ORIGIN_ID, "origin", ORIGIN,
+             [("markdown/source/note.md", note_id), ("markdown/source/sibling.md", sibling_id)])
+    session.commit()
+    _create_project(library, READING_ID, "Reading list")
+    plan = mutate(*library, _mac_plan_request(note_id, READING_ID, "markdown/source/note.md"))["plan"]
+    folder = plan["destination"]["folder"]
+    assert folder.startswith("docs-reading-list-") and plan["destination"]["new_folder"]
+    assert {f["source"]: f["action"] for f in plan["files"]} == {"markdown/source/img/only.png": "move"}
+    assert plan["warnings"] == []
+    mutate(*library, _mac_operation(plan, plan["source"]["revision"]))
+    assert "[sibling](../../../docs-origin/markdown/source/sibling.md)" in _text(library, f"{folder}/markdown/source/note.md")
+    assert f"[note](../../../{folder}/markdown/source/note.md)" in _text(library, f"{ORIGIN}/markdown/source/sibling.md")
+    assert session.get(SourceFile, f"{folder}/markdown/source/img/only.png") is not None
+    declared = pc.canonical_for_project(session, store, READING_ID)["documents"]
+    assert [(d["document_id"], d["format"], d["source"]["path"]) for d in declared] == [(note_id, "markdown", "markdown/source/note.md")]
+
+
+CITING_STYLE = ("\\NeedsTeXFormat{LaTeX2e}\n\\ProvidesPackage{manual_style}\n"
+                "\\newcommand{\\docTitle}[1]{\\section*{#1}}\n"
+                "\\newcommand{\\manualBibliography}{\\bibliographystyle{plain}\\bibliography{references}}\n")
+
+
+@pytest.mark.skipif(not shutil.which("latexmk") or not shutil.which("bibtex"), reason="requires TeX toolchain")
+def test_note_moved_into_a_new_folder_builds_there_as_before(library, monkeypatch):
+    """The moved note compiles in the folder the move created, with its style, figure input and citation."""
+    from pypdf import PdfReader
+    from thoughts_server import native_renderer as renderer
+    from thoughts_server.builds import build_closure_expectations
+    from thoughts_server.project_documents import project_documents
+    from thoughts_server.render_types import ProjectBuild
+    session, store, root = library
+    monkeypatch.setattr(renderer, "_linked_shared_pdfs", lambda *_: [])
+    note = ("\\begin{document}\n\\docTitle{Moved note}\nMoved text cites \\cite{KEY1}.\n"
+            "\\input{tex/generated/table.tex}\n\\manualBibliography\n\\end{document}\n")
+    moved_id, other_id = str(uuid.uuid4()), str(uuid.uuid4())
+    for path, content in {f"{ORIGIN}/tex/source/moved.tex": note,
+                          f"{ORIGIN}/tex/source/other.tex": "\\begin{document}\n\\docTitle{Other}\nOther text.\n\\end{document}\n",
+                          f"{ORIGIN}/tex/support/manual_style.sty": CITING_STYLE,
+                          f"{ORIGIN}/tex/support/references.bib": "@misc{KEY1,\n  title={Carried reference title},\n  year={2020}\n}\n"}.items():
+        _put(session, store, root, path, content)
+    _project(session, store, root, ORIGIN_ID, "origin", ORIGIN,
+             [("tex/source/moved.tex", moved_id), ("tex/source/other.tex", other_id)])
+    session.add(Device(id="desktop", name="desktop", enabled=True, token_hash="0" * 64))
+    pdf = store.put_bytes(session, b"%PDF-moved", "application/pdf")
+    session.add(Publication(filename="origin_moved.pdf", project=ORIGIN, document_id=moved_id, object_sha256=pdf.sha256,
+                            size_bytes=10, metadata_json={"kind": "source_linked", "project": ORIGIN}))
+    table = (b"% Generated by scripts/table.py\nGenerated table.\n", "generated")
+    _snapshot(session, store, root, "origin_moved.pdf", ORIGIN, [(f"{ORIGIN}/tex/generated/table.tex", *table)], sha="9" * 64)
+    session.commit()
+    _create_project(library, READING_ID, "Reading")
+    plan = mutate(*library, _mac_plan_request(moved_id, READING_ID, "tex/source/moved.tex"))["plan"]
+    folder = plan["destination"]["folder"]
+    assert plan["warnings"] == [] and plan["preamble"]["carried"] == ""
+    assert {f["destination"]: f["transfer"] for f in plan["files"]} == {
+        "tex/generated/table.tex": "desktop", "tex/support/manual_style.sty": "fedora", "tex/support/references.bib": "fedora"}
+    mutate(*library, _mac_operation(plan, plan["source"]["revision"]))
+    # The desktop copies its build input and publishes the moved PDF's inventory from the new folder.
+    inputs = _snapshot(session, store, root, "origin_moved.pdf", folder, [(f"{folder}/tex/generated/table.tex", *table)],
+                       sha="a" * 64)
+    session.commit()
+    expectations = {e["target"]: e for e in build_closure_expectations(
+        session, store, {"origin_moved.pdf": inputs}, _captured(session, root))}
+    build = renderer._compile_project(root, root / folder, jobs=1)
+    renderer._verify_source_project_inputs(root, build)
+    outputs = {f"{folder}/{d.source}": d.output for d in project_documents(root / folder)}
+    assert list(outputs.values()) == ["origin_moved.pdf"]
+    source, = build.sources
+    closure = renderer._verify_tex_closure(root, ProjectBuild(build.project, build.project_short, (source,)),
+                                           "origin_moved.pdf", expectations["origin_moved.pdf"])
+    assert closure["project"] == folder
+    text = "".join(page.extract_text() for page in PdfReader(source.pdf).pages)
+    assert "Moved note" in text and "Generated table." in text and "Carried reference title" in text

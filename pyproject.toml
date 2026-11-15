@@ -14,6 +14,8 @@ license = { text = "GPL-2.0-or-later" }
 authors = [{ name = "Tommaso Bendinelli" }]
 dependencies = [
   "alembic>=1.14,<2",
+  # RS256 signatures of the FCM service account's OAuth assertions (push.py).
+  "cryptography>=42,<51",
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
   "pdfplumber>=0.11,<1",

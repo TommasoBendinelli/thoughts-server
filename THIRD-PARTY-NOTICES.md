@@ -26,6 +26,7 @@ The repository vendors no third-party source code, fonts or icons. It contains:
 | Package | Licence (SPDX) | Upstream |
 |---|---|---|
 | alembic | MIT | <https://github.com/sqlalchemy/alembic> |
+| cryptography | Apache-2.0 OR BSD-3-Clause | <https://github.com/pyca/cryptography> |
 | fastapi | MIT | <https://github.com/fastapi/fastapi> |
 | httpx | BSD-3-Clause | <https://github.com/encode/httpx> |
 | pdfplumber | MIT | <https://github.com/jsvine/pdfplumber> |

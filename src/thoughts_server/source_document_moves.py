@@ -23,6 +23,16 @@ plan's structural digest so the server refuses a move whose plan changed meanwhi
 (new users of a file, a different preamble) instead of applying something the
 user did not review. Content changes alone don't invalidate a plan: the latest
 canonical text is what moves.
+
+A Project created without a source folder has only its hidden default folder.
+A move into it creates the Project's first connected folder, in the same
+transaction: ``plan`` names it (``destination.new_folder``), the way an
+imported folder is named (Rule N: ``docs-<Project name slug>-<hex>``, the hex
+from the destination and the document, so the plan and the operation name the
+same folder), and the analysis gives it what the document needs to build there
+(the origin's project style and bibliography). The digest covers the new
+folder's name, so a plan reviewed before the Project got a folder elsewhere is
+refused rather than applied into another folder.
 """
 from __future__ import annotations
 
@@ -112,6 +122,33 @@ def _package_source(name: str) -> str | None:
     return None
 
 
+def _new_folder_name(session, store, root, configuration: dict, document_id: str) -> str:
+    """The first connected folder a move creates in ``configuration``'s Project.
+
+    Named as an imported folder is (Rule N, source_folder_names.import_folder_name):
+    the Project's name for the slug, and for the hex a UUID of the destination
+    and the document instead of an operation id, since the plan has none; a
+    retried operation therefore names the same folder. Unique case-insensitively
+    against every folder name in use or used before, and every Project's folders.
+    """
+    from .project_configuration import canonical_projects
+    from .source_folder_names import import_folder_name, taken_names
+    taken = taken_names(session, root) | {folder["path"] for value in canonical_projects(session, store)
+                                          for folder in value["source_folders"]}
+    seed = uuid.uuid5(uuid.NAMESPACE_URL, f"thoughts:moved-document-folder:{configuration['id']}:{document_id}")
+    return import_folder_name(configuration["name"], str(seed), taken)
+
+
+def _new_folder_declaration(folder: str) -> dict:
+    """The new folder's (empty) source-folder manifest, as an import declares one.
+
+    Its permanent aggregate identity follows from the folder's unique name, and
+    project_configuration.add_folder derives the folder id from it as for an import.
+    """
+    digest = hashlib.sha256(("thoughts:moved-document-folder:" + folder).encode()).digest()
+    return {"schema_version": 4, "document_id": str(uuid.UUID(bytes=digest[:16], version=4)), "documents": []}
+
+
 def _structural_digest(plan: dict) -> str:
     shape = {
         "document": plan["source"]["path"], "destination": plan["destination"]["path"],
@@ -120,6 +157,9 @@ def _structural_digest(plan: dict) -> str:
         "bibliography": sorted(e["key"] for e in plan["bibliography"]["missing"]),
         "edited": sorted(plan["link_edits"]),
     }
+    if plan["destination"].get("new_folder"):
+        # Only a new folder adds to the shape: digests of every other move stay as they were.
+        shape["new_folder"] = plan["destination"]["folder"]
     return hashlib.sha256(json.dumps(shape, sort_keys=True).encode()).hexdigest()
 
 
@@ -154,11 +194,15 @@ def plan(session, store, root, request: dict) -> dict:
         raise ValueError("Documents of a Project's own default folder cannot move yet; move a connected source folder's document")
     folders = _connected_folders(destination_configuration)
     wanted_folder = request.get("destination_folder")
+    new_folder = None
     if wanted_folder:
         folders = [f for f in folders if f["path"] == wanted_folder]
-    if not folders:
+    elif not folders:
+        # Only its hidden default folder: the move gives the Project its first source folder.
+        new_folder = _new_folder_name(session, store, root, destination_configuration, document_id)
+    if not folders and new_folder is None:
         raise ValueError("The destination project has no source folder. Move or import a source folder into it first")
-    destination_folder = folders[0]
+    destination_folder = folders[0] if folders else {"folder_id": None, "path": new_folder}
     origin_owner, destination_owner = origin_folder["path"], destination_folder["path"]
     old_relative = declaration["source"]["path"]
     origin = _CanonicalFolder(session, store, origin_owner)
@@ -186,7 +230,8 @@ def plan(session, store, root, request: dict) -> dict:
                              if d["source"]["folder_id"] == destination_folder["folder_id"]]
     result = analysis.analyse(origin, destination, old_relative, new_relative,
                               other_documents=other_documents, destination_documents=destination_documents,
-                              package_source=_package_source, document_format=declaration["format"])
+                              package_source=_package_source, document_format=declaration["format"],
+                              new_folder=new_folder is not None)
 
     if request.get("carry_preamble") is False and result["preamble"]["carried"]:
         result["preamble"]["carried"] = ""
@@ -263,7 +308,11 @@ def plan(session, store, root, request: dict) -> dict:
         "destination": {"project_id": destination_id, "project_name": destination_configuration["name"],
                         "folder": destination_owner, "path": new_relative,
                         "revision": destination_record.revision if destination_record else 0,
-                        "collision": collision, "suggested_path": suggestion},
+                        "collision": collision, "suggested_path": suggestion,
+                        # Only for a Project without a source folder: the move creates `folder`
+                        # in it, listed under the Project's name.
+                        **({"new_folder": True, "folder_name": destination_configuration["name"]}
+                           if new_folder is not None else {})},
         "files": files,
         "unresolved": result["unresolved"],
         "preamble": {k: v for k, v in result["preamble"].items()},
@@ -429,7 +478,8 @@ def move_source_document(session, store, root, request, current, record, data, d
     """Apply a reviewed move. The caller holds the worktree lock and checked ``base_revision``."""
     from .document_moves import finish_move
     from .library_projects import RECEIPT, TYPE, _record, _save_source, catalogue
-    from .project_configuration import canonical_for_project, configured_manifest_path, retire_source, validate
+    from .project_configuration import (add_folder, canonical_for_project, configured_manifest_path, retire_source,
+                                        validate)
     from .proposal_history import reconcile_proposal_history
 
     operation_id = str(uuid.UUID(request["operation_id"]))
@@ -451,6 +501,7 @@ def move_source_document(session, store, root, request, current, record, data, d
     projects = {p["id"]: p for p in catalogue(session, root, store)["projects"]}
     destination = projects[destination_id]
     origin_owner, destination_owner = value["source"]["folder"], value["destination"]["folder"]
+    creates_folder = bool(value["destination"].get("new_folder"))
     old_path = origin_owner + "/" + value["source"]["path"]
     new_path = destination_owner + "/" + value["destination"]["path"]
     document_id = value["document_id"]
@@ -504,7 +555,8 @@ def move_source_document(session, store, root, request, current, record, data, d
             existing = session.get(SourceFile, path)
             edited_in_place = path in value["link_edits"] or path == destination_owner + "/" + (bibliography["target"] or "")
             if existing is not None and not existing.deleted and not edited_in_place:
-                raise ValueError(f"{path} appeared on the server after the move was planned. Choose Move to project again")
+                raise ValueError(f"{path} appeared on the server after the move was planned. "
+                                 "Choose Move to project again")
             _save_source(session, store, root, operation_id, path, content, materialize=False)
             touched.add(path)
         # 4. Records keyed by the source path follow it, before the old path is deleted.
@@ -534,6 +586,10 @@ def move_source_document(session, store, root, request, current, record, data, d
         origin_configuration["documents"] = [d for d in origin_configuration["documents"] if d["document_id"] != document_id]
         for field in ("rendering", "document_names"):
             origin_configuration.get(field, {}).pop(document_id, None)
+        if creates_folder:
+            # The Project's first source folder, declared as an imported folder is.
+            destination_configuration = add_folder(destination_configuration, destination_owner,
+                                                   _new_folder_declaration(destination_owner))
         folder_id = next(f["folder_id"] for f in destination_configuration["source_folders"] if f["path"] == destination_owner)
         if any(d["document_id"] == document_id for d in destination_configuration["documents"]):
             raise ValueError("The destination project already contains this document")
@@ -577,6 +633,10 @@ def move_source_document(session, store, root, request, current, record, data, d
         data["retired_filenames"] = [f for f in data.get("retired_filenames", []) if f != filename]
         if moved_name:
             target_data.setdefault("document_names", {})[document_id] = moved_name
+        if creates_folder:
+            # Listed under the Project's name, as an import lists its folder under the import's.
+            target_data.setdefault("source_folders", []).append(
+                {"project": destination_owner, "folder": value["destination"]["folder_name"]})
         for project_id, existing, payload in ((value["source"]["project_id"], record, data),
                                               (destination_id, target_record, target_data)):
             if existing is None:
@@ -596,7 +656,8 @@ def move_source_document(session, store, root, request, current, record, data, d
                              "sha256": digest, "move_pending": True, "source_paths": sorted(touched),
                              "projects": [value["source"]["project_id"], destination_id],
                              "moved_document": {"document_id": document_id, "from": old_path, "to": new_path,
-                                                "filename": filename, "followed": followed}})
+                                                "filename": filename, "followed": followed,
+                                                **({"created_folder": destination_owner} if creates_folder else {})}})
         session.add(receipt)
         from .library import store_published_source_index
         store_published_source_index(session, store)
