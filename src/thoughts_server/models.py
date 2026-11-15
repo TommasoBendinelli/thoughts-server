@@ -550,6 +550,9 @@ class AgentNoteReply(Base):
     strokes_sha256: Mapped[str | None] = mapped_column(ForeignKey("objects.sha256"))
     stroke_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     message: Mapped[str | None] = mapped_column(Text)
+    # What the answering agent may ground its answer in, as the sender chose: none, linked_pdf, library or
+    # library_and_mental_model; null when the sender did not say (protocol/agent-notes.md "Reply sources").
+    sources: Mapped[str | None] = mapped_column(String(32))
     content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
 
 

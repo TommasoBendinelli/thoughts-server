@@ -397,3 +397,20 @@ def test_review_count_follows_the_desktop():
               {"event_id": "5", "rating": "good", "interval_action": "set"},
               {"event_id": "6", "rating": "easy"}, {"event_id": "7", "retracted_event_id": "6"}]
     assert review_card_merge.review_count(events) == 2
+
+
+def test_the_first_cards_own_page_leads_before_its_table_of_contents_lines():
+    """A passage with headings is also highlighted on their lines in the table of contents, pages
+    before the card's own page: the kept card's first area is on the first card's own page."""
+    from thoughts_server.review_card_merge import merged_regions
+
+    def area(page, top):
+        return {"page": page, "rect": [0.1, top, 0.9, top + 0.04]}
+
+    first = {"primary": {"page": 11, "rect": area(11, 0.2)["rect"],
+                         "regions": [area(2, 0.3), area(11, 0.2), area(12, 0.1)]}}
+    second = {"primary": {"page": 12, "rect": area(12, 0.5)["rect"], "regions": [area(2, 0.35), area(12, 0.5)]}}
+    assert merged_regions([first, second]) == [area(11, 0.2), area(2, 0.3), area(12, 0.1), area(2, 0.35), area(12, 0.5)]
+    # Cards whose areas already start on their own page keep their order.
+    plain = {"primary": {"page": 3, "rect": area(3, 0.1)["rect"], "regions": [area(3, 0.1), area(4, 0.2)]}}
+    assert merged_regions([plain, second]) == [area(3, 0.1), area(4, 0.2), area(2, 0.35), area(12, 0.5)]

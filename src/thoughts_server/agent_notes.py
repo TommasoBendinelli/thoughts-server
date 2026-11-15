@@ -29,11 +29,11 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from fastapi import Depends, FastAPI, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, false, func, null, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
@@ -61,6 +61,19 @@ CAPABILITY = "agent_notes_v1"
 LISTENING_CAPABILITY = "agent_note_listening_v1"
 # A reply may carry a photo (the phone's "Send with picture", from the glasses camera).
 REPLY_PHOTOS_CAPABILITY = "agent_note_reply_photos_v1"
+# A reply may say what the answering agent may ground its answer in ("Reply sources"). The server only
+# stores and returns the choice; the agents that answer follow it.
+REPLY_SOURCES_CAPABILITY = "agent_note_reply_sources_v1"
+ReplySources = Literal["none", "linked_pdf", "library", "library_and_mental_model"]
+REPLY_SOURCES: tuple[str, ...] = get_args(ReplySources)
+REPLY_SOURCES_DESCRIPTION = (
+    "What the answering agent may use to ground its answer, as the sender of the reply chose "
+    "(protocol/agent-notes.md, Reply sources). none: no Thoughts documents, only general knowledge and "
+    "the note and reply. linked_pdf: only the PDF the note is linked to (its document_id / "
+    "document_filename). library: any Library document, but not the Mental Model. "
+    "library_and_mental_model: Library documents and the Mental Model. null: the sender did not say, so "
+    "the agent uses everything, as before."
+)
 # Notes may carry links: rectangles of the image that open a source when tapped.
 LINKS_CAPABILITY = "agent_note_links_v1"
 # One agent may answer for every device (reply feed responder=true) and read the user's pages.
@@ -168,6 +181,9 @@ ERROR_STATUS = {
     "agent_note_conflict": 409,
     "agent_note_too_large": 413,
     "unsupported_image": 415,
+    # A reply's sources is not one of REPLY_SOURCES. Documented on that route only: on the others, a 422
+    # is FastAPI's malformed query parameter.
+    "invalid_reply_sources": 422,
 }
 
 
@@ -428,6 +444,18 @@ def decode_photo(payload: dict) -> tuple[Image, str | None] | None:
     return photo, capture
 
 
+def optional_sources(payload: dict) -> str | None:
+    """The reply's optional ``sources``: what the answering agent may use (``Reply sources``), or None."""
+    value = payload.get("sources")
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in REPLY_SOURCES:
+        raise AgentNoteError(
+            "invalid_reply_sources", f"sources must be one of {', '.join(REPLY_SOURCES)}, or null"
+        )
+    return value
+
+
 def is_number(value: object) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
@@ -523,6 +551,7 @@ def reply_record(reply: AgentNoteReply, photo: AgentNoteReplyPhoto | None = None
         "stroke_count": reply.stroke_count,
         "message": reply.message,
         "photo": photo_record(photo),
+        "sources": reply.sources,
     }
 
 
@@ -1438,6 +1467,7 @@ class AgentNoteReplyRecord(BaseModel):
     stroke_count: int
     message: str | None
     photo: AgentNoteReplyPhotoRecord | None
+    sources: ReplySources | None = Field(description=REPLY_SOURCES_DESCRIPTION)
 
 
 class AgentNoteLinkRecord(BaseModel):
@@ -1780,6 +1810,12 @@ CREATE_REPLY_BODY = {
                             "capture": {"type": "string", "maxLength": MAX_CAPTURE_CHARACTERS},
                         },
                     },
+                    "sources": {
+                        "type": ["string", "null"],
+                        "enum": [*REPLY_SOURCES, None],
+                        "description": REPLY_SOURCES_DESCRIPTION
+                        + " Any other value: 422 invalid_reply_sources.",
+                    },
                 },
             }
         }
@@ -1912,7 +1948,7 @@ HANDOVER_BODY = {
     },
 }
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    status: {"description": code} for code, status in ERROR_STATUS.items()
+    status: {"description": code} for code, status in ERROR_STATUS.items() if code != "invalid_reply_sources"
 }
 IMAGE_RESPONSE = {200: {"content": {"image/png": {}, "image/jpeg": {}}, "description": "Image bytes"}}
 
@@ -2212,6 +2248,7 @@ class AgentNoteService:
         payload = parse_json_object(body)
         reply_id = normalize_uuid(payload.get("reply_id"), "reply_id")
         message = optional_text(payload, "message", MAX_MESSAGE_CHARACTERS)
+        sources = optional_sources(payload)
         if "image" not in payload:
             raise invalid("image is required")
         image = decode_image(payload["image"])
@@ -2232,6 +2269,8 @@ class AgentNoteService:
                 "sha256": photo[0].sha256,
                 "capture": photo[1],
             }
+        if sources is not None:  # no sources: the hash as before; other sources conflict, as a message does
+            identity["sources"] = sources
         content_sha256 = canonical_hash(identity)
         with self.database.session_factory() as session:
             existing = self._existing_reply(session, reply_id, content_sha256)
@@ -2255,6 +2294,7 @@ class AgentNoteService:
                 strokes_sha256=strokes_record.sha256 if strokes_record else None,
                 stroke_count=strokes[1] if strokes else 0,
                 message=message,
+                sources=sources,
                 content_sha256=content_sha256,
             )
             session.add(reply)
@@ -3415,6 +3455,7 @@ def register_agent_note_routes(
         responses={
             200: {"model": AgentNoteReplyCreateResponse, "description": "Identical retry"},
             **ERROR_RESPONSES,
+            422: {"description": "invalid_reply_sources: sources is not one of " + ", ".join(REPLY_SOURCES)},
         },
         openapi_extra={"requestBody": CREATE_REPLY_BODY},
         description="The phone's annotated image and stroke document. Idempotent by reply_id. "

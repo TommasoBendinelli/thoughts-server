@@ -641,8 +641,9 @@ def test_migration_0022_creates_and_drops_the_agent_note_tables(tmp_path, monkey
         command.upgrade(config, "0022_agent_notes")
         inspector = sa.inspect(engine)
         assert agent_tables <= set(inspector.get_table_names())
-        # Columns later migrations add to these tables (0029: agent_notes.links, 0031: answer_by).
-        later = {"agent_notes": {"links", "answer_by"}}
+        # Columns later migrations add to these tables (0029: agent_notes.links, 0031: answer_by,
+        # 0034: agent_note_replies.sources).
+        later = {"agent_notes": {"links", "answer_by"}, "agent_note_replies": {"sources"}}
         for name in agent_tables:
             migrated = {column["name"] for column in inspector.get_columns(name)}
             assert migrated == set(Base.metadata.tables[name].columns.keys()) - later.get(name, set()), name

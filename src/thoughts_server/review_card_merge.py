@@ -296,6 +296,20 @@ def card_regions(payload: dict) -> list[dict]:
     return copy.deepcopy(regions)
 
 
+def merged_regions(ordered: list[dict]) -> list[dict]:
+    """The kept card's answer areas: each card's own, cards in reading order. The kept card's page and
+    page fingerprint are the first card's own page, so its areas there lead, before the lines its
+    passage's headings put in the table of contents earlier in the PDF (each group keeps its order)."""
+    regions: list[dict] = []
+    for index, payload in enumerate(ordered):
+        own = card_regions(payload)
+        if index == 0:
+            page = (payload.get("primary") or {}).get("page")
+            own = sorted(own, key=lambda region: region["page"] != page)
+        regions += own
+    return regions
+
+
 def _events_by_card(session, card_ids: list[str]) -> dict[str, list[dict]]:
     events: dict[str, list[dict]] = {card_id: [] for card_id in card_ids}
     rows = session.scalars(select(Entity).where(
@@ -481,9 +495,8 @@ def merge_cards(session, store, settings, request, *, now: datetime | None = Non
         if not 1 <= len(question) <= MAX_QUESTION_LENGTH:
             raise _refused(f"The question must contain between 1 and {MAX_QUESTION_LENGTH} characters.")
         # The kept card's areas: each card's own, in the order of its first passage.
-        regions, answers = [], []
+        regions, answers = merged_regions(ordered), []
         for payload in ordered:
-            regions += card_regions(payload)
             answer_anchor = (payload.get("primary") or {}).get("answer_anchor") or {}
             answer = str(answer_anchor.get("normalized_text") or "").strip()
             if answer:

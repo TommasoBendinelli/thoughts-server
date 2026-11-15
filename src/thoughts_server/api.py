@@ -39,6 +39,7 @@ from .agent_notes import CAPABILITY as AGENT_NOTES_CAPABILITY
 from .agent_notes import LISTENING_CAPABILITY as AGENT_NOTE_LISTENING_CAPABILITY
 from .agent_notes import LINKS_CAPABILITY as AGENT_NOTE_LINKS_CAPABILITY
 from .agent_notes import REPLY_PHOTOS_CAPABILITY as AGENT_NOTE_REPLY_PHOTOS_CAPABILITY
+from .agent_notes import REPLY_SOURCES_CAPABILITY as AGENT_NOTE_REPLY_SOURCES_CAPABILITY
 from .agent_notes import CLAIMS_CAPABILITY as AGENT_NOTE_CLAIMS_CAPABILITY
 from .agent_notes import OWNERS_CAPABILITY as AGENT_NOTE_OWNERS_CAPABILITY
 from .agent_notes import RESPONDER_CAPABILITY as AGENT_NOTE_RESPONDER_CAPABILITY
@@ -339,6 +340,9 @@ SERVER_CAPABILITIES = [
     AGENT_NOTE_LISTENING_CAPABILITY,
     # A reply may carry a photo (POST .../replies photo, GET /v1/agent-notes/replies/{id}/photo).
     AGENT_NOTE_REPLY_PHOTOS_CAPABILITY,
+    # A reply may say what the answering agent may ground its answer in: POST .../replies sources,
+    # sources in every reply record.
+    AGENT_NOTE_REPLY_SOURCES_CAPABILITY,
     # A note may carry links: rectangles of its image that open a web page or a Library PDF page.
     AGENT_NOTE_LINKS_CAPABILITY,
     # One agent answers for every device: reply feed responder=true, GET /v1/agent-notes/pages.

@@ -100,6 +100,7 @@ and `review_question` from `payload.question` when present.
 | strokes_sha256 | FK objects.sha256 null | stroke JSON (below) |
 | stroke_count | integer | |
 | message | text null | optional comment, <= 4000 chars |
+| sources | string(32) null | migration 0034: what the answering agent may use ("Reply sources"); null when not said |
 | content_sha256 | string(64) | idempotency |
 
 `agent_note_listeners`: `device_id` PK, `last_seen_at`, `context` JSON
@@ -124,11 +125,13 @@ See "The user's choice".
 
 Errors are `{"detail": "...", "error_code": "..."}` with codes `invalid_agent_note` (400),
 `agent_note_too_large` (413), `unsupported_image` (415), `agent_note_not_found` (404),
-`agent_note_conflict` (409). A missing or wrong token is the usual 401 and a malformed
+`agent_note_conflict` (409), and `invalid_reply_sources` (422, endpoint 7 only). A missing
+or wrong token is the usual 401 and a malformed
 query parameter FastAPI's 422. Health advertises the capability `agent_notes_v1`, and
 `agent_note_listening_v1` for "Who hears a reply" (endpoint 11, `listen`/`conversation_id` on
 endpoint 8, `reply_listening` and `listening` in the answers of endpoints 1 and 7), and
 `agent_note_reply_photos_v1` for "Reply photos" (`photo` on endpoint 7 and in reply records),
+`agent_note_reply_sources_v1` for "Reply sources" (`sources` on endpoint 7 and in reply records),
 `agent_note_links_v1` for "Links" (`links` on endpoint 1 and in note records), and
 `agent_note_responder_v1` for "One responder" (`responder` on endpoint 8, endpoint 12, `responder`
 in listener records, `sender_device_id` in the feed's `note`), `agent_note_claims_v1` for "Who
@@ -169,7 +172,8 @@ before parsing.
   "image_bytes": 234567, "image_sha256": "...", "image_url": "/v1/agent-notes/replies/<id>/image",
   "strokes_url": "/v1/agent-notes/replies/<id>/strokes" (or null), "stroke_count": 7, "message": "...",
   "photo": null | {"url": "/v1/agent-notes/replies/<id>/photo", "media_type": "image/jpeg",
-            "width": 3264, "height": 2448, "bytes": 1234567, "sha256": "...", "capture": "IMG_..."}
+            "width": 3264, "height": 2448, "bytes": 1234567, "sha256": "...", "capture": "IMG_..."},
+  "sources": null | "none" | "linked_pdf" | "library" | "library_and_mental_model"
 }
 ```
 
@@ -206,8 +210,11 @@ before parsing.
    first time stamp wins; `opened` also sets `delivered_*` if unset. Returns the note.
 7. `POST /v1/agent-notes/{note_id}/replies` — `{"reply_id", "image": {"media_type",
    "data_base64"}, "strokes"?: <stroke document>, "message"?, "photo"?: {"media_type",
-   "data_base64", "capture"?}}`. `201` with the reply,
-   `200` on an identical retry. A reply to a deleted note is still accepted. The answer is the
+   "data_base64", "capture"?}, "sources"?: "none" | "linked_pdf" | "library" |
+   "library_and_mental_model" | null}`. `201` with the reply,
+   `200` on an identical retry. A reply to a deleted note is still accepted. Any other `sources`
+   (another string, or not a string) is `422` `invalid_reply_sources` ("Reply sources").
+   The answer is the
    reply record plus `"listening": {"state", "listeners"}` (endpoint 11) as of now, so the
    phone can say right after Send whether an agent hears it; stored records do not carry it.
 8. `GET /v1/agent-notes/replies?after=&wait=&note_id=&conversation_id=&listen=` — replies to
@@ -445,6 +452,26 @@ glasses' capture `IMG_<time>_<suffix>`. The glasses also deliver every capture t
 archive, so a watcher that answers glasses captures must leave a capture alone when a reply names
 it in `photo.capture`: that reply's agent answers it. The photo is part of the reply's identity: a
 retry with another photo (or without it) under the same `reply_id` is a conflict.
+
+### Reply sources
+
+With each reply the user chooses (on the Mac or the phone) what the agent that answers it may use to
+ground its answer, sent as `sources` (migration 0034):
+
+* `none`: no Thoughts documents at all; the agent answers from general knowledge and the note and
+  reply only.
+* `linked_pdf`: only the PDF the note is linked to (its `document_id` / `document_filename`).
+* `library`: any Library document, but not the user's Mental Model.
+* `library_and_mental_model`: Library documents and the Mental Model (what agents did before the choice).
+* `null` (or absent): the sender did not say, so the agent uses everything, as before.
+
+Any other value is refused with `422` `invalid_reply_sources` and nothing is stored. Every reply record
+carries `sources` (`null` for replies stored before the field, or sent without it). The server only stores
+and returns the choice; the agent that answers follows it, and the tools that hand a reply to their agent
+pass it on. `sources` is part of the reply's identity, like `message`: a retry with other sources (or
+without them) under the same `reply_id` is a conflict; a reply without `sources` hashes as before. A server
+without `agent_note_reply_sources_v1` ignores the field, so senders check the capability (or the `sources`
+of the answer) before showing the choice as sent.
 
 ### Links
 

@@ -4065,11 +4065,8 @@ paths:
         '415':
           description: unsupported_image
         '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+          description: 'invalid_reply_sources: sources is not one of none, linked_pdf,
+            library, library_and_mental_model'
       requestBody:
         required: true
         content:
@@ -4125,6 +4122,24 @@ paths:
                       maxLength: 128
                   description: A picture sent with the reply (e.g. from the glasses
                     camera); same limits as image.
+                sources:
+                  type:
+                  - string
+                  - 'null'
+                  enum:
+                  - none
+                  - linked_pdf
+                  - library
+                  - library_and_mental_model
+                  - null
+                  description: 'What the answering agent may use to ground its answer,
+                    as the sender of the reply chose (protocol/agent-notes.md, Reply
+                    sources). none: no Thoughts documents, only general knowledge and
+                    the note and reply. linked_pdf: only the PDF the note is linked
+                    to (its document_id / document_filename). library: any Library document,
+                    but not the Mental Model. library_and_mental_model: Library documents
+                    and the Mental Model. null: the sender did not say, so the agent
+                    uses everything, as before. Any other value: 422 invalid_reply_sources.'
   /v1/push/registration:
     put:
       summary: Put Push Registration
@@ -8161,6 +8176,23 @@ components:
           anyOf:
           - $ref: '#/components/schemas/AgentNoteReplyPhotoRecord'
           - type: 'null'
+        sources:
+          anyOf:
+          - type: string
+            enum:
+            - none
+            - linked_pdf
+            - library
+            - library_and_mental_model
+          - type: 'null'
+          title: Sources
+          description: 'What the answering agent may use to ground its answer, as the
+            sender of the reply chose (protocol/agent-notes.md, Reply sources). none:
+            no Thoughts documents, only general knowledge and the note and reply. linked_pdf:
+            only the PDF the note is linked to (its document_id / document_filename).
+            library: any Library document, but not the Mental Model. library_and_mental_model:
+            Library documents and the Mental Model. null: the sender did not say, so the
+            agent uses everything, as before.'
         note:
           $ref: '#/components/schemas/AgentNoteSummary'
       type: object
@@ -8180,6 +8212,7 @@ components:
       - stroke_count
       - message
       - photo
+      - sources
       - note
       title: AgentNoteReplyFeedItem
     AgentNoteReplyRecord:
@@ -8234,6 +8267,23 @@ components:
           anyOf:
           - $ref: '#/components/schemas/AgentNoteReplyPhotoRecord'
           - type: 'null'
+        sources:
+          anyOf:
+          - type: string
+            enum:
+            - none
+            - linked_pdf
+            - library
+            - library_and_mental_model
+          - type: 'null'
+          title: Sources
+          description: 'What the answering agent may use to ground its answer, as the
+            sender of the reply chose (protocol/agent-notes.md, Reply sources). none:
+            no Thoughts documents, only general knowledge and the note and reply. linked_pdf:
+            only the PDF the note is linked to (its document_id / document_filename).
+            library: any Library document, but not the Mental Model. library_and_mental_model:
+            Library documents and the Mental Model. null: the sender did not say, so the
+            agent uses everything, as before.'
       type: object
       required:
       - reply_id
@@ -8251,6 +8301,7 @@ components:
       - stroke_count
       - message
       - photo
+      - sources
       title: AgentNoteReplyRecord
     AgentNoteReplyCreateResponse:
       properties:
@@ -8304,6 +8355,23 @@ components:
           anyOf:
           - $ref: '#/components/schemas/AgentNoteReplyPhotoRecord'
           - type: 'null'
+        sources:
+          anyOf:
+          - type: string
+            enum:
+            - none
+            - linked_pdf
+            - library
+            - library_and_mental_model
+          - type: 'null'
+          title: Sources
+          description: 'What the answering agent may use to ground its answer, as the
+            sender of the reply chose (protocol/agent-notes.md, Reply sources). none:
+            no Thoughts documents, only general knowledge and the note and reply. linked_pdf:
+            only the PDF the note is linked to (its document_id / document_filename).
+            library: any Library document, but not the Mental Model. library_and_mental_model:
+            Library documents and the Mental Model. null: the sender did not say, so the
+            agent uses everything, as before.'
         listening:
           $ref: '#/components/schemas/AgentNoteReplyListening'
       type: object
@@ -8323,6 +8391,7 @@ components:
       - stroke_count
       - message
       - photo
+      - sources
       - listening
       title: AgentNoteReplyCreateResponse
     AgentNoteSummary:
