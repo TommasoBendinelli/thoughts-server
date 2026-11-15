@@ -374,28 +374,28 @@ def test_an_answered_claim_is_not_given_up(client):
 
 
 def test_a_topic_owners_session_is_woken_after_the_notes_own_session(client):
-    register(client, sessions=[session_record(), session_record(OWNER_SESSION, "Weight writing")])
+    register(client, sessions=[session_record(), session_record(OWNER_SESSION, "Course notes")])
     register_fallback(client)
     owner = own(
-        client, conversation_id=OWNER_SESSION, label="Weight writing", title_tags=["[Weight writing]"]
+        client, conversation_id=OWNER_SESSION, label="Course notes", title_tags=["[Course notes]"]
     )
     age_reply_listeners(client, 600)  # the owner's conversation no longer polls
 
     from_elsewhere = send_note(
-        client, SERVER, title="[Weight writing] step 3", origin={"conversation_id": OTHER_SESSION}
+        client, SERVER, title="[Course notes] step 3", origin={"conversation_id": OTHER_SESSION}
     )
     reply = post_reply(client, from_elsewhere["note_id"], reply_body()).json()
     record = handling(client, reply["reply_id"])
     assert entry_summary(record) == [("test-device", OWNER_SESSION, "owner", True, "laptop")]
     assert (
         record["covered_by"][0]["owner_id"] == owner["owner_id"]
-        and record["covered_by"][0]["label"] == "Weight writing"
+        and record["covered_by"][0]["label"] == "Course notes"
     )
-    assert record["wake_target"]["role"] == "owner" and record["wake_target"]["label"] == "Weight writing"
+    assert record["wake_target"]["role"] == "owner" and record["wake_target"]["label"] == "Course notes"
     taken = claim(client, reply["reply_id"], AGENT, conversation_id=OWNER_SESSION)
     assert taken.status_code == 201 and taken.json()["claim"]["role"] == "owner"
 
-    own_note = send_note(client, AGENT, title="[Weight writing] step 4", origin={"conversation_id": SESSION})
+    own_note = send_note(client, AGENT, title="[Course notes] step 4", origin={"conversation_id": SESSION})
     reply = post_reply(client, own_note["note_id"], reply_body()).json()
     record = handling(client, reply["reply_id"])
     assert [c["role"] for c in record["covered_by"]] == ["sender", "owner"]
