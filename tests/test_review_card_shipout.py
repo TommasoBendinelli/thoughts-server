@@ -600,3 +600,67 @@ def test_card_with_two_areas_and_a_generated_table_float_compiles_into_both_segm
     assert "Second area table caption." in table_area
     assert "Arithmetic" in table_area and "8.98" in table_area
     assert "Not selected" not in table_area and "Outside" not in first_area + table_area
+
+
+PROPOSAL = r"\agentProposedEdit[created=2026-01-05T10:00:00.000Z,conversation_id=0190a000-0000-7000-8000-0000000000c2]"
+
+
+def split_math_card():
+    """A card whose passage holds pending proposals that cut its display math: the first one's
+    texts open \\[ and the \\] closes after the proposal; the second sits inside an aligned block
+    and its texts open \\left[ that closes after it."""
+    passage = (
+        "Maximize the expected reward.\n"
+        + PROPOSAL + "{agent-one}{Your usual notation.}"
+        + "{For a prompt \\(q\\) the policy samples \\(Y\\).\n\\[\nJ(\\theta\\mid q)=\\mathbb{E}_{Y\\sim\\pi_\\theta}\\bigl[R(q,Y)\\bigr].\n}"
+        + "{For a prompt \\(q\\) the policy samples \\(y\\).\n\\[\nJ(\\theta\\mid q)=\\mathbb{E}_{y\\sim\\pi_\\theta}\\bigl[R(q,y)\\bigr].\n}"
+        + "\\]\nThe gradient is therefore\n\\[\n\\begin{aligned}\n\\nabla J&=\\sum_y R\\,\\nabla\\pi\\\\\n&=\n"
+        + PROPOSAL + "{agent-two}{Same notation fix.}"
+        + "{\\mathbb{E}_{Y}\\left[\nR\\nabla\\log\\pi(Y)\n}"
+        + "{\\mathbb{E}_{y}\\left[\nR\\nabla\\log\\pi(y)\n}"
+        + "\\right].\n\\end{aligned}\n\\]\nThis is the policy-gradient identity."
+    )
+    return (
+        r"\documentclass{article}\usepackage{amsmath,amssymb}" + "\n"
+        + r"\providecommand{\ReviewCardMaskStart}[2]{}" + "\n"
+        + r"\providecommand{\ReviewCardMaskEnd}[2]{}" + "\n"
+        + r"\begin{document}" + "\n" + span(ALL_REDUCE, passage) + r"\end{document}" + "\n"
+    )
+
+
+def test_proposals_that_cut_math_inside_a_card_leave_it_placeable():
+    # A pending proposal is temporary: a card whose passage holds one that opens a display math
+    # block closed after it must still get markers (it never becomes unavailable).
+    _, report = instrument_source(split_math_card().encode())
+    assert "card:" + ALL_REDUCE + ":0" in {m["key"] for m in report["markers"]}
+    assert not report["unresolved"]
+    assert not [item for item in report["uncovered"] if "opaque" in str(item.get("reason"))]
+
+
+def test_real_card_with_a_proposal_cutting_its_math_gets_its_regions(tmp_path):
+    if not all(shutil.which(name) for name in ("latexmk", "pdflatex", "qpdf")):
+        pytest.skip("real LaTeX toolchain required")
+    project = tmp_path / "docs-fixture"
+    source = project / "tex/source/cards.tex"
+    source.parent.mkdir(parents=True)
+    raw = split_math_card().encode()
+    source.write_bytes(raw)
+    from test_shipout_placements import register_project
+    register_project(tmp_path, project, 'tex/source/cards.tex')
+    build = compile_source(tmp_path, project, "cards.tex", run=_run)
+    assert source.read_bytes() == raw
+    source_file = "docs-fixture/tex/source/cards.tex"
+    publisher = publisher_for(tmp_path, raw, source_file)
+    record = SimpleNamespace(directory=build.pdf.parent, mapping={"pdf_name": build.pdf.name})
+    fragments = publisher._build_review_card_fragments(
+        record, [{"source_file": source_file, "synctex_path": source_file}], {})
+    regions = fragments[(ALL_REDUCE, "0")]
+    assert regions and {region["page"] for region in regions} == {1}
+    with pdfplumber.open(build.pdf) as document:
+        page = document.pages[0]
+        text = " ".join(page.crop((r["left"] * page.width - .05, r["top"] * page.height - .05,
+                                   r["right"] * page.width + .05, r["bottom"] * page.height + .05)).extract_text()
+                        for r in regions)
+    # The whole passage is covered: the text before, the proposals' (new) text and the math after.
+    assert "Maximize the expected reward." in text and "policy-gradient identity" in text
+    assert "samples y" in text.replace("\n", " ")

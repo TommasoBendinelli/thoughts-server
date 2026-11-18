@@ -4,8 +4,9 @@
 
 A source conflict is recorded with the merge rules of its day (sources._merge). The rules have
 grown since (adjacent edits, agent proposals giving way to the user's edit, the same decision on
-two devices), but a recorded conflict was never looked at again: it waited for the user even when
-today's server would have merged the same upload without asking.
+two devices, the server's recorded decisions on proposals the client still offers), but a
+recorded conflict was never looked at again: it waited for the user even when today's server
+would have merged the same upload without asking.
 
 Trigger: listing the conflicts (GET /v1/conflicts, any status). Every client and agent that shows
 "Merge needed" lists them first, and the desktop lists the resolved ones before it takes a
@@ -67,6 +68,7 @@ from .sources import (
     _pending_moved_cards,
     _proposal_strict,
     _queue_source_anchor_retries,
+    _recorded_proposals,
     _validate_source_content,
     _withdrawn_proposals,
     source_render_impact,
@@ -117,7 +119,8 @@ def _merge_today(
     return _merge(base, current, incoming, path=path,
                   folder_names=_folder_names(session, path),
                   withdrawn=_withdrawn_proposals(session),
-                  moved_cards=_pending_moved_cards(session))
+                  moved_cards=_pending_moved_cards(session),
+                  recorded=_recorded_proposals(session))
 
 
 def _plan(

@@ -61,6 +61,7 @@ PHONE_TEXT = decide(PATH, BASE, [PROPOSAL], "accept")
 def _old_rules(monkeypatch) -> None:
     """The merge of early October: a line merge only, and every upload its own conflict."""
     monkeypatch.setattr(proposal_merge, "merge_around_proposal_changes", lambda *args, **kwargs: None)
+    monkeypatch.setattr(proposal_merge, "merge_computer_proposal_decisions", lambda *args, **kwargs: None)
     monkeypatch.setattr(adjacent_edits, "merge", lambda *args, **kwargs: None)
     monkeypatch.setattr(sources_module, "_open_twin", lambda *args, **kwargs: None)
 

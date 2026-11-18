@@ -28,6 +28,8 @@ Pure standard library, Python 3.11 or later; runs with the system `python3`, no 
 | `thoughts_cli/documents.py` | create-document's request checks and its Project lookups in the catalogue |
 | `thoughts_cli/build_inputs.py` | a note's PDF build inputs as the desktop declares them (publish-build-inputs) |
 | `thoughts_cli/review_cards.py` | create-review-card and move-review-card: the desktop's request checks and the card records |
+| `thoughts_cli/review_kinds.py` | knowledge and project cards: a copy of the server's fold (protocol/review-card-kinds.md) |
+| `thoughts_cli/review_card_sections.py` | a section card's body: the desktop's reviewSourceSection rules for TeX and Markdown headings |
 | `thoughts_cli/review_card_selection.py` | the selection rules, the card markers and a target on a pending proposal's text, copied unchanged from the server (a test keeps them identical) |
 | `thoughts_cli/card_merges.py` | merge-review-cards: the desktop's request checks; the server merges (`POST /v1/review-card-merges`) |
 | `thoughts_cli/card_passage_moves.py` | move-card-passage (move-review-card with `start_line == end_line`): a card linked to source markers moves with its marked passage, as the two linked proposals of `shell/proposalauthoring.cpp` authorCardMove |
@@ -45,7 +47,8 @@ field, one JSON object on stdout. The request fields may instead be given as opt
 `--proposals-file`, `--conversation-id`, `--conversation-url`, `--request-id`; for create-document
 `--project`, `--name`, `--filename`, `--content` or `--content-file`; for publish-build-inputs
 `--document-id`, or `--project` and `--filename`; for the review cards `--question`, `--due-at`
-and `--card-id`; for merge-review-cards `--card-id` once per card and `--keep-card-id`); then
+and `--card-id`; for merge-review-cards `--card-id` once per card and `--keep-card-id`, without
+`--source` and `--expected-source-sha256` for cards of a PDF); then
 stdin is not read.
 
 ```sh
@@ -61,7 +64,7 @@ thoughts-cli publish-build-inputs --document-id ID --publish --request-id UUID  
 thoughts-cli create-review-card < card.json                            # a card whose answer is a source passage
 thoughts-cli move-review-card < move.json                              # a card on an imported PDF into a note;
                                                                        # start_line == end_line: a linked card's passage
-thoughts-cli merge-review-cards < merge.json                           # several cards of one note into one card
+thoughts-cli merge-review-cards < merge.json                           # cards of one note (or one PDF) into one card
 thoughts-cli pending-card-moves --card-id UUID                         # card moves waiting for a proposal
 thoughts-cli cancel-pending-card-move --pending-move-id UUID           # the card stays where it is
 thoughts-cli move-pdf --pdf KEY --project NAME --request-id UUID       # an imported PDF to another Project
@@ -104,10 +107,18 @@ error) carry `retryable: true`. Exit status as `thoughtsctl`: 0 success, 2 inval
 
 - `create-review-card`: `source`, `expected_source_sha256`, `start_line`, `end_line` (one-based,
   end exclusive, whole lines), `question` (1 to 500 characters), `due_at` (ISO 8601 with a
-  timezone, now or later), `request_id`. The request ID is the new card's ID, so an uncertain
-  retry never makes a second card. Result: `state: card_created`, `card_id`, `document` (the
-  note's PDF filename), `document_id`, `source`, `source_sha256` (the marked source), `due_at`,
-  `source_link_state: linked`, `pdf_placement_state: pending`, `card_revision`, `render_check`.
+  timezone, now or later), `request_id`, and optionally `kind` (`knowledge` or `project`,
+  protocol/review-card-kinds.md; left out, the card follows its Project's kind). The request ID
+  is the new card's ID, so an uncertain retry never makes a second card. Result: `state:
+  card_created`, `card_id`, `document` (the note's PDF filename), `document_id`, `source`,
+  `source_sha256` (the marked source), `due_at`, `review_kind` and `review_kind_source` (`card`
+  when `kind` was given, else `project` or `default`), `source_link_state: linked`,
+  `pdf_placement_state: pending`, `card_revision`, `render_check`.
+  A section card names its heading instead of the lines: `section_line` (the heading's line) or
+  `section_heading` (its text); the card hides the section's body, from below the heading to
+  before the next heading of the same or a higher level, and may hold other cards' passages
+  whole. Its result also has `section`: `title`, `kind`, `heading_line`, `start_line`,
+  `end_line` (exclusive; lines before the markers) and `wrapped_cards`.
 - `move-review-card`: `card_id`, `source`, `expected_source_sha256`, `start_line`, `end_line`,
   `request_id`. Only a card without source markers moves this way (a card on an imported PDF);
   it keeps its ID, question, schedule and review history. Result: `state: card_moved` and
@@ -169,16 +180,24 @@ order). The kept card keeps its ID, schedule and review history and marks every 
 its own segment, in file order; text between the passages stays unmarked; the other cards are
 deleted with their markers.
 
+Cards of an imported PDF (no source: "Answer highlighted in PDF") merge with the same request
+without `source` and `expected_source_sha256` (capability `review_card_merge_pdf_v1`, otherwise
+`server_unsupported`); one of the two without the other is refused (`invalid_request`). The kept
+card takes every card's areas on the PDF, in reading order (by each card's first area); nothing in a
+source changes and no rebuild is requested. The result has `kind: "pdf"`, `source` and
+`source_sha256` null and `passages` = the number of areas.
+
 The desktop merges on the Mac and sends the records through its outbox; this client has none, so
 the server merges (`POST /v1/review-card-merges`, capability `review_card_merge_v1` read from
 `GET /v1/health`, otherwise `server_unsupported` and nothing is sent; protocol/review-card-merge.md).
 It makes the desktop's records and applies them in one transaction on the canonical source. Result:
-`state: merged`, `kept_card_id`, `deleted_card_ids`, `delete_event_ids`, `card_order` (reading
-order), `question`, `source`, `source_sha256` (the merged source), `passages`, `card_revision`,
-`document`, `render_check` (the rebuild that places the kept card's areas). Refusals keep the
-server's code: `merge_refused` (with the reason: cards of several documents or files, a PDF-only
-card, cards on different PDF versions, ...), `card_unavailable`, `invalid_source`,
-`source_conflict` (with `current_source_sha256`), `request_conflict`. The server answers a retry of
+`state: merged`, `kind` (`source`, or `pdf`), `kept_card_id`, `deleted_card_ids`,
+`delete_event_ids`, `card_order` (reading order), `question`, `source`, `source_sha256` (the merged
+source), `passages`, `card_revision`, `document`, `render_check` (the rebuild that places the kept
+card's areas). Refusals keep the server's code: `merge_refused` (with the reason: cards of several
+documents or files, cards marked in a note together with cards only on the PDF, cards on different
+PDF versions, ...), `card_unavailable`, `invalid_source`, `source_conflict` (with
+`current_source_sha256`), `request_conflict`. The server answers a retry of
 the same `request_id` from its receipt (`replayed: true`), so a lost answer (`transport_error`,
 `retryable: true`) is retried with the identical request and never merges twice.
 

@@ -3476,6 +3476,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/mental-model:
+    get:
+      summary: Mental Model
+      description: 'The user''s Mental Model: the Library note mental-model.md that
+        the Mac''s Review › Mental Model › Refresh writes (its generated-file header left
+        out). Agents and services read it here instead of keeping copies.'
+      operationId: mental_model_v1_mental_model_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentNoteRules'
+        '400':
+          description: invalid_agent_note
+        '404':
+          description: agent_note_not_found
+        '409':
+          description: agent_note_conflict
+        '413':
+          description: agent_note_too_large
+        '415':
+          description: unsupported_image
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/agent-notes/handling/{item_id}/handover:
     post:
       summary: Hand Over Agent Note Item

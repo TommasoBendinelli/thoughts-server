@@ -8,6 +8,10 @@ The request and result are the desktop's (thoughtsctl merge-review-cards, shell/
 ``keep_card_id`` and ``question``. The kept card keeps its ID, schedule and review history and
 gets every card's passage as its own answer area; the others are deleted with their markers.
 
+Cards of an imported PDF have no source: their request leaves out both ``source`` and
+``expected_source_sha256`` (capability review_card_merge_pdf_v1). The kept card then takes every
+card's answer areas on the PDF, in reading order; nothing in a source changes.
+
 The desktop merges on the Mac and sends the records through its outbox. This client has no outbox,
 so the server merges (POST /v1/review-card-merges, capability review_card_merge_v1,
 protocol/review-card-merge.md): it makes the same records and applies them in one transaction on
@@ -25,6 +29,8 @@ from .authoring import AuthoringRefused, _valid_uuid
 
 MERGE_REVIEW_CARDS = "merge-review-cards"
 CAPABILITY = "review_card_merge_v1"
+# Cards of an imported PDF: the request without source fields.
+PDF_CAPABILITY = "review_card_merge_pdf_v1"
 FIELDS = frozenset({"command", "card_ids", "keep_card_id", "question", "source", "expected_source_sha256",
                     "request_id"})
 MIN_CARDS, MAX_CARDS = 2, 20
@@ -44,15 +50,22 @@ def validate(request: Any) -> dict[str, Any]:
             raise AuthoringRefused("invalid_request", f"Unexpected field: {key}")
     ids = request.get("card_ids")
     keep = request.get("keep_card_id")
+    # Cards of a PDF have no source: their request leaves out both source fields.
+    if ("source" in request) != ("expected_source_sha256" in request):
+        raise AuthoringRefused("invalid_request", "Give both source and expected_source_sha256 for cards marked "
+                               "in a note, or leave both out for cards of a PDF.")
+    pdf = is_pdf_merge(request)
     if (not isinstance(ids, list) or not MIN_CARDS <= len(ids) <= MAX_CARDS
             or not all(isinstance(card, str) and _valid_uuid(card) for card in ids) or len(set(ids)) != len(ids)
             or not isinstance(request.get("request_id"), str) or not _valid_uuid(request["request_id"])
-            or not isinstance(request.get("expected_source_sha256"), str)
-            or SHA256.fullmatch(request["expected_source_sha256"]) is None
+            or (not pdf and (not isinstance(request.get("expected_source_sha256"), str)
+                             or SHA256.fullmatch(request["expected_source_sha256"]) is None))
             or ("keep_card_id" in request and keep not in ids)):
         raise AuthoringRefused("invalid_request", "Provide 2 to 20 different card UUIDs, a keep_card_id among them "
-                               "if any, the current source SHA-256 and a request UUID.")
-    if not isinstance(request.get("source"), str) or not request["source"] or "\0" in request["source"]:
+                               "if any, a request UUID and, for cards marked in a note, its source and current "
+                               "SHA-256 (leave both out for cards of a PDF).")
+    if not pdf and (not isinstance(request.get("source"), str) or not request["source"]
+                    or "\0" in request["source"]):
         raise AuthoringRefused("invalid_request", "Provide the source path that holds the cards' markers.")
     if "question" in request and (not isinstance(request["question"], str)
                                   or not 1 <= len(request["question"].strip()) <= MAX_QUESTION_LENGTH):
@@ -61,12 +74,19 @@ def validate(request: Any) -> dict[str, Any]:
     return {key: value for key, value in request.items() if key != "command"}
 
 
+def is_pdf_merge(request: dict[str, Any]) -> bool:
+    """A merge of cards of an imported PDF: the request has no source fields."""
+    return "source" not in request and "expected_source_sha256" not in request
+
+
 def merge(api: ServerApi, body: dict[str, Any]) -> dict[str, Any]:
     """POST the merge; a refusal raises AuthoringRefused with the server's error_code (nothing changed)."""
     capabilities = api.health().get("capabilities") or []
-    if CAPABILITY not in capabilities:
+    needed = PDF_CAPABILITY if is_pdf_merge(body) else CAPABILITY
+    if needed not in capabilities or CAPABILITY not in capabilities:
+        what = "review cards of a PDF" if needed == PDF_CAPABILITY else "review cards"
         raise AuthoringRefused("server_unsupported",
-                               f"The server cannot merge review cards yet ({CAPABILITY}); nothing was changed.")
+                               f"The server cannot merge {what} yet ({needed}); nothing was changed.")
     try:
         answer = api.merge_review_cards(body)
     except ApiError as error:

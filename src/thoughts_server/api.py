@@ -43,6 +43,7 @@ from .agent_notes import REPLY_SOURCES_CAPABILITY as AGENT_NOTE_REPLY_SOURCES_CA
 from .agent_notes import CLAIMS_CAPABILITY as AGENT_NOTE_CLAIMS_CAPABILITY
 from .agent_notes import OWNERS_CAPABILITY as AGENT_NOTE_OWNERS_CAPABILITY
 from .agent_notes import RESPONDER_CAPABILITY as AGENT_NOTE_RESPONDER_CAPABILITY
+from .agent_notes import MENTAL_MODEL_CAPABILITY
 from .agent_notes import RULES_CAPABILITY as AGENT_NOTE_RULES_CAPABILITY
 from .agent_notes import WAKERS_CAPABILITY as AGENT_NOTE_WAKERS_CAPABILITY
 from .agent_notes import register_agent_note_routes
@@ -97,9 +98,11 @@ from .html_edition import CAPABILITY as HTML_EDITION_CAPABILITY
 from .html_edition.jobs import HTML_HINT_FIELDS, edition_states, strip_html_hints
 from .html_edition.jobs import revision_key as html_jobs_revision_key
 from .library_url_imports import CAPABILITY as LIBRARY_IMPORT_PDF_CAPABILITY
+from .new_source_folders import CAPABILITY as LIBRARY_PROJECT_SOURCE_FOLDER_CAPABILITY
 from .pending_card_moves import CAPABILITY as REVIEW_CARD_PENDING_MOVES_CAPABILITY
 from .push import PushService, register_push_routes
 from .review_card_merge import CAPABILITY as REVIEW_CARD_MERGE_CAPABILITY
+from .review_card_merge import PDF_CAPABILITY as REVIEW_CARD_MERGE_PDF_CAPABILITY
 from .models import (
     AgentProposalResolution,
     AnnotationAnchorJob,
@@ -315,6 +318,9 @@ SERVER_CAPABILITIES = [
     "project_document_publication_v1",
     # Retire/restore review cards as review-event queue actions (protocol/review-card-retire.md).
     "review_card_retire_v1",
+    # Knowledge cards and project cards: set_review_kind review events, a card's review_kind,
+    # a Project's review_kind and its set_review_kind action (protocol/review-card-kinds.md).
+    "review_card_kinds_v1",
     # Claude Code / Codex conversations linked to a Project (protocol/agent-conversations.md).
     "agent_conversations_v1",
     "compiler_review_placement_v3",
@@ -353,6 +359,8 @@ SERVER_CAPABILITIES = [
     AGENT_NOTE_OWNERS_CAPABILITY,
     # The user's answering rules from the Library note agent-note-rules.md: GET /v1/agent-notes/rules.
     AGENT_NOTE_RULES_CAPABILITY,
+    # The user's Mental Model from the Library note mental-model.md: GET /v1/mental-model.
+    MENTAL_MODEL_CAPABILITY,
     # The user chooses which agent answers a note's replies: PUT /v1/agent-notes/{id}/answer-by,
     # answer_by and candidates in GET /v1/agent-notes/{id}/listening.
     AGENT_NOTE_ANSWER_BY_CAPABILITY,
@@ -369,9 +377,16 @@ SERVER_CAPABILITIES = [
     # POST /v1/library/url-imports: the server downloads a PDF and imports it into a Project
     # (protocol/library-url-imports.md), for agents that have no file to upload.
     LIBRARY_IMPORT_PDF_CAPABILITY,
+    # A Project gets a new, empty connected docs-* folder from the server: Library-project action
+    # add_source_folder, or create with source_folder (new_source_folders.py). A note moved into
+    # such a folder takes its HTML pages along (thoughts-html: links follow).
+    LIBRARY_PROJECT_SOURCE_FOLDER_CAPABILITY,
     # POST /v1/review-card-merges: the server merges review cards of one document into one card
     # (protocol/review-card-merge.md), for clients without the desktop's outbox.
     REVIEW_CARD_MERGE_CAPABILITY,
+    # The same for cards of an imported PDF (no source): the request leaves out source and
+    # expected_source_sha256, and the kept card takes every card's areas.
+    REVIEW_CARD_MERGE_PDF_CAPABILITY,
     # /v1/review-card-pending-moves: a card move onto a pending agent proposal's text waits for the
     # proposal and is made when the user accepts it (protocol/review-card-pending-moves.md).
     REVIEW_CARD_PENDING_MOVES_CAPABILITY,
@@ -2605,7 +2620,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "/v1/review-card-merges",
         description="Merge 2 to 20 review cards of one document into one card, as the desktop's Merge cards… "
                     "does, in one transaction on the canonical source (protocol/review-card-merge.md). "
-                    "A retry with the same request_id answers the first result again.",
+                    "Cards of an imported PDF are merged without source and expected_source_sha256; "
+                    "nothing in a source changes. A retry with the same request_id answers the first "
+                    "result again.",
     )
     def merge_review_cards(
         request: dict,

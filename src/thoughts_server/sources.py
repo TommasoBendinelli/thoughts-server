@@ -288,6 +288,17 @@ def _withdrawn_proposals(session: Session):
     return withdrawn
 
 
+def _recorded_proposals(session: Session):
+    """The server's current record of a proposal (protocol/agent-proposals.md 10.2), or None.
+
+    Retired rows stay in the table, so a decided proposal's record says how it was decided.
+    """
+    def record(identifier: str) -> dict | None:
+        row = session.get(Entity, ("proposal", "proposals", identifier))
+        return None if row is None else row.payload
+    return record
+
+
 def _pending_moved_cards(session: Session):
     """Whether a pending card move marked a card's passage (pending_card_moves.with_moved_card_markers)."""
     def moved(card_id: str) -> bool:
@@ -355,7 +366,7 @@ def _close_twins(session: Session, conflict: SourceConflict) -> list[str]:
 
 
 def _merge(base: bytes, current: bytes, incoming: bytes, *, path: str = "",
-           folder_names=(), withdrawn=None, moved_cards=None) -> tuple[bytes, int]:
+           folder_names=(), withdrawn=None, moved_cards=None, recorded=None) -> tuple[bytes, int]:
     # Project manifests carry structured authority. Formatting and object-key
     # order are not edits; arrays (especially document order) remain significant.
     from .project_configuration import is_manifest_path, merge as merge_manifest, semantic_identity
@@ -389,6 +400,19 @@ def _merge(base: bytes, current: bytes, incoming: bytes, *, path: str = "",
         return incoming, 0
     if incoming in (base, current):
         return current, 0
+    if recorded is not None:
+        # Proposals the server decided while the client still offers them unchanged are decided
+        # the server's way on the client's side too (and in the base): the two versions then no
+        # longer differ on those lines, so neighbouring decisions do not overlap. Only a clean
+        # merge is taken; otherwise the versions merge as they are.
+        from .proposal_merge import with_recorded_decisions
+
+        decided = with_recorded_decisions(path, base, current, incoming, recorded)
+        if decided is not None:
+            merged, conflicts = _merge(decided[0], current, decided[1], path=path, folder_names=folder_names,
+                                       withdrawn=withdrawn, moved_cards=moved_cards)
+            if not conflicts:
+                return merged, 0
     from .client_review_sources import with_removed_card_markers
 
     for removed, other in ((current, incoming), (incoming, current)):
@@ -447,9 +471,14 @@ def _merge(base: bytes, current: bytes, incoming: bytes, *, path: str = "",
             merged = merge_adjacent(path, base, current, incoming)
             if merged is not None:
                 return merged, 0
-            # Proposal changes an agent made meanwhile give way to the user's edit and carry over onto it.
-            from .proposal_merge import merge_around_proposal_changes
+            # Only agent proposals stand between the two versions: agents only propose, so the
+            # computer's version wins, with the proposal changes it had not seen carried over.
+            from .proposal_merge import merge_around_proposal_changes, merge_computer_proposal_decisions
 
+            merged = merge_computer_proposal_decisions(path, base, current, incoming)
+            if merged is not None:
+                return merged, 0
+            # Proposal changes an agent made meanwhile give way to the user's edit and carry over onto it.
             merged = merge_around_proposal_changes(
                 path, base, current, incoming,
                 lambda b, c, i: _merge(b, c, i, path=path, folder_names=folder_names),
@@ -759,13 +788,15 @@ def _apply_source(
         merged, conflict_count = _merge(base, current_bytes, incoming, path=request.path,
                                         folder_names=_folder_names(session, request.path),
                                         withdrawn=_withdrawn_proposals(session),
-                                        moved_cards=_pending_moved_cards(session))
+                                        moved_cards=_pending_moved_cards(session),
+                                        recorded=_recorded_proposals(session))
         outcome = "applied"
     else:
         merged, conflict_count = _merge(base, current_bytes, incoming, path=request.path,
                                         folder_names=_folder_names(session, request.path),
                                         withdrawn=_withdrawn_proposals(session),
-                                        moved_cards=_pending_moved_cards(session))
+                                        moved_cards=_pending_moved_cards(session),
+                                        recorded=_recorded_proposals(session))
         conflicted = conflict_count > 0
         outcome = "conflict" if conflicted else "merged"
     conflicted = conflict_count > 0
@@ -1613,7 +1644,8 @@ def _resolve_conflict(
         result_content, conflict_count = _merge(original_current, current_content, content, path=conflict.path,
                                                 folder_names=_folder_names(session, conflict.path),
                                                 withdrawn=_withdrawn_proposals(session),
-                                                moved_cards=_pending_moved_cards(session))
+                                                moved_cards=_pending_moved_cards(session),
+                                                recorded=_recorded_proposals(session))
         outcome = "conflict" if conflict_count else "merged"
     result_deleted = source.deleted and result_content == current_content
     result_record = store.put_bytes(session, result_content, "text/x-tex; charset=utf-8")

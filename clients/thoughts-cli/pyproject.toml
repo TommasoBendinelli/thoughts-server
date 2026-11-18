@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thoughts-cli"
-version = "1.7.0"
+version = "1.12.0"
 description = "Headless Thoughts sync client that creates, revises and withdraws agent proposals and creates new notes"
 requires-python = ">=3.11"
 dependencies = []

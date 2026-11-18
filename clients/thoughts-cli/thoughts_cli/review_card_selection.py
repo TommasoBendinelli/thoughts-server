@@ -10,7 +10,8 @@ protocol/review-card-pending-moves.md).
 
 The selection rules are the desktop's sourceSelectionError (reviewdocumenttools.cpp):
 complete UTF-8 lines with text, outside pending agent proposals and other cards'
-passages; in Markdown, complete top-level blocks outside HTML, front matter,
+passages (a section card, ``wrap_cards``, may hold other cards' passages whole, never part of
+one); in Markdown, complete top-level blocks outside HTML, front matter,
 block quotes and lists cut in half. LaTeX selections must also stay in the
 document body, close every group and environment they open, and lie only inside
 text environments (lists, quotations, centering), because the markers are
@@ -47,6 +48,8 @@ MARKDOWN_MARKER = re.compile(r"<!--\s*thoughts:v1:(start|end)\s+review:([A-Za-z0
 MARKDOWN_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 MARKDOWN_HEADING = re.compile(r"^#{1,6}\s")
 MARKDOWN_LIST_ITEM = re.compile(r"^([-+*]|[0-9]+[.)])\s")
+# Another card's marker line as Thoughts writes it (a section card may hold that card whole).
+MARKDOWN_CARD_MARKER_LINE = re.compile(r"^ {0,3}<!-- thoughts:v1:(start|end) review:[0-9A-Fa-f-]{36}:answer:[0-9]+ -->\r?$")
 QT_SPACE = "\t\n\v\f\r \x85\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
 
 PENDING_PROPOSAL = "Resolve the pending proposal before creating a card from this passage."
@@ -159,8 +162,9 @@ def _tex_selection_error(text: str, first: int, end: int) -> str:
     return ""
 
 
-def _markdown_selection_error(text: str, first: int, end: int) -> str:
-    """The desktop's Markdown rules (sourceSelectionError): only top-level block boundaries are safe."""
+def _markdown_selection_error(text: str, first: int, end: int, wrap_cards: bool = False) -> str:
+    """The desktop's Markdown rules (sourceSelectionError): only top-level block boundaries are safe.
+    A heading is a complete block: a selection may start right below it."""
     lines = text.split("\n")
     line_count = len(lines) - int(text.endswith("\n"))
     fence, html, safe = "", False, set()
@@ -190,11 +194,14 @@ def _markdown_selection_error(text: str, first: int, end: int) -> str:
         return not line.strip(QT_SPACE)
 
     if (first not in safe or end not in safe
-            or (first > 1 and not blank(lines[first - 2]) and not blank(lines[first - 1]) and not heading(lines[first - 1]))
+            or (first > 1 and not blank(lines[first - 2]) and not blank(lines[first - 1]) and not heading(lines[first - 1])
+                and not heading(lines[first - 2]))
             or (end <= line_count and not blank(lines[end - 2]) and not blank(lines[end - 1]) and not heading(lines[end - 1]))
             or lines[first - 1].startswith((" ", "\t"))):
         return "Select complete Markdown blocks, including the full paragraph, list, table, or code block."
     for index in range(first - 1, end - 1):
+        if wrap_cards and MARKDOWN_CARD_MARKER_LINE.match(lines[index]):
+            continue  # another card's marker, of a passage held whole (selection_error)
         stripped = lines[index].strip(QT_SPACE)
         if stripped.startswith(("<", ">")) or (index == 0 and stripped in {"---", "+++"}):
             return "Select rendered Markdown content outside HTML, front matter, and blockquotes."
@@ -209,8 +216,9 @@ def _markdown_selection_error(text: str, first: int, end: int) -> str:
     return ""
 
 
-def selection_error(path: str, text: str, first: int, end: int, card_id: str) -> str:
-    """Why this whole-line selection cannot become the card's answer, or ""."""
+def selection_error(path: str, text: str, first: int, end: int, card_id: str, wrap_cards: bool = False) -> str:
+    """Why this whole-line selection cannot become the card's answer, or "". With ``wrap_cards`` (a
+    section card) other cards' passages that lie wholly inside the selection are no obstacle."""
     lines = text.split("\n")
     line_count = len(lines) - int(text.endswith("\n"))
     if "\0" in text or first < 1 or end <= first or end > line_count + 1:
@@ -226,10 +234,15 @@ def selection_error(path: str, text: str, first: int, end: int, card_id: str) ->
     if any(start < issue.end and issue.start < stop for issue in parsed.issues):
         return "Fix or remove the broken proposal before creating a card from this passage."
     for card, passages in card_passages(path, text).items():
-        if card != card_id and any(first <= last and opened < end for opened, last in passages):
-            return "A review card already covers part of this passage."
+        for opened, last in passages:
+            if card == card_id or not (first <= last and opened < end):
+                continue
+            if wrap_cards and first <= opened and last < end and opened < last:
+                continue  # held whole
+            return ("A review card's passage runs past this section; a card can hold other cards only whole."
+                    if wrap_cards else "A review card already covers part of this passage.")
     if source_format(path) == "markdown":
-        return _markdown_selection_error(text, first, end)
+        return _markdown_selection_error(text, first, end, wrap_cards)
     return _tex_selection_error(text, first, end)
 
 

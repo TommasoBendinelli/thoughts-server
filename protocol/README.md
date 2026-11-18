@@ -52,7 +52,9 @@ Publishing and unpublishing Project documents (Library-project action `set_docum
 
 Retiring review cards (`review_event` queue actions `retire`, `restore` and `undo_retire`) is specified in `review-card-retire.md`.
 
-Merging review cards of one document into one card on the server (`POST /v1/review-card-merges`, capability `review_card_merge_v1`: the records the desktop's Merge cards… sends, made and applied in one transaction) is specified in `review-card-merge.md`.
+Knowledge cards and project cards (`review_event` queue action `set_review_kind`, a card's and a Project's `review_kind`, the Library-project action `set_review_kind`, capability `review_card_kinds_v1`: project cards come back at least weekly and at once when their passage changes, answers carry a `passage` stamp) are specified in `review-card-kinds.md`.
+
+Merging review cards of one document into one card on the server (`POST /v1/review-card-merges`, capability `review_card_merge_v1`: the records the desktop's Merge cards… sends, made and applied in one transaction; `review_card_merge_pdf_v1`: the same for cards of an imported PDF, without a source) is specified in `review-card-merge.md`.
 
 Push to the phones (`/v1/push`, capability `push_fcm_v1`: a content-free Firebase Cloud Messaging ping to the other devices' phones whenever a new agent note is in their inbox; the phone then fetches the note from the server) is specified in `push.md`.
 

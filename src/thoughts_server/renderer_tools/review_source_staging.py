@@ -197,6 +197,10 @@ class SourceScanner:
         self.font_boundaries: dict[int, int] = {}
         self.before_font_boundaries: dict[int, int] = {}
         self.longtable_tokens: list[tuple[str, int, int]] = []
+        # The pending proposals whose rendered text is being scanned, innermost last:
+        # (end of that text, end of the proposal, end of the scan around it). A proposal can
+        # cut a math block: its text opens \[ (or \(, $, $$) and the closing follows the proposal.
+        self.proposal_bodies: list[tuple[int, int, int]] = []
         self._bounds_checked = False
         self.document_start = text.find(r'\begin{document}')
         self.document_end = text.find(r'\end{document}')
@@ -218,6 +222,11 @@ class SourceScanner:
             if c == '$':
                 delimiter = '$$' if text.startswith('$$', at) else '$'
                 closing = text.find(delimiter, at + len(delimiter), end)
+                if closing < 0 and (outside := self.math_closed_after_proposal(delimiter, end)) is not None:
+                    self.math_ranges.append((at + len(delimiter), outside))
+                    self.scan(at + len(delimiter), end, rendered)
+                    at = end
+                    continue
                 if closing >= 0:
                     a, b = at + len(delimiter), closing
                     self.math_ranges.append((a, b))
@@ -240,6 +249,13 @@ class SourceScanner:
                 if name in {'(', '['}:
                     closing_token = r'\)' if name == '(' else r'\]'
                     closing = text.find(closing_token, cursor, end)
+                    if closing < 0 and (outside := self.math_closed_after_proposal(closing_token, end)) is not None:
+                        # Math opened in a pending proposal's text and closed after it: one math
+                        # block across the proposal's end; the scan around it resumes inside it.
+                        self.math_ranges.append((cursor, outside))
+                        self.scan(cursor, end, rendered)
+                        at = end
+                        continue
                     if closing >= 0:
                         self.math_ranges.append((cursor, closing))
                         self.scan(cursor, closing, rendered)
@@ -308,7 +324,13 @@ class SourceScanner:
                         if body:
                             if count == 4:
                                 self.font_boundaries[body[2]] = args[-1][3]
-                            self.scan(a, b, rendered)
+                                self.proposal_bodies.append((b, args[-1][3], end))
+                                try:
+                                    self.scan(a, b, rendered)
+                                finally:
+                                    self.proposal_bodies.pop()
+                            else:
+                                self.scan(a, b, rendered)
                             cursor = args[-1][3] if count == 4 else body[3]
                         at = cursor
                         continue
@@ -538,6 +560,18 @@ class SourceScanner:
             elif stack:
                 stack[-1].append((name, start, end))
         return ranges
+
+    def math_closed_after_proposal(self, closing_token: str, end: int) -> int | None:
+        """Where math that opens in the rendered text of the innermost pending proposal closes,
+        when its closing delimiter is not in that text but follows the proposal (within the scan
+        around it); None otherwise. Only the proposal's own text level counts (end is its end)."""
+        if not self.proposal_bodies:
+            return None
+        body_end, proposal_end, outer_end = self.proposal_bodies[-1]
+        if end != body_end:
+            return None
+        closing = self.text.find(closing_token, proposal_end, outer_end)
+        return closing if closing >= 0 else None
 
     def markers(self):
         self.leaves.sort()

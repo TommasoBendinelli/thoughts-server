@@ -447,6 +447,9 @@ def catalogue(session, root: Path, store, *, sources: bool = True, listing: set[
             first += document.get("page_count", 0)
         entry["source_manifests"] = source_manifests(session, store, entry)
         entry["removed_identities"] = _removed_identities(session, configuration, data)
+        # Every Project has a kind for its review cards (protocol/review-card-kinds.md 2.3).
+        entry["review_kind"] = data.get("review_kind") if data.get("review_kind") in ("knowledge", "project") \
+            else "knowledge"
         projects.append(entry)
     from .source_folder_names import renames
     # Map M of the source-folder naming migration ([{folder_id, old, new}], empty before
@@ -971,6 +974,8 @@ def _mutate(session, store, root: Path, request: dict, *, settings=None, trace_o
     action = request.get("action")
     current = next((p for p in catalogue(session, root, store)["projects"] if p["id"] == key), None)
     record = _record(session, TYPE, key)
+    # A new, empty connected folder (new_source_folders.py): (folder, label), declared below.
+    new_folder = None
     if action == "create":
         if current or record:
             raise ValueError("This project already exists")
@@ -979,6 +984,11 @@ def _mutate(session, store, root: Path, request: dict, *, settings=None, trace_o
             raise ValueError("A project with this name already exists")
         data = {"name": name, "imports": [], "order": []}
         current = {"documents": [], "target": ""}
+        if "source_folder" in request:
+            from .new_source_folders import folder_label, folder_name
+            label = folder_label(request["source_folder"], name, [])
+            new_folder = (folder_name(session, store, root, label, operation_id), label)
+            data["source_folders"] = [{"project": new_folder[0], "folder": label}]
     else:
         if not current:
             raise ValueError("This project is no longer in the Library")
@@ -1114,6 +1124,18 @@ def _mutate(session, store, root: Path, request: dict, *, settings=None, trace_o
             folders.append({"project": owner, "folder": name})
         else:
             entry["folder"] = name
+    elif action == "add_source_folder":
+        from .new_source_folders import folder_label, folder_name
+        labels = [f.get("folder") for f in current.get("source_folders", [])]
+        label = folder_label(request.get("name"), current["name"], labels)
+        new_folder = (folder_name(session, store, root, label, operation_id), label)
+        data.setdefault("source_folders", []).append({"project": new_folder[0], "folder": label})
+    elif action == "set_review_kind":
+        # protocol/review-card-kinds.md 2.3: the record only; no manifest or card changes.
+        from .review_kinds import project_kind_error
+        if (error := project_kind_error(request.get("review_kind"))) is not None:
+            raise ValueError(error)
+        data["review_kind"] = request["review_kind"]
     elif action == "set_document_published":
         selected = _selected_document(project_documents(current), request.get("document_id"))
         if not selected or not selected.get("document_id"):
@@ -1173,10 +1195,15 @@ def _mutate(session, store, root: Path, request: dict, *, settings=None, trace_o
     if action == "create" and configuration is None:
         from .project_configuration import from_legacy
         configuration = from_legacy({"id": key, "name": data["name"], "documents": []}, {})
+    if new_folder is not None:
+        if configuration is None:
+            raise ValueError("This project has no current Project manifest. Sync on the Mac and try again")
+        from .new_source_folders import declare
+        configuration = declare(configuration, new_folder[0])
     if configuration is not None and action == "remove":
         from .project_configuration import retire_source
         retire_source(session, store, root, operation_id, current_manifest_path(session, key))
-    if configuration is not None and action not in {"remove", "rename_source"}:
+    if configuration is not None and action not in {"remove", "rename_source", "set_review_kind"}:
         if action == "import_folder":
             from .project_configuration import retire_source
             new_owner = folder["project"]
@@ -1188,6 +1215,11 @@ def _mutate(session, store, root: Path, request: dict, *, settings=None, trace_o
                      (json.dumps(configuration, ensure_ascii=False, indent=2) + "\n").encode())
         if action == "import_folder":
             retire_source(session, store, root, operation_id, new_owner + "/thoughts-project.json")
+    rules = None
+    if new_folder is not None:
+        # Its first file, published after the configuration that declares the folder.
+        from .new_source_folders import write_rules
+        rules = write_rules(session, store, root, operation_id, new_folder[0])
     record.revision += 1
     data.pop("source_project", None)
     record.payload = data
@@ -1202,5 +1234,8 @@ def _mutate(session, store, root: Path, request: dict, *, settings=None, trace_o
     from .library import store_published_source_index, write_library_index
     store_published_source_index(session, store)
     session.commit()
+    if rules is not None:
+        from .sources import _materialize_canonical_path
+        _materialize_canonical_path(session, store, root, rules, already_locked=True)
     write_library_index(session, root)
     return catalogue(session, root, store)

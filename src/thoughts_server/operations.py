@@ -354,6 +354,14 @@ def apply_operation(
         from .review_retirement import retire_event_error
         if (retire_error := retire_event_error(incoming.payload)) is not None:
             raise OperationConflict(retire_error)
+        # Knowledge cards and project cards (protocol/review-card-kinds.md section 9).
+        from .review_kinds import kind_event_error
+        if (kind_error := kind_event_error(incoming.payload)) is not None:
+            raise OperationConflict(kind_error)
+    if incoming.entity_type == "review_card" and incoming.payload.get("deleted") is not True:
+        from .review_kinds import card_record_error
+        if (kind_error := card_record_error(incoming.payload)) is not None:
+            raise OperationConflict(kind_error)
     identity_fields = {
         "agent_conversation": ("link_id",),
         "annotation": ("annotation_id",),

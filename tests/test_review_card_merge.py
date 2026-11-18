@@ -4,6 +4,7 @@
 import copy
 import hashlib
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -11,7 +12,7 @@ from test_review_creation import setup_sources
 from test_source_conflicts import _upload
 
 from thoughts_server import review_card_merge
-from thoughts_server.models import Entity, Operation, SourceFile
+from thoughts_server.models import DocumentIdentity, Entity, Operation, Publication, SourceFile
 from thoughts_server.object_store import ObjectStore
 from thoughts_server.operations import OperationConflict
 from thoughts_server.review_card_merge import DEVICE_ID, MergeRefused, plan_merge_source
@@ -298,8 +299,17 @@ def test_refusals_change_nothing(client, settings, auth_headers, library):
 
     stale = refused([first, second], expected="0" * 64)
     assert stale["error_code"] == "source_conflict" and stale["current_source_sha256"] == digest
-    # A PDF-only card (the seeded one has no source markers).
-    assert "not linked to a source passage" in refused([first, old])["detail"]
+    # A card marked in the note with a PDF-only card (the seeded one has no source markers).
+    mixed = refused([first, old])["detail"]
+    assert mixed == ("Card “One?” is marked in its note and card “What is the complete answer?” is only on "
+                     "the PDF. Merge cards of a note with each other, and cards of a PDF with each other.")
+    for card_ids in ([first, old], [first, second]):
+        # Without source fields: a PDF merge, which takes no card marked in a note.
+        response = client.post("/v1/review-card-merges", headers=auth_headers,
+                               json={"request_id": str(uuid.uuid4()), "card_ids": card_ids})
+        assert response.status_code == 409 and response.json()["error_code"] == "merge_refused"
+        assert current_source(client, settings, TEX) == (before, digest, revision)
+    assert "give its source and expected_source_sha256" in response.json()["detail"]
     assert refused([first, str(uuid.uuid4())])["error_code"] == "card_unavailable"
     other = "docs-paper/tex/source/other.tex"
     assert refused([first, second], source=other)["error_code"] == "invalid_source"
@@ -414,3 +424,299 @@ def test_the_first_cards_own_page_leads_before_its_table_of_contents_lines():
     # Cards whose areas already start on their own page keep their order.
     plain = {"primary": {"page": 3, "rect": area(3, 0.1)["rect"], "regions": [area(3, 0.1), area(4, 0.2)]}}
     assert merged_regions([plain, second]) == [area(3, 0.1), area(4, 0.2), area(2, 0.35), area(12, 0.5)]
+
+
+# ------------------------------------------------------------------ cards of an imported PDF
+
+SCAN = "scan"
+
+
+@pytest.fixture
+def imported_pdf(client, settings):
+    """A PDF imported into the Library, with no Thoughts source behind it (as Import document leaves it)."""
+    store = ObjectStore(settings.object_root)
+    with client.app.state.database.session_factory() as session:
+        record = store.put_bytes(session, b"%PDF-1.7 an imported scan", "application/pdf")
+        identity = str(uuid.uuid4())
+        session.add(DocumentIdentity(document_id=identity, filename=f"{SCAN}.pdf", source_path=None))
+        session.add(Publication(filename=f"{SCAN}.pdf", document_id=identity, object_sha256=record.sha256,
+                                size_bytes=record.size_bytes, project="",
+                                metadata_json={"filename": f"{SCAN}.pdf", "pdf_sha256": record.sha256,
+                                               "kind": "unlinked", "archived": False}))
+        session.commit()
+        return SimpleNamespace(document_id=identity, pdf_sha256=record.sha256)
+
+
+def area(page, top, left=0.1):
+    return {"page": page, "rect": [left, top, 0.9, top + 0.05]}
+
+
+def make_pdf_card(client, headers, pdf, question, regions, *, answer=None, page=None, primary=None, **fields):
+    """A card answered on the imported PDF ("Answer highlighted in PDF"), sent as the desktop sends one."""
+    card_id = str(uuid.uuid4())
+    page = page or regions[0]["page"]
+    own = next(region for region in regions if region["page"] == page)
+    record = {"pdf_stem": SCAN, "document_id": pdf.document_id, "pdf_sha256": pdf.pdf_sha256, "page": page,
+              "rect": own["rect"], "regions": regions, "question": question, "source_kind": "pdf",
+              "page_visual_sha256": hashlib.sha256(f"{question} {page}".encode()).hexdigest(),
+              "page_visual_fingerprint_method": "poppler-rgb-96-v1", **(primary or {})}
+    if answer:
+        record["answer_anchor"] = {"version": 1, "normalized_text": answer,
+                                   "text_sha256": hashlib.sha256(answer.encode()).hexdigest()}
+    payload = {"schema_version": 4, "card_id": card_id, "revision": 1, "status": "approved",
+               "created_at": "2026-11-01T10:00:00Z", "updated_at": "2026-11-01T10:00:00Z",
+               "origin_id": "test-device", "source_link": {"state": "pdf_without_source"},
+               "review_version": {"pdf_sha256": pdf.pdf_sha256, "source_built": False},
+               "primary": record, **fields}
+    op = dict(operation_id=str(uuid.uuid4()), device_sequence=next_sequence(client, headers),
+              entity_type="review_card", entity_id=card_id, collection="cards", base_revision=0,
+              client_timestamp="2026-11-01T10:00:00Z", payload=payload)
+    response = client.post("/v1/operations", headers=headers, json={"operations": [op]})
+    assert response.status_code == 200, response.text
+    return card_id
+
+
+def merge_pdf(client, headers, card_ids, **extra):
+    body = {"request_id": extra.pop("request_id", str(uuid.uuid4())), "card_ids": card_ids, **extra}
+    return body, client.post("/v1/review-card-merges", headers=headers, json=body)
+
+
+def merge_operations(client):
+    with client.app.state.database.session_factory() as session:
+        return [(row.entity_type, row.payload) for row in session.scalars(
+            select(Operation).where(Operation.device_id == DEVICE_ID).order_by(Operation.device_sequence))]
+
+
+def test_pdf_capability_is_advertised(client):
+    for path in ("/v1/ready", "/v1/health"):
+        capabilities = client.get(path).json()["capabilities"]
+        assert {"review_card_merge_v1", "review_card_merge_pdf_v1"} <= set(capabilities), path
+
+
+def test_cards_of_an_imported_pdf_merge_on_the_pdf(client, auth_headers, imported_pdf, monkeypatch):
+    from thoughts_server import client_review_sources, review_source_delete
+    from thoughts_server.review_reanchor import _deleted_review_card_ids
+
+    # Its answer area was corrected on this PDF: the correction is the area that merges.
+    alpha = make_pdf_card(client, auth_headers, imported_pdf, "What is alpha?", [area(3, 0.5)],
+                          answer="Alpha answer.", primary={
+                              "answer_region_override": {"pdf_sha256": imported_pdf.pdf_sha256,
+                                                         "regions": [area(3, 0.45)]},
+                              "component_origin": {"document": "part.pdf", "page": 1}})
+    # Its own page is 4; its second area, on page 2, comes first in the PDF.
+    beta = make_pdf_card(client, auth_headers, imported_pdf, "What is beta?",
+                         [area(4, 0.1), area(2, 0.6, 0.2)], page=4, answer="Beta answer.")
+    gamma = make_pdf_card(client, auth_headers, imported_pdf, "What is gamma?", [area(3, 0.1)])
+    untouched = make_pdf_card(client, auth_headers, imported_pdf, "Untouched?", [area(1, 0.1)])
+    reviews = [review(client, auth_headers, alpha), review(client, auth_headers, alpha, "hard")]
+    review(client, auth_headers, gamma, at="2099-01-01T00:00:00Z")
+    before = {card_id: card_payload(client, card_id) for card_id in (alpha, beta, gamma, untouched)}
+    # Nothing in a source is changed or checked: an ordinary delete of a PDF card has no markers.
+    source_checks = []
+    original = client_review_sources.apply_client_review_source
+    monkeypatch.setattr(client_review_sources, "apply_client_review_source",
+                        lambda *args, **kwargs: source_checks.append(args[3]) or original(*args, **kwargs))
+    removed = []
+    monkeypatch.setattr(review_source_delete, "delete_marked_passages",
+                        lambda *args, **kwargs: removed.append(args) or {})
+
+    body, response = merge_pdf(client, auth_headers, [alpha, beta, gamma])
+    assert response.status_code == 200, response.text
+    answer = response.json()
+    assert answer["kind"] == "pdf" and answer["source"] is None and answer["source_sha256"] is None
+    assert answer["accepted"] is True and answer["state"] == "merged" and answer["replayed"] is False
+    # Reading order by each card's first area; the most reviewed card is kept.
+    assert answer["card_order"] == [beta, gamma, alpha]
+    assert answer["kept_card_id"] == alpha and answer["deleted_card_ids"] == [beta, gamma]
+    assert answer["question"] == "What is beta? What is gamma? What is alpha?"
+    assert answer["passages"] == 4 and answer["document"] == "scan.pdf" and answer["card_revision"] == 2
+    assert "build" not in answer["message"] and "next Sync" in answer["message"]
+    assert source_checks == [] and removed == []
+
+    operations = merge_operations(client)
+    assert [entity_type for entity_type, _ in operations] == ["review_event", "review_event", "review_card"]
+    kept = operations[-1][1]
+    # The stored card is the merge's record: no placement or link job changed it afterwards.
+    assert card_payload(client, alpha) == kept
+    primary = kept["primary"]
+    # Each card's own areas, cards in reading order; the first card's areas on its own page lead.
+    assert primary["regions"] == [area(4, 0.1), area(2, 0.6, 0.2), area(3, 0.1), area(3, 0.45)]
+    assert (primary["page"], primary["rect"]) == (4, area(4, 0.1)["rect"])
+    assert primary["page_visual_sha256"] == before[beta]["primary"]["page_visual_sha256"]
+    assert primary["page_visual_fingerprint_method"] == "poppler-rgb-96-v1"
+    assert primary["pdf_sha256"] == imported_pdf.pdf_sha256
+    assert primary["question"] == answer["question"]
+    text = "Beta answer. Alpha answer."
+    assert primary["answer_anchor"] == {"version": 1, "normalized_text": text,
+                                        "text_sha256": hashlib.sha256(text.encode()).hexdigest()}
+    for key in ("answer_region_override", "source_kind", "component_origin", "source_anchor"):
+        assert key not in primary, key
+    assert {key: value for key, value in primary.items() if key not in (
+        "question", "regions", "page", "rect", "page_visual_sha256", "answer_anchor")} == {
+        key: value for key, value in before[alpha]["primary"].items() if key not in (
+            "question", "regions", "page", "rect", "page_visual_sha256", "answer_anchor",
+            "answer_region_override", "source_kind", "component_origin")}
+    assert kept["schema_version"] == 4 and kept["revision"] == before[alpha]["revision"] + 1
+    assert kept["origin_id"] == review_card_merge.ORIGIN_ID and kept["status"] == "approved"
+    # Its source link, authority and review version stay as they were.
+    assert kept["source_link"] == {"state": "pdf_without_source"}
+    assert kept["review_version"] == before[alpha]["review_version"]
+    for key in ("source_change", "source_authority", "reanchor"):
+        assert key not in kept, key
+    assert kept["merge_request"]["request_id"] == body["request_id"]
+
+    # Each other card: the desktop's plain Delete card, naming the kept card.
+    for card_id in (beta, gamma):
+        [event] = delete_events(client, card_id)
+        assert set(event) == {"schema_version", "event_id", "card_id", "reviewed_at", "updated_at",
+                              "origin_id", "revision", "rating", "scheduler_version", "source_anchor",
+                              "merged_into"}
+        assert (event["schema_version"], event["revision"], event["rating"], event["scheduler_version"]) == \
+            (3, 1, "delete", 2)
+        assert event["source_anchor"] == {} and event["merged_into"] == alpha
+        assert event["origin_id"] == review_card_merge.ORIGIN_ID
+        assert event["updated_at"] == event["reviewed_at"]
+    assert answer["delete_event_ids"] == [delete_events(client, beta)[0]["event_id"],
+                                          delete_events(client, gamma)[0]["event_id"]]
+    # After the deleted card's own events, whatever the clock says.
+    assert delete_events(client, gamma)[0]["reviewed_at"] == "2099-01-01T00:00:01Z"
+    with client.app.state.database.session_factory() as session:
+        deleted = _deleted_review_card_ids(session)
+        assert {beta, gamma} <= deleted and alpha not in deleted and untouched not in deleted
+        kept_events = {row.payload["event_id"] for row in session.scalars(select(Entity).where(
+            Entity.entity_type == "review_event")) if row.payload.get("card_id") == alpha}
+        assert list(session.scalars(select(SourceFile))) == []
+    assert kept_events == set(reviews)
+    assert card_payload(client, untouched) == before[untouched]
+    # The deleted cards cannot be merged again.
+    _, again = merge_pdf(client, auth_headers, [alpha, beta])
+    assert again.status_code == 409 and again.json()["error_code"] == "card_unavailable"
+
+
+def test_pdf_reading_order_ties_keep_the_request_order(client, auth_headers, imported_pdf):
+    first = make_pdf_card(client, auth_headers, imported_pdf, "First?", [area(2, 0.3)])
+    second = make_pdf_card(client, auth_headers, imported_pdf, "Second?", [area(2, 0.3)])
+    earlier = make_pdf_card(client, auth_headers, imported_pdf, "Earlier?", [area(2, 0.3, 0.05)])
+    # The same first area: the request's order; no reviews: the first in reading order is kept.
+    _, response = merge_pdf(client, auth_headers, [second, first, earlier])
+    assert response.status_code == 200, response.text
+    answer = response.json()
+    assert answer["card_order"] == [earlier, second, first] and answer["kept_card_id"] == earlier
+    assert answer["question"] == "Earlier? Second? First?"
+    # Without answer texts the kept card has none.
+    assert "answer_anchor" not in card_payload(client, earlier)["primary"]
+
+
+def test_pdf_merge_keeps_the_given_card_and_question(client, auth_headers, imported_pdf):
+    one = make_pdf_card(client, auth_headers, imported_pdf, "One?", [area(1, 0.2)], answer="One.")
+    two = make_pdf_card(client, auth_headers, imported_pdf, "Two?", [area(1, 0.6)])
+    review(client, auth_headers, one)
+    _, response = merge_pdf(client, auth_headers, [one, two], keep_card_id=two, question="  Both?  ")
+    assert response.status_code == 200, response.text
+    answer = response.json()
+    assert answer["kept_card_id"] == two and answer["deleted_card_ids"] == [one]
+    assert answer["question"] == "Both?"
+    primary = card_payload(client, two)["primary"]
+    assert primary["regions"] == [area(1, 0.2), area(1, 0.6)] and primary["page"] == 1
+    assert primary["rect"] == area(1, 0.2)["rect"] and primary["answer_anchor"]["normalized_text"] == "One."
+    assert primary["page_visual_sha256"] == card_payload(client, one)["primary"]["page_visual_sha256"]
+    assert [event["merged_into"] for event in delete_events(client, one)] == [two]
+
+
+def test_pdf_merge_retry_answers_the_first_result_and_a_changed_retry_is_refused(client, auth_headers,
+                                                                                  imported_pdf):
+    one = make_pdf_card(client, auth_headers, imported_pdf, "One?", [area(1, 0.2)])
+    two = make_pdf_card(client, auth_headers, imported_pdf, "Two?", [area(1, 0.6)])
+    body, response = merge_pdf(client, auth_headers, [one, two])
+    assert response.status_code == 200, response.text
+    operations = merge_operations(client)
+    again = client.post("/v1/review-card-merges", headers=auth_headers, json=body)
+    assert again.status_code == 200 and again.json() == {**response.json(), "replayed": True}
+    assert merge_operations(client) == operations and len(delete_events(client, two)) == 1
+    for changed in ({**body, "question": "Other?"},
+                    {**body, "source": "docs-paper/tex/source/main.tex", "expected_source_sha256": "a" * 64}):
+        refused = client.post("/v1/review-card-merges", headers=auth_headers, json=changed)
+        assert refused.status_code == 409 and refused.json()["error_code"] == "request_conflict"
+    assert merge_operations(client) == operations
+
+
+def test_pdf_merge_refusals_change_nothing(client, auth_headers, imported_pdf):
+    one = make_pdf_card(client, auth_headers, imported_pdf, "One?", [area(1, 0.2)])
+    two = make_pdf_card(client, auth_headers, imported_pdf, "Two?", [area(2, 0.2)])
+    original = card_payload(client, two)
+
+    def refused(card_ids=(one, two), status=409, code="merge_refused", **extra):
+        _, response = merge_pdf(client, auth_headers, list(card_ids), **extra)
+        assert response.status_code == status, response.text
+        assert response.json()["accepted"] is False and response.json()["error_code"] == code
+        assert merge_operations(client) == []
+        assert card_payload(client, two)["revision"] == original["revision"]
+        return response.json()["detail"]
+
+    # One source field without the other.
+    for extra in ({"source": "docs-paper/tex/source/main.tex"}, {"expected_source_sha256": "a" * 64}):
+        assert "leave both out for cards of a PDF" in refused(status=422, code="invalid_request", **extra)
+    for body in ({"card_ids": [one]}, {"keep_card_id": str(uuid.uuid4())}, {"question": " "}, {"pdf": True}):
+        refused(body.pop("card_ids", (one, two)), status=422, code="invalid_request", **body)
+    # A source merge of PDF cards says how to merge them.
+    assert refused(source="docs-paper/tex/source/main.tex", expected_source_sha256="a" * 64) == (
+        "Card “One?” is not linked to a source passage. Only cards whose answers are marked in the source "
+        "can be merged. To merge cards of a PDF, leave out source and expected_source_sha256.")
+    assert refused((one, str(uuid.uuid4())), code="card_unavailable")
+
+    def edit(change):
+        with client.app.state.database.session_factory() as session:
+            entity = session.get(Entity, ("review_card", "cards", two))
+            payload = copy.deepcopy(original)
+            change(payload)
+            entity.payload = payload
+            session.commit()
+
+    segment = {"segment_id": "0", "source_file": "docs-scan/tex/source/main.tex"}
+    segments = {"version": 2, "segments": [segment]}
+    for change, reason in (
+            (lambda p: p["primary"].update(pdf_sha256="e" * 64),
+             "different versions of the PDF, so their areas cannot be combined"),
+            (lambda p: p["primary"].update(pdf_stem="other"), "belong to 2 documents: scan.pdf, other.pdf"),
+            (lambda p: p.update(status="needs_reanchor"), "Card “Two?” is not an approved card."),
+            (lambda p: p["primary"].update(scope="document"),
+             "Card “Two?” has no answer areas of its own on the PDF, so it cannot be merged."),
+            (lambda p: p["primary"].update(whole_document=True), "has no answer areas of its own"),
+            (lambda p: p.update(generation_method="basic_half_page"), "has no answer areas of its own"),
+            (lambda p: p.update(card_type="text"), "has no answer areas of its own"),
+            (lambda p: p["primary"].update(regions=[{"page": 2, "rect": [0.5, 0.5, 0.4, 0.6]}]),
+             "Card “Two?” has no answer areas on the PDF."),
+            (lambda p: p["primary"].update(source_anchor=segments),
+             "Card “Two?” is marked in its note and card “One?” is only on the PDF. Merge cards of a note "
+             "with each other, and cards of a PDF with each other.")):
+        edit(change)
+        assert reason in refused(), reason
+    edit(lambda p: None)
+    # The first card in reading order needs a verified page.
+    with client.app.state.database.session_factory() as session:
+        entity = session.get(Entity, ("review_card", "cards", one))
+        payload = copy.deepcopy(entity.payload)
+        payload["primary"]["page_visual_sha256"] = "unverified"
+        entity.payload = payload
+        session.commit()
+    assert "Card “One?” has no verified page on the PDF" in refused()
+    # A deleted card.
+    review(client, auth_headers, two, "delete")
+    assert refused(code="card_unavailable")
+
+
+def test_the_first_cards_own_page_follows_its_corrected_areas():
+    """With an answer_region_override in effect the card's own page is its first corrected area's page,
+    as on the desktop (ReviewCard::page)."""
+    from thoughts_server.review_card_merge import card_page, merged_regions
+
+    sha = "f" * 64
+    override = {"pdf_sha256": sha, "regions": [area(2, 0.4), area(1, 0.3)]}
+    corrected = {"primary": {"pdf_sha256": sha, "page": 5, "rect": area(5, 0.1)["rect"],
+                             "regions": [area(5, 0.1)], "answer_region_override": override}}
+    assert card_page(corrected) == 2
+    assert merged_regions([corrected]) == [area(2, 0.4), area(1, 0.3)]
+    # An override for another version of the PDF is not in effect.
+    stale = copy.deepcopy(corrected)
+    stale["primary"]["answer_region_override"]["pdf_sha256"] = "e" * 64
+    assert card_page(stale) == 5 and merged_regions([stale]) == [area(5, 0.1)]

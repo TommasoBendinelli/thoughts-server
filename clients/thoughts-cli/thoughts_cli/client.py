@@ -54,7 +54,9 @@ from . import (
     html_pages,
     pdf_links,
     pdf_moves,
+    project_folders,
     review_cards,
+    review_kinds,
 )
 from .api import ApiError, ServerApi, TransportError, sha256_hex
 from .proposal_syntax import move_partner, parse, source_format
@@ -65,7 +67,8 @@ MAX_SEQUENCE_RECOVERIES = 3
 MAXIMUM_DEVICE_SEQUENCE = 2_147_483_647
 COMMANDS = (authoring.CREATE, authoring.CREATE_BATCH, authoring.REVISE, documents.CREATE_DOCUMENT,
             build_inputs.PUBLISH_BUILD_INPUTS, *review_cards.COMMANDS, card_merges.MERGE_REVIEW_CARDS, pdf_moves.MOVE_PDF,
-            build_status.BUILD_STATUS, *card_pending_moves.COMMANDS, card_passage_moves.MOVE_CARD_PASSAGE)
+            build_status.BUILD_STATUS, *card_pending_moves.COMMANDS, card_passage_moves.MOVE_CARD_PASSAGE,
+            *project_folders.COMMANDS)
 # A Library-project action refused because another device changed the Project
 # (thoughts_server.library_projects._mutate): read the catalogue again and resend.
 PROJECT_CHANGED = "changed on another device"
@@ -213,6 +216,8 @@ class ThoughtsClient:
             return self.move_pdf(request)
         if isinstance(request, dict) and request.get("command") == build_status.BUILD_STATUS:
             return self.build_status(request)
+        if isinstance(request, dict) and request.get("command") in project_folders.COMMANDS:
+            return self.project_folders(request)
         try:
             stripped, figure_list = figures.split_request(request)
             validated = authoring.validate_request(stripped)
@@ -498,6 +503,214 @@ class ThoughtsClient:
         self.store.put(key, {**record, "status": "applied", "result": result})
         return result
 
+    # ------------------------------------------------------------------ Projects and their folders
+
+    def project_folders(self, request: Any) -> dict[str, Any]:
+        """create-project, add-source-folder, move-document (project_folders.py); never raises for a refusal.
+
+        create-project names the Project new:<request_id> (as the Mac's create-project does), so a retry finds
+        the Project it made. add-source-folder and move-document keep their action in a request record before
+        it is sent, so a retry with the same request_id is answered from the server's receipt."""
+        try:
+            validated = project_folders.validate(request)
+        except authoring.AuthoringRefused as refusal:
+            return refusal.body()
+        command = request["command"]
+        try:
+            if command == project_folders.CREATE_PROJECT:
+                return self._create_project(validated)
+            if command == project_folders.MOVE_DOCUMENT and validated.get("dry_run"):
+                if not project_folders.supported(self.api):
+                    raise project_folders.unsupported("move a note with its pages")
+                plan, _origin = self._plan_move(validated)
+                return {"schema_version": 1, "accepted": True, "terminal": True, "state": "move_planned",
+                        "request_id": validated["request_id"], **project_folders.plan_summary(plan),
+                        "message": "Nothing was moved; call again without dry_run (and a new request_id) to move it."}
+            digest = authoring.request_sha256(request)
+            key = f"{self.scope}#{validated['request_id']}"
+            with self.store.locked():
+                record = self.store.get(key)
+                if record is not None:
+                    if record.get("request_sha256") != digest:
+                        return error_body("request_conflict", "This request ID was already used with different arguments.")
+                    if record.get("status") == "applied":
+                        return {**record["result"], "replayed": True}
+                else:
+                    record = {"status": "prepared", "command": command, "request_sha256": digest,
+                              "request_id": validated["request_id"], "change": None}
+                if command == project_folders.ADD_SOURCE_FOLDER:
+                    return self._add_source_folder(key, record, validated)
+                return self._move_document(key, record, validated)
+        except Busy as busy:
+            return error_body("busy", str(busy))
+        except authoring.AuthoringRefused as refusal:
+            return refusal.body()
+        except (ApiError, TransportError) as error:
+            return self._transport_failure(error)
+
+    def _create_project(self, validated: dict[str, Any]) -> dict[str, Any]:
+        with_folder = validated.get("source_folder", True)
+        if with_folder and not project_folders.supported(self.api):
+            raise project_folders.unsupported("give a new Project its own docs folder (create it with "
+                                              "source_folder false for a Project with its default folder only)")
+        project_id = "new:" + validated["request_id"]
+        catalogue = self.api.library_projects()
+        project = documents.project_by_id(catalogue, project_id)
+        replayed = project is not None
+        if replayed and project.get("name") != validated["name"]:
+            raise authoring.AuthoringRefused("request_conflict", f"This request ID already created the Project "
+                                                                 f"{project.get('name')!r}.")
+        if not replayed:
+            same = [p for p in catalogue.get("projects") or [] if isinstance(p, dict)
+                    and str(p.get("name", "")).casefold() == validated["name"].casefold()]
+            if same:
+                raise authoring.AuthoringRefused("project_exists", f"A Project named {same[0].get('name')!r} already "
+                                                                   f"exists (id {same[0].get('id')}).")
+            change = {"action": "create", "operation_id": validated["request_id"], "project_id": project_id,
+                      "name": validated["name"], "base_revision": 0}
+            if with_folder:
+                change["source_folder"] = validated.get("folder_name")
+            try:
+                catalogue = self.api.library_change(change)
+            except ApiError as error:
+                if error.status != 409:
+                    raise
+                raise authoring.AuthoringRefused("write_failed", f"Thoughts did not create the Project: "
+                                                                 f"{error.detail}") from error
+            project = documents.project_by_id(catalogue, project_id)
+            if project is None:
+                raise authoring.AuthoringRefused("write_failed", "The server answered, but its catalogue does not list "
+                                                 "the Project; retry with the same request_id.", retryable=True)
+        folders = project_folders.connected_folders(project)
+        where = (f" with its own folder {folders[0]['folder']} (listed as {folders[0]['name']!r})" if folders
+                 else " with only its default folder")
+        return {"schema_version": 1, "accepted": True, "terminal": True, "state": "project_created",
+                "project_id": project_id, "project": project.get("name"), "project_revision": project.get("revision"),
+                "source_folders": folders, "request_id": validated["request_id"], "replayed": replayed,
+                "message": f"Created Project {project.get('name')!r}{where}. The phone and Mac show it after their "
+                           "next Sync."}
+
+    def _add_source_folder(self, key: str, record: dict[str, Any], validated: dict[str, Any]) -> dict[str, Any]:
+        if not project_folders.supported(self.api):
+            self.store.delete(key)
+            raise project_folders.unsupported("add a docs folder to a Project")
+        catalogue = None
+        for _attempt in range(MAX_PROJECT_ATTEMPTS):
+            if record.get("change") is None:
+                catalogue = self.api.library_projects()
+                project = documents.resolve_project(catalogue, validated["project"])
+                change = {"action": "add_source_folder", "operation_id": str(uuid.uuid4()),
+                          "project_id": project["id"], "base_revision": int(project.get("revision") or 0)}
+                if validated.get("name"):
+                    change["name"] = validated["name"]
+                record.update(change=change, before=[f["folder"] for f in project_folders.connected_folders(project)])
+                self.store.put(key, record)
+            try:
+                catalogue = self.api.library_change(record["change"])
+                break
+            except ApiError as error:
+                if error.status != 409:
+                    raise
+                record["change"] = None
+                self.store.put(key, record)
+                if PROJECT_CHANGED in error.detail:
+                    continue
+                self.store.delete(key)
+                raise authoring.AuthoringRefused("write_failed", f"Thoughts did not add the folder: {error.detail}") \
+                    from error
+        else:
+            self.store.delete(key)
+            raise authoring.AuthoringRefused("project_conflict", "The Project kept changing on another device; no "
+                                                                 "folder was added. Retry later.", retryable=True)
+        project = documents.project_by_id(catalogue, record["change"]["project_id"])
+        added = [f for f in project_folders.connected_folders(project) if f["folder"] not in record["before"]]
+        if len(added) != 1:
+            raise authoring.AuthoringRefused("write_failed", "The server answered, but its catalogue does not show "
+                                             "the new folder; retry with the same request_id.", retryable=True)
+        result = {"schema_version": 1, "accepted": True, "terminal": True, "state": "source_folder_added",
+                  "project_id": project["id"], "project": project.get("name"),
+                  "project_revision": project.get("revision"), "folder": added[0]["folder"],
+                  "name": added[0]["name"], "source_folders": project_folders.connected_folders(project),
+                  "request_id": record["request_id"], "replayed": False,
+                  "message": f"Project {project.get('name')!r} has the new folder {added[0]['folder']} (listed as "
+                             f"{added[0]['name']!r}). The phone and Mac show it after their next Sync."}
+        self.store.put(key, {**record, "status": "applied", "result": result})
+        return result
+
+    def _plan_move(self, validated: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        catalogue = self.api.library_projects()
+        origin, note = project_folders.find_note(catalogue, validated["document"])
+        destination = documents.resolve_project(catalogue, validated["project"])
+        if destination["id"] == origin["id"]:
+            raise authoring.AuthoringRefused("no_change", f"{note.get('name')!r} is already in Project "
+                                                          f"{origin.get('name')!r}.")
+        try:
+            answer = self.api.library_change(project_folders.plan_change(
+                origin, note["document_id"], destination, validated.get("destination_path")))
+        except ApiError as error:
+            if error.status != 409:
+                raise
+            raise authoring.AuthoringRefused("move_refused", f"Thoughts cannot move {note.get('name')!r}: "
+                                                             f"{error.detail}") from error
+        plan = answer.get("plan") if isinstance(answer, dict) else None
+        if not isinstance(plan, dict) or not isinstance(plan.get("plan_digest"), str):
+            raise authoring.AuthoringRefused("write_failed", "The server returned no move plan.")
+        project_folders.check_plan(plan)
+        return plan, origin
+
+    def _move_document(self, key: str, record: dict[str, Any], validated: dict[str, Any]) -> dict[str, Any]:
+        if not project_folders.supported(self.api):
+            self.store.delete(key)
+            raise project_folders.unsupported("move a note with its pages")
+        catalogue = None
+        for _attempt in range(MAX_PROJECT_ATTEMPTS):
+            if record.get("change") is None:
+                try:
+                    plan, _origin = self._plan_move(validated)
+                except authoring.AuthoringRefused:
+                    self.store.delete(key)
+                    raise
+                record.update(change=project_folders.move_change(plan, str(uuid.uuid4())),
+                              summary=project_folders.plan_summary(plan))
+                self.store.put(key, record)
+            try:
+                catalogue = self.api.library_change(record["change"])
+                break
+            except ApiError as error:
+                if error.status != 409:
+                    raise
+                # Refused: nothing moved. A Project or the plan changed meanwhile: plan again.
+                record["change"] = None
+                self.store.put(key, record)
+                if PROJECT_CHANGED in error.detail or "changed after you reviewed" in error.detail:
+                    continue
+                self.store.delete(key)
+                raise authoring.AuthoringRefused("move_refused", f"Thoughts did not move the note: {error.detail}",
+                                                 retryable="Sync again in a moment" in error.detail) from error
+        else:
+            self.store.delete(key)
+            raise authoring.AuthoringRefused("project_conflict", "The Projects kept changing on another device; "
+                                                                 "nothing moved. Retry later.", retryable=True)
+        change, summary = record["change"], record["summary"]
+        destination = documents.project_by_id(catalogue, change["destination_project_id"])
+        moved = destination is not None and any(d.get("document_id") == change["document_id"]
+                                                for d in documents.documents(destination))
+        if not moved:
+            raise authoring.AuthoringRefused("write_failed", "The server answered, but its catalogue does not show the "
+                                             "note in the destination; retry with the same request_id.", retryable=True)
+        result = {"schema_version": 1, "accepted": True, "terminal": True, "state": "document_moved",
+                  "project_id": destination["id"], "project_revision": destination.get("revision"),
+                  "request_id": record["request_id"], "replayed": False, **summary,
+                  "source_folders": project_folders.connected_folders(destination),
+                  "message": (f"Moved {summary['name']!r} from Project {summary['from_project']!r} to "
+                              f"{summary['to_project']!r}: {summary['from']} is now {summary['to']}, with its review "
+                              "cards and comments; links to and from it and its interactive pages follow. The phone "
+                              "and Mac see the move after their next Sync.")}
+        if self.render_check:
+            result["render_check"] = self._render_check(record["request_id"])
+        self.store.put(key, {**record, "status": "applied", "result": result})
+        return result
+
     def _linking_sources(self, key: str) -> list[str]:
         """The LaTeX and Markdown sources that name the PDF key (best effort; uses the object cache)."""
         found = []
@@ -581,6 +794,8 @@ class ThoughtsClient:
             raise authoring.AuthoringRefused("invalid_request", "Choose now or a future review time.")
         capabilities = self.api.health().get("capabilities") or []
         missing = [name for name in review_cards.CAPABILITIES[validated.command] if name not in capabilities]
+        if validated.kind and review_kinds.CAPABILITY not in capabilities:
+            missing.append(review_kinds.CAPABILITY)
         if missing:
             raise authoring.AuthoringRefused(
                 "server_unsupported", f"The server cannot take this card yet ({', '.join(missing)}); nothing was written.")
@@ -603,7 +818,8 @@ class ThoughtsClient:
                 return replayed
             raise authoring.AuthoringRefused("source_conflict", "The source changed; select the passage again.",
                                              current_source_sha256=snapshot["sha256"])
-        document = review_cards.owner_document(self.api.library_projects(), path)
+        listing = self.api.library_projects()
+        document = review_cards.owner_document(listing, path)
         row = review_cards.card_projection(self.api.projections(), validated.card_id)
         if move:
             current, from_stem, to_stem = review_cards.check_movable(row, document)
@@ -620,7 +836,11 @@ class ThoughtsClient:
         elif row is not None:
             raise authoring.AuthoringRefused(
                 "request_conflict", "A card with this request ID already exists; use a new request_id for a new card.")
-        marked, anchor = review_cards.mark(path, text, validated.start_line, validated.end_line, validated.card_id)
+        section = None
+        first, end = validated.start_line, validated.end_line
+        if validated.section:
+            first, end, section = review_cards.section_lines(validated, path, text)
+        marked, anchor = review_cards.mark(path, text, first, end, validated.card_id, wrap_cards=section is not None)
         content = marked.encode("utf-8")
         before_sha256, content_sha256 = self.api.upload(raw), self.api.upload(content)
         # Read the version again right before sending, as for proposals: a change refuses.
@@ -642,6 +862,14 @@ class ThoughtsClient:
                         if move else "Card created; its passage is marked in the source. ")
                        + "Its PDF areas are placed when the note is next built.",
         }
+        if section is not None:
+            # Lines of the source before the markers; the heading stays visible as the cue.
+            result["section"] = section
+            result["message"] = (f"Card created; it hides the {section['kind']} “{section['title']}” (lines "
+                                 f"{section['start_line']}–{section['end_line'] - 1}), marked in the source"
+                                 + (f" around {section['wrapped_cards']} other card(s), which stay as they are"
+                                    if section["wrapped_cards"] else "")
+                                 + ". Its PDF areas are placed when the note is next built.")
         if move:
             result["from_document"] = f"{from_stem}.pdf"
             payload = review_cards.moved_card(current, document, anchor, from_stem, to_stem, now, validated, digest,
@@ -650,6 +878,12 @@ class ThoughtsClient:
         else:
             result["due_at"] = review_cards.utc_string(due)
             payload = review_cards.created_card(validated, document, anchor, due, now, digest, dict(result))
+            kind = review_cards.card_kind(payload, listing)
+            result.update(review_kind=kind.kind, review_kind_source=kind.source)
+            result["message"] += (" It is a project card" if kind.is_project else " It is a knowledge card") + (
+                "." if kind.source == review_kinds.SOURCE_CARD else ", as its Project's cards are."
+                if kind.source == review_kinds.SOURCE_PROJECT else ".")
+            payload["creation_request"]["result"] = dict(result)
             base_revision = 0
         # A creation's transaction is the card's (its ID is the request's); a move's is the request's.
         payload["source_change"] = {"path": path, "transaction_id": validated.request_id,
@@ -969,8 +1203,9 @@ class ThoughtsClient:
             return refusal.body()
         except (ApiError, TransportError) as error:
             return self._transport_failure(error)
-        if self.render_check and not result.get("replayed"):
-            # The PDF rebuild places the kept card's areas (the Mac asks for it after each Sync).
+        if self.render_check and not result.get("replayed") and not card_merges.is_pdf_merge(body):
+            # The PDF rebuild places the kept card's areas (the Mac asks for it after each Sync). Cards of
+            # a PDF keep the areas they had: nothing is built.
             result = {**result, "render_check": self._render_check(body["request_id"])}
         return result
 

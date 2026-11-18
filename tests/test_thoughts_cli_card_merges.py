@@ -12,7 +12,17 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from test_review_card_merge import TEX, current_source, delete_events, library, make_card  # noqa: F401
+from test_review_card_merge import (  # noqa: F401
+    TEX,
+    area,
+    card_payload,
+    current_source,
+    delete_events,
+    imported_pdf,
+    library,
+    make_card,
+    make_pdf_card,
+)
 from test_thoughts_cli import NOW, AppApi
 from thoughts_cli import cli  # noqa: E402  (test_thoughts_cli puts the client on sys.path)
 from thoughts_cli.api import TransportError  # noqa: E402
@@ -66,7 +76,7 @@ def test_refusals_keep_the_servers_code(client, settings, agent, cards):
     stale = agent.run(request([first, second], "0" * 64))
     assert stale["error_code"] == "source_conflict" and stale["current_source_sha256"] == before[1]
     refused = agent.run(request([first, old], before[1]))
-    assert refused["error_code"] == "merge_refused" and "not linked to a source passage" in refused["message"]
+    assert refused["error_code"] == "merge_refused" and "is only on the PDF" in refused["message"]
     assert agent.run(request([first, str(uuid.uuid4())], before[1]))["error_code"] == "card_unavailable"
     for bad in ({"card_ids": [first]}, {"keep_card_id": str(uuid.uuid4())}, {"question": ""}, {"extra": 1},
                 {"expected_source_sha256": "abc"}):
@@ -114,3 +124,60 @@ def test_the_command_line_takes_repeated_card_ids(cards):
     body = cli.request_from_options(arguments)
     assert body["card_ids"] == [first, second] and body["keep_card_id"] == second
     assert set(body) == {"card_ids", "keep_card_id", "source", "expected_source_sha256", "request_id"}
+
+
+def pdf_request(card_ids, **extra):
+    return {"command": "merge-review-cards", "card_ids": card_ids, "request_id": str(uuid.uuid4()), **extra}
+
+
+def test_cards_of_a_pdf_merge_without_source_fields(client, auth_headers, agent, imported_pdf,  # noqa: F811
+                                                     monkeypatch):
+    one = make_pdf_card(client, auth_headers, imported_pdf, "One?", [area(2, 0.6)], answer="One.")
+    two = make_pdf_card(client, auth_headers, imported_pdf, "Two?", [area(2, 0.1)], answer="Two.")
+    sent = []
+    original = agent.api.merge_review_cards
+    monkeypatch.setattr(agent.api, "merge_review_cards", lambda body: sent.append(body) or original(body))
+    merge = pdf_request([one, two])
+    result = agent.run(merge)
+    assert result["accepted"] is True and result["kind"] == "pdf", result
+    assert set(sent[-1]) == {"card_ids", "request_id"}
+    assert result["source"] is None and result["source_sha256"] is None and result["passages"] == 2
+    assert result["card_order"] == [two, one] and result["kept_card_id"] == two
+    # Nothing to build: the cards keep the areas they had.
+    assert "render_check" not in result
+    assert card_payload(client, two)["primary"]["regions"] == [area(2, 0.1), area(2, 0.6)]
+    assert [event["merged_into"] for event in delete_events(client, one)] == [two]
+    again = agent.run(merge)
+    assert again == {**result, "replayed": True}
+
+
+def test_a_pdf_merge_is_checked_before_it_is_sent(client, auth_headers, agent, imported_pdf,  # noqa: F811
+                                                  monkeypatch):
+    one = make_pdf_card(client, auth_headers, imported_pdf, "One?", [area(1, 0.2)])
+    two = make_pdf_card(client, auth_headers, imported_pdf, "Two?", [area(1, 0.6)])
+    sent = []
+    monkeypatch.setattr(agent.api, "merge_review_cards", lambda body: sent.append(body))
+    for extra in ({"source": TEX}, {"expected_source_sha256": "a" * 64}):
+        result = agent.run(pdf_request([one, two], **extra))
+        assert result["error_code"] == "invalid_request" and "leave both out" in result["message"], result
+    # A server that merges only cards of a note is not asked to merge cards of a PDF.
+    monkeypatch.setattr(agent.api, "health", lambda: {"capabilities": ["review_card_merge_v1"]})
+    result = agent.run(pdf_request([one, two]))
+    assert result["error_code"] == "server_unsupported" and "review_card_merge_pdf_v1" in result["message"]
+    assert sent == []
+
+
+def test_source_fields_on_cards_of_a_pdf_are_refused_by_the_server(client, auth_headers, agent,
+                                                                    imported_pdf):  # noqa: F811
+    one = make_pdf_card(client, auth_headers, imported_pdf, "One?", [area(1, 0.2)])
+    two = make_pdf_card(client, auth_headers, imported_pdf, "Two?", [area(1, 0.6)])
+    result = agent.run(pdf_request([one, two], source=TEX, expected_source_sha256="a" * 64))
+    assert result["error_code"] == "merge_refused"
+    assert "leave out source and expected_source_sha256" in result["message"]
+
+
+def test_the_command_line_merges_cards_of_a_pdf_without_source_options(cards):
+    _, first, second = cards
+    arguments = cli.parser().parse_args([
+        "merge-review-cards", "--card-id", first, "--card-id", second, "--request-id", str(uuid.uuid4())])
+    assert set(cli.request_from_options(arguments)) == {"card_ids", "request_id"}

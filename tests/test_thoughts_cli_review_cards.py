@@ -208,3 +208,53 @@ def test_a_latex_selection_needs_rendered_text():
     path = "docs-x/tex/source/part.tex"
     assert review_cards.selection_error(path, SAMPLES[path], 4, 5, str(uuid.uuid4())) == "Select rendered text, not only comments."
     assert review_cards.selection_error(path, SAMPLES[path], 4, 6, str(uuid.uuid4())) == ""
+
+
+def test_a_new_card_follows_its_projects_kind_unless_a_kind_is_given(client, settings, auth_headers, document, agent):
+    """protocol/review-card-kinds.md 8: kind is optional; left out, the card has no review_kind and
+    follows its Project, and the answer says which kind it has."""
+    from thoughts_cli import review_kinds
+    seed_document(client, settings, auth_headers, document)
+    listing = {"projects": [{"id": "new:paper", "name": "paper", "review_kind": "project", "documents": [
+        {"document_id": paper_identity(client), "filename": "paper.pdf", "source_file": TEX_PATH}]}]}
+    agent.api.library_projects = lambda: listing
+    followed = agent.run(create())
+    assert followed["accepted"], followed
+    assert (followed["review_kind"], followed["review_kind_source"]) == ("project", "project")
+    assert "It is a project card, as its Project's cards are." in followed["message"]
+    assert "review_kind" not in card(client, followed["card_id"])
+
+    text = source_bytes(client, settings)
+    chosen = agent.run(create(text=text, start=9, end=10, question="What is gamma?", kind="knowledge"))
+    assert chosen["accepted"], chosen
+    assert (chosen["review_kind"], chosen["review_kind_source"]) == ("knowledge", "card")
+    assert chosen["message"].endswith("It is a knowledge card.")
+    payload = card(client, chosen["card_id"])
+    assert payload["review_kind"] == "knowledge"
+    assert review_kinds.card_kind(payload, [], listing["projects"]).kind == "knowledge"
+
+    refused = agent.run(create(text=source_bytes(client, settings), kind="weekly"))
+    assert refused["error_code"] == "invalid_request" and "kind" in refused["message"]
+
+
+def test_a_kind_needs_a_server_that_knows_kinds(client, settings, auth_headers, document, agent, monkeypatch):
+    seed_document(client, settings, auth_headers, document)
+    library(agent, client, {"paper.pdf": (paper_identity(client), TEX_PATH)})
+    health = agent.api.health
+    monkeypatch.setattr(agent.api, "health", lambda: {**health(), "capabilities": [
+        name for name in health()["capabilities"] if name != "review_card_kinds_v1"]})
+    refused = agent.run(create(kind="project"))
+    assert refused["error_code"] == "server_unsupported" and "review_card_kinds_v1" in refused["message"]
+    assert source_bytes(client, settings) == TEX
+    # Without a kind the card is made as before.
+    assert agent.run(create())["accepted"]
+
+
+def test_the_command_line_takes_a_kind():
+    from thoughts_cli import cli
+    arguments = cli.parser().parse_args(["create-review-card", "--source", TEX_PATH, "--expected-source-sha256",
+                                         "a" * 64, "--start-line", "5", "--end-line", "6", "--question", "Q?",
+                                         "--due-at", DUE, "--request-id", str(uuid.uuid4()), "--kind", "project"])
+    assert cli.request_from_options(arguments)["kind"] == "project"
+    with pytest.raises(SystemExit):
+        cli.parser().parse_args(["create-review-card", "--kind", "weekly"])

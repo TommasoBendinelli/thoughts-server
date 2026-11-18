@@ -40,6 +40,8 @@ import copy
 import hashlib
 import json
 import posixpath
+import re
+import urllib.parse
 import uuid
 from pathlib import PurePosixPath
 
@@ -53,6 +55,9 @@ DEVICE = "thoughts-document-moves"
 PLAN_ACTION = "plan_move_source_document"
 ACTION = "move_source_document"
 TEXT_SUFFIXES = (".tex", ".md", ".markdown")
+# A link to a folder's interactive HTML page (protocol/html-pages.md), as thoughts-cli finds it.
+HTML_LINK = re.compile(r"thoughts-html:([^\s{}()<>\[\]\"'\\]+)")
+HTML_PAGE_LIST = "tex/support/thoughts_html_attachments.txt"  # html_attachments.MANIFEST
 
 
 def _configuration_folder(configuration: dict, folder_id: str) -> dict | None:
@@ -160,7 +165,101 @@ def _structural_digest(plan: dict) -> str:
     if plan["destination"].get("new_folder"):
         # Only a new folder adds to the shape: digests of every other move stay as they were.
         shape["new_folder"] = plan["destination"]["folder"]
+    if plan.get("html_pages"):
+        # Likewise the pages a move lists in the destination (which pages, not their content).
+        shape["html_pages"] = sorted((p["source"], p["destination"]) for p in plan["html_pages"])
     return hashlib.sha256(json.dumps(shape, sort_keys=True).encode()).hexdigest()
+
+
+def _origin_pages(session, store, owner: str) -> dict[str, dict]:
+    """The folder's HTML pages, listed or carried only by its build inputs: path -> {sha256, bytes}."""
+    from .html_pages import HtmlPageError, _manifest_entries, unlisted_pages
+    try:
+        listed = {e["path"]: {"sha256": e["sha256"], "bytes": e["bytes"]} for e in _manifest_entries(session, store, owner)}
+    except (HtmlPageError, OSError, ValueError):
+        raise ValueError(f"The HTML page list of {owner} cannot be read; the move would lose the note's pages")
+    for page in unlisted_pages(session, owner, set(listed)):
+        listed.setdefault(page["path"], {"sha256": page["sha256"], "bytes": page["size_bytes"]})
+    return listed
+
+
+def _list_pages(session, store, root, operation_id: str, folder: str, pages: list[dict]) -> str | None:
+    """Add ``pages`` (same objects) to ``folder``'s HTML page list; its path, or None when it had them all."""
+    from .html_pages import HtmlPageError, _manifest_entries, _verified_object
+    from .library_projects import _save_source
+    from .source_resources import normalize_manifest_resources
+    try:
+        entries = {entry["path"]: entry for entry in _manifest_entries(session, store, folder)}
+    except HtmlPageError as error:
+        raise ValueError(str(error)) from error
+    changed = False
+    for page in pages:
+        if entries.get(page["destination"], {}).get("sha256") == page["sha256"]:
+            continue
+        size = _verified_object(session, store, page["sha256"], page["destination"])
+        entries[page["destination"]] = {"kind": "html_attachment", "path": page["destination"],
+                                        "sha256": page["sha256"], "object": page["sha256"], "bytes": size}
+        changed = True
+    if not changed:
+        return None
+    listed = normalize_manifest_resources(list(entries.values()), folder)
+    content = (json.dumps({"schema_version": 1, "attachments": listed}, sort_keys=True) + "\n").encode()
+    path = folder + "/" + HTML_PAGE_LIST
+    _save_source(session, store, root, operation_id + ":html-pages", path, content, materialize=False)
+    return path
+
+
+def _html_pages(session, store, origin, destination, document: str, result: dict) -> tuple[list[dict], list[str]]:
+    """The origin folder's HTML pages the moved files link, and their links as edits.
+
+    A ``thoughts-html:`` link names a page by its docs-root path, and a PDF carries only its
+    own folder's pages: each link to an origin page is rewritten to the same page of the
+    destination (added to ``result["edits"]``), and the page is listed there with the same
+    bytes. Links to a page the origin has neither listed nor built stay as they are (warned).
+    """
+    from .html_pages import is_page_path
+    origin_owner, destination_owner = origin.owner, destination.owner
+    moved = [document] + [f["source"] for f in result["files"]
+                          if f["action"] in {"move", "copy"} and f["source"].lower().endswith(TEXT_SUFFIXES)]
+    available = None
+    pages: dict[str, dict] = {}
+    missing: set[str] = set()
+    for path in moved:
+        text = origin.text(path)
+        if text is None or "thoughts-html:" not in text:
+            continue
+        scan = analysis.strip_comments(text) if path.lower().endswith(".tex") else text
+        for match in HTML_LINK.finditer(scan):
+            raw = match.group(1)
+            target = urllib.parse.unquote(raw)
+            if not is_page_path(target, origin_owner) or not raw.startswith(origin_owner + "/"):
+                continue
+            if available is None:
+                available = _origin_pages(session, store, origin_owner)
+            if target not in available:
+                missing.add(target)
+                continue
+            new = destination_owner + target[len(origin_owner):]
+            pages[target] = {"source": target, "destination": new, **available[target]}
+            result["edits"].setdefault(path, []).append({
+                "start": match.start(1), "end": match.end(1), "replacement": destination_owner + raw[len(origin_owner):],
+                "reason": "the interactive page is listed in the new folder too"})
+    for edits in result["edits"].values():
+        edits.sort(key=lambda edit: edit["start"])
+    warnings = []
+    if missing:
+        warnings.append("Links to HTML pages the origin folder does not have stay as they are: "
+                        + ", ".join(sorted(missing)))
+    if pages:
+        from .html_pages import listed_page_versions
+        listed = listed_page_versions(session, store, destination_owner)
+        clash = sorted(p["destination"] for p in pages.values()
+                       if listed.get(p["destination"]) not in (None, p["sha256"]))
+        if clash:
+            warnings.append("The destination folder already has a different HTML page of the same name; the "
+                            "note's links open that one: " + ", ".join(clash))
+            pages = {k: p for k, p in pages.items() if p["destination"] not in clash}
+    return [pages[k] for k in sorted(pages)], warnings
 
 
 def plan(session, store, root, request: dict) -> dict:
@@ -228,10 +327,14 @@ def plan(session, store, root, request: dict) -> dict:
                        if d["source"]["folder_id"] == origin_folder["folder_id"] and d["document_id"] != document_id]
     destination_documents = [d["source"]["path"] for d in destination_configuration["documents"]
                              if d["source"]["folder_id"] == destination_folder["folder_id"]]
+    # A connected folder without files (add_source_folder made it, or it was emptied) receives
+    # what a new folder receives: the origin's style and bibliography when the document needs them.
+    empty = not (destination.paths - {HTML_PAGE_LIST, ".ThoughtIgnore"})
     result = analysis.analyse(origin, destination, old_relative, new_relative,
                               other_documents=other_documents, destination_documents=destination_documents,
                               package_source=_package_source, document_format=declaration["format"],
-                              new_folder=new_folder is not None)
+                              new_folder=new_folder is not None or empty)
+    html_pages, page_warnings = _html_pages(session, store, origin, destination, old_relative, result)
 
     if request.get("carry_preamble") is False and result["preamble"]["carried"]:
         result["preamble"]["carried"] = ""
@@ -293,6 +396,7 @@ def plan(session, store, root, request: dict) -> dict:
     if any(r["required"] is False for r in result["preamble"]["packages"]):
         warnings.append("Packages loaded only by the origin's preamble and not used by this document: "
                         + ", ".join(r["name"] for r in result["preamble"]["packages"] if not r["required"]))
+    warnings += page_warnings
     origin_record = _record(session, TYPE, origin_id)
     destination_record = _record(session, TYPE, destination_id)
     value = {
@@ -318,6 +422,9 @@ def plan(session, store, root, request: dict) -> dict:
         "preamble": {k: v for k, v in result["preamble"].items()},
         "bibliography": result["bibliography"],
         "link_edits": link_edits,
+        # Interactive pages the moved files link, listed in the destination folder too (copied:
+        # the origin keeps them, since a Mac lists a page again that only the server removed).
+        "html_pages": html_pages,
         "markers": result["markers"],
         "warnings": warnings,
     }
@@ -559,6 +666,11 @@ def move_source_document(session, store, root, request, current, record, data, d
                                  "Choose Move to project again")
             _save_source(session, store, root, operation_id, path, content, materialize=False)
             touched.add(path)
+        # 3b. The interactive pages the moved files link, listed in the destination folder too.
+        if value["html_pages"]:
+            path = _list_pages(session, store, root, operation_id, destination_owner, value["html_pages"])
+            if path is not None:
+                touched.add(path)
         # 4. Records keyed by the source path follow it, before the old path is deleted.
         followed = {"review_cards": 0, "comments": 0, "annotations": 0}
         for old, new in [(old_path, new_path)] + [

@@ -1,0 +1,2893 @@
+{
+  "spec": "protocol/review-card-kinds.md sections 3, 4 and 6",
+  "how_to_use": "kind_cases: fold the card's kind from card, events and projects (catalogue entries) and compare with expected (review_kind, source, project_ids in catalogue order). passage_cases: stamp is the passage an answer on the card would carry now (null: none); passage_changed is section 6.3 (shown for project cards only). due_cases: scheduled_due_at is what the knowledge schedule gives; expected.due_at is the card's due time (compare as instants). The results must not depend on the order of events: test the given order and its reverse.",
+  "kind_cases": [
+    {
+      "name": "no_project_is_default_knowledge",
+      "note": "No Project holds the card.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-c",
+          "name": "Project C",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "bbbbbbbb-0000-4000-8000-00000000000b",
+              "filename": "notes-b.pdf",
+              "id": "notes-b.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "default",
+        "project_ids": []
+      }
+    },
+    {
+      "name": "old_server_project_without_review_kind",
+      "note": "A catalogue entry without review_kind is a knowledge Project.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": []
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "knowledge_project",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        },
+        {
+          "id": "project-c",
+          "name": "Project C",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "bbbbbbbb-0000-4000-8000-00000000000b",
+              "filename": "notes-b.pdf",
+              "id": "notes-b.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "project_project",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "held_by_filename",
+      "note": "The card names no document ID; its PDF file is a Project document.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": []
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "held_by_target",
+      "note": "The card is on the Project's combined reading PDF.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "project-a-reading",
+          "question": "What does the fixture show?",
+          "regions": []
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "project-a-reading.pdf",
+          "documents": [
+            {
+              "document_id": "bbbbbbbb-0000-4000-8000-00000000000b",
+              "filename": "notes-b.pdf",
+              "id": "notes-b.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "held_by_unpublished_document",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [],
+          "unpublished_documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf",
+              "published": false
+            }
+          ],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "held_by_document_id_with_other_filename",
+      "note": "The card's document ID decides even if the file was renamed.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "old-name",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "two_projects_one_project",
+      "note": "Any project Project that holds the card makes it a project card.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        },
+        {
+          "id": "project-b",
+          "name": "Project B",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            },
+            {
+              "document_id": "bbbbbbbb-0000-4000-8000-00000000000b",
+              "filename": "notes-b.pdf",
+              "id": "notes-b.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a",
+          "project-b"
+        ]
+      }
+    },
+    {
+      "name": "unknown_project_value_is_knowledge",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "weekly"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "card_event_knowledge_in_project_project",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "knowledge",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "card_event_project_in_knowledge_project",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "card_event_project_without_project",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [],
+      "expected": {
+        "review_kind": "project",
+        "source": "card",
+        "project_ids": []
+      }
+    },
+    {
+      "name": "record_kind_project",
+      "note": "The card was made as a project card (record review_kind).",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        },
+        "review_kind": "project"
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "record_kind_unknown_value_ignored",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        },
+        "review_kind": "draft"
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "event_overrides_record",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        },
+        "review_kind": "project"
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "knowledge",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "follow_project_ignores_record",
+      "note": "follow_project drops the record's kind too.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        },
+        "review_kind": "project"
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "follow_project",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "follow_project_after_swap",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "knowledge",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "follow_project",
+          "reviewed_at": "2026-11-17T11:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "swap_back_and_forth_latest_wins",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "knowledge",
+          "reviewed_at": "2026-11-17T12:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "knowledge",
+          "reviewed_at": "2026-11-17T11:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000004",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T13:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "same_time_larger_event_id_wins",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000009",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "knowledge",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "instants_not_strings_fraction",
+      "note": "10:00:00.500Z is later than 10:00:00Z although it sorts first as a string.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000009",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "knowledge",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00.500Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "instants_not_strings_offset",
+      "note": "11:30+01:00 is 10:30Z, earlier than 10:45Z.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "knowledge",
+          "reviewed_at": "2026-11-17T10:45:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000009",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T11:30:00+01:00"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "invalid_events_ignored",
+      "note": "Unknown kind, no time, a time without a zone, another card's event.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "draft",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000004",
+          "card_id": "22222222-2222-4222-8222-222222222222",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "knowledge",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "duplicate_event_ids_first_copy",
+      "note": "Copies of one event are one event.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "card",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    },
+    {
+      "name": "retire_and_answers_do_not_change_kind",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ]
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "retire",
+          "reviewed_at": "2026-11-17T10:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "expected": {
+        "review_kind": "project",
+        "source": "project",
+        "project_ids": [
+          "project-a"
+        ]
+      }
+    }
+  ],
+  "passage_cases": [
+    {
+      "name": "no_answer",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          ]
+        },
+        "passage_changed": false
+      }
+    },
+    {
+      "name": "answer_without_stamp",
+      "note": "Answers from before this capability are never marked.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ]
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          ]
+        },
+        "passage_changed": false
+      }
+    },
+    {
+      "name": "same_passage",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          ]
+        },
+        "passage_changed": false
+      }
+    },
+    {
+      "name": "content_changed",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          ]
+        },
+        "passage_changed": true
+      }
+    },
+    {
+      "name": "segment_added",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              },
+              {
+                "segment_id": "1",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            {
+              "segment_id": "1",
+              "content_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          ]
+        },
+        "passage_changed": true
+      }
+    },
+    {
+      "name": "segment_removed",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              {
+                "segment_id": "1",
+                "content_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          ]
+        },
+        "passage_changed": true
+      }
+    },
+    {
+      "name": "same_segments_other_order",
+      "note": "Compared as a map, not as a list.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "1",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+                "line_start": 10,
+                "line_end": 12
+              },
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              {
+                "segment_id": "1",
+                "content_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "1",
+              "content_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            },
+            {
+              "segment_id": "0",
+              "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          ]
+        },
+        "passage_changed": false
+      }
+    },
+    {
+      "name": "card_on_imported_pdf",
+      "note": "No source segments: no stamp, never marked.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "stamp": null,
+        "passage_changed": false
+      }
+    },
+    {
+      "name": "segment_without_hash",
+      "note": "A segment without content_sha256: no stamp, never marked.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "stamp": null,
+        "passage_changed": false
+      }
+    },
+    {
+      "name": "newer_answer_saw_the_change",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-12T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          ]
+        },
+        "passage_changed": false
+      }
+    },
+    {
+      "name": "retracted_answer_does_not_count",
+      "note": "Take back this answer: the answer before it counts.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-12T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "retracted_event_id": "a0000000-0000-4000-8000-000000000002",
+          "reviewed_at": "2026-11-12T09:01:00Z"
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          ]
+        },
+        "passage_changed": true
+      }
+    },
+    {
+      "name": "queue_actions_and_deletes_are_not_answers",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-13T09:00:00Z"
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000003",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "delete",
+          "reviewed_at": "2026-11-14T09:00:00Z",
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+              }
+            ]
+          }
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000004",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "restore",
+          "reviewed_at": "2026-11-15T09:00:00Z"
+        }
+      ],
+      "expected": {
+        "stamp": {
+          "segments": [
+            {
+              "segment_id": "0",
+              "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          ]
+        },
+        "passage_changed": true
+      }
+    }
+  ],
+  "due_cases": [
+    {
+      "name": "knowledge_keeps_schedule",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "scheduled_due_at": "2027-01-09T09:00:00Z",
+      "expected": {
+        "review_kind": "knowledge",
+        "passage_changed": false,
+        "due_at": "2027-01-09T09:00:00Z"
+      }
+    },
+    {
+      "name": "project_at_most_7_days",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "scheduled_due_at": "2027-01-09T09:00:00Z",
+      "expected": {
+        "review_kind": "project",
+        "passage_changed": false,
+        "due_at": "2026-11-17T09:00:00Z"
+      }
+    },
+    {
+      "name": "project_earlier_schedule_kept",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "scheduled_due_at": "2026-11-12T09:00:00Z",
+      "expected": {
+        "review_kind": "project",
+        "passage_changed": false,
+        "due_at": "2026-11-12T09:00:00Z"
+      }
+    },
+    {
+      "name": "project_never_answered_keeps_initial_due",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "scheduled_due_at": "2026-12-01T09:00:00Z",
+      "expected": {
+        "review_kind": "project",
+        "passage_changed": false,
+        "due_at": "2026-12-01T09:00:00Z"
+      }
+    },
+    {
+      "name": "project_without_schedule",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "scheduled_due_at": null,
+      "expected": {
+        "review_kind": "project",
+        "passage_changed": false,
+        "due_at": "2026-11-17T09:00:00Z"
+      }
+    },
+    {
+      "name": "swapped_card_old_interval_capped",
+      "note": "A knowledge card with a 60-day interval made a project card.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-01T08:00:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a"
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ]
+        },
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000002",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "queue_action": "set_review_kind",
+          "review_kind": "project",
+          "reviewed_at": "2026-11-11T09:00:00Z"
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "scheduled_due_at": "2027-01-09T09:00:00Z",
+      "expected": {
+        "review_kind": "project",
+        "passage_changed": false,
+        "due_at": "2026-11-17T09:00:00Z"
+      }
+    },
+    {
+      "name": "changed_project_due_at_change",
+      "note": "The record was updated after the answer: due then.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-13T15:30:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "scheduled_due_at": "2027-01-09T09:00:00Z",
+      "expected": {
+        "review_kind": "project",
+        "passage_changed": true,
+        "due_at": "2026-11-13T15:30:00Z"
+      }
+    },
+    {
+      "name": "changed_project_record_time_earlier",
+      "note": "updated_at before the answer: due at the answer's time.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-09T15:30:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "scheduled_due_at": "2027-01-09T09:00:00Z",
+      "expected": {
+        "review_kind": "project",
+        "passage_changed": true,
+        "due_at": "2026-11-10T09:00:00Z"
+      }
+    },
+    {
+      "name": "changed_knowledge_card_keeps_schedule",
+      "note": "Knowledge cards are never marked.",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-13T15:30:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "knowledge"
+        }
+      ],
+      "scheduled_due_at": "2027-01-09T09:00:00Z",
+      "expected": {
+        "review_kind": "knowledge",
+        "passage_changed": false,
+        "due_at": "2027-01-09T09:00:00Z"
+      }
+    },
+    {
+      "name": "changed_project_earlier_schedule_kept",
+      "note": "",
+      "card": {
+        "schema_version": 4,
+        "card_id": "11111111-1111-4111-8111-111111111111",
+        "status": "approved",
+        "revision": 2,
+        "created_at": "2026-11-01T08:00:00Z",
+        "updated_at": "2026-11-13T15:30:00Z",
+        "primary": {
+          "pdf_stem": "notes-a",
+          "question": "What does the fixture show?",
+          "regions": [],
+          "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "pdf_document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+          "source_anchor": {
+            "version": 2,
+            "segments": [
+              {
+                "segment_id": "0",
+                "source_file": "docs-fixture/tex/source/notes.tex",
+                "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "line_start": 10,
+                "line_end": 12
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "schema_version": 3,
+          "event_id": "a0000000-0000-4000-8000-000000000001",
+          "card_id": "11111111-1111-4111-8111-111111111111",
+          "origin_id": "fixture",
+          "rating": "good",
+          "reviewed_at": "2026-11-10T09:00:00Z",
+          "review_tags": [
+            "Correct"
+          ],
+          "passage": {
+            "segments": [
+              {
+                "segment_id": "0",
+                "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+              }
+            ]
+          }
+        }
+      ],
+      "projects": [
+        {
+          "id": "project-a",
+          "name": "Project A",
+          "revision": 3,
+          "target": "",
+          "documents": [
+            {
+              "document_id": "aaaaaaaa-0000-4000-8000-00000000000a",
+              "filename": "notes-a.pdf",
+              "id": "notes-a.pdf"
+            }
+          ],
+          "unpublished_documents": [],
+          "review_kind": "project"
+        }
+      ],
+      "scheduled_due_at": "2026-11-11T09:00:00Z",
+      "expected": {
+        "review_kind": "project",
+        "passage_changed": true,
+        "due_at": "2026-11-11T09:00:00Z"
+      }
+    }
+  ]
+}

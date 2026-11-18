@@ -84,6 +84,14 @@ form, and a warning when the page loads resources from the network.
 `{reason: html_page_not_found | html_page_other_folder, command: "thoughts-html", text, line, message,
 suggestion?}`. Links already in the source are not checked.
 
+**Moving a note.** `move_source_document` (a note moved to another Project) lists in the
+destination folder every page of the origin folder that the moved files link
+(`thoughts-html:docs-<origin>/tex/support/html/<name>.html`), with the same object, and rewrites
+those links to `docs-<destination>/...`. The plan shows them as `html_pages` (`source`,
+`destination`, `sha256`, `bytes`) and its digest covers which pages move. The origin keeps its pages:
+a Mac lists again a page only the server removed (table below). Links to a page the origin has
+neither listed nor built stay as they are, with a warning. Capability `library_project_source_folder_v1`.
+
 ## 4. The Mac
 
 Each Sync's source steps (the source installer after Fedora's sources moved, and every source

@@ -32,6 +32,13 @@ group and environment they open, and lie only inside text environments (lists,
 quotations, centering), because the markers are commands. The server's parser then
 refuses markers in hidden text.
 
+create-review-card may name a section instead of lines (section_line, the line of its heading, or
+section_heading, the heading's text): the card hides the section's body, from below the heading to
+before the next heading of the same or a higher level, by the desktop's rules
+(review_card_sections.py), and may hold other cards' passages whole (selection_error with
+wrap_cards). The server already accepts such a card (tests/test_nested_review_cards.py); its PDF
+areas are placed by the next build like any card's.
+
 A move may also select lines of a pending agent proposal's proposed text, when the
 server can wait for the proposal (capability review_card_pending_moves_v1,
 pending_card_moves.py): the server records the move and makes it when the user accepts
@@ -45,7 +52,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from . import review_card_selection
+from . import review_card_sections, review_card_selection, review_kinds
 from .authoring import AuthoringRefused, _valid_uuid
 from .card_passage_moves import LINKED_CARD
 from .review_card_selection import (  # noqa: F401  (the selection API, as before)
@@ -66,8 +73,10 @@ CREATE_REVIEW_CARD = "create-review-card"
 MOVE_REVIEW_CARD = "move-review-card"
 COMMANDS = (CREATE_REVIEW_CARD, MOVE_REVIEW_CARD)
 FIELDS = {
+    # kind: "knowledge" or "project" (protocol/review-card-kinds.md 8); left out, the card follows its Project.
     CREATE_REVIEW_CARD: frozenset({"command", "source", "expected_source_sha256", "start_line", "end_line",
-                                   "question", "due_at", "request_id"}),
+                                   "question", "due_at", "request_id", "kind", "section_line",
+                                   "section_heading"}),
     # explanation, conversation_id and conversation_url are for a card linked to markers (passage_move).
     MOVE_REVIEW_CARD: frozenset({"command", "card_id", "source", "expected_source_sha256", "start_line",
                                  "end_line", "request_id", "explanation", "conversation_id", "conversation_url"}),
@@ -95,6 +104,14 @@ class CardRequest:
     card_id: str
     question: str = ""
     due_at: str = ""
+    kind: str = ""
+    # A section card: its heading's line or text instead of start_line and end_line.
+    section_line: int = 0
+    section_heading: str = ""
+
+    @property
+    def section(self) -> bool:
+        return bool(self.section_line or self.section_heading)
 
 
 def _line(value: Any) -> int:
@@ -134,7 +151,17 @@ def validate_request(request: Any) -> CardRequest:
     if (not isinstance(source, str) or not source or "\0" in source or not isinstance(request_id, str)
             or not _valid_uuid(request_id) or not isinstance(expected, str) or SHA256.fullmatch(expected) is None):
         raise AuthoringRefused("invalid_request", "Provide a source, its current SHA-256 and a UUID request ID.")
-    if start < 1 or end <= start:
+    section_line, section_heading = request.get("section_line"), request.get("section_heading")
+    if section_line is not None or section_heading is not None:
+        heading = section_heading.strip(QT_SPACE) if isinstance(section_heading, str) else ""
+        if ((section_line is None) == (section_heading is None) or "start_line" in request or "end_line" in request
+                or (section_line is not None and _line(section_line) < 1)
+                or (section_heading is not None and not 1 <= len(heading) <= MAX_QUESTION_LENGTH)):
+            raise AuthoringRefused(
+                "invalid_request", "Name the section by one of section_line (its heading's one-based line) or "
+                "section_heading (the heading's text), without start_line and end_line.")
+        start, end = 0, 0
+    elif start < 1 or end <= start:
         raise AuthoringRefused("invalid_request", "Select one nonempty range with one-based start and exclusive end lines.")
     if command == MOVE_REVIEW_CARD:
         card_id = request.get("card_id")
@@ -147,20 +174,42 @@ def validate_request(request: Any) -> CardRequest:
         raise AuthoringRefused(
             "invalid_request", "Provide a UUID request ID, current source SHA-256, question (1–500 characters), "
             "and an ISO review time with timezone.")
+    kind = request.get("kind", "")
+    if kind not in ("", *review_kinds.KINDS):
+        raise AuthoringRefused("invalid_request", 'kind must be "knowledge" or "project" (or left out: the card '
+                               "follows its Project's kind).")
     # The request ID is the new card's ID, as on the desktop.
-    return CardRequest(command, source, expected, start, end, request_id, request_id, question, request["due_at"])
+    return CardRequest(command, source, expected, start, end, request_id, request_id, question, request["due_at"],
+                       kind, _line(section_line) if section_line is not None else 0,
+                       heading if section_heading is not None else "")
 
 
 # ------------------------------------------------------------------ selections (review_card_selection.py)
 
 
-def mark(path: str, text: str, first: int, end: int, card_id: str) -> tuple[str, dict[str, Any]]:
+def mark(path: str, text: str, first: int, end: int, card_id: str, wrap_cards: bool = False) -> tuple[str, dict[str, Any]]:
     """The source with the card's marker pair around lines [first, end) and the card's v2 source anchor
-    (review_card_selection.marked), or the selection's refusal."""
-    error = selection_error(path, text, first, end, card_id)
+    (review_card_selection.marked), or the selection's refusal. A section card (``wrap_cards``) may
+    hold other cards' passages whole."""
+    error = selection_error(path, text, first, end, card_id, wrap_cards)
     if error:
         raise AuthoringRefused("invalid_selection", error)
     return marked(path, text, first, end, card_id)
+
+
+def section_lines(request: CardRequest, path: str, text: str) -> tuple[int, int, dict[str, Any]]:
+    """A section card's lines [first, end) and what the result tells about the section, or the refusal."""
+    try:
+        found = (review_card_sections.section(path, text, [request.section_line]) if request.section_line
+                 else review_card_sections.section_named(path, text, request.section_heading))
+    except review_card_sections.SectionRefused as refusal:
+        raise AuthoringRefused("invalid_selection", str(refusal)) from None
+    wrapped = {card for card, passages in card_passages(path, text).items()
+               if any(found.first_line <= opened and last <= found.last_line for opened, last in passages)}
+    return found.first_line, found.last_line + 1, {
+        "title": found.title, "kind": found.kind, "heading_line": found.heading_line,
+        "start_line": found.first_line, "end_line": found.last_line + 1, "wrapped_cards": len(wrapped),
+    }
 
 
 # ------------------------------------------------------------------ Library documents and cards
@@ -230,7 +279,14 @@ def created_card(request: CardRequest, document: dict[str, Any], anchor: dict[st
         "reanchor": {"state": "updating", "reason": "pdf_placement_pending"},
         "creation_request": {"sha256": request_sha256, "result": result},
         "source_authority": "client-v1",
+        # The kind it was made with (protocol/review-card-kinds.md 2.2); none: it follows its Project.
+        **({"review_kind": request.kind} if request.kind else {}),
     }
+
+
+def card_kind(payload: dict[str, Any], listing: dict[str, Any]) -> review_kinds.CardKind:
+    """The new card's kind: its own, else its Project's (GET /v1/library/projects)."""
+    return review_kinds.card_kind(payload, [], listing.get("projects") or [])
 
 
 def moved_card(payload: dict[str, Any], document: dict[str, Any], anchor: dict[str, Any], from_stem: str,

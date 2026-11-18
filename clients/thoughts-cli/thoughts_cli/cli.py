@@ -11,6 +11,8 @@
     thoughts-cli publish-build-inputs --document-id ... --publish --request-id ...
     thoughts-cli create-review-card --source ... --expected-source-sha256 ... --start-line 12 --end-line 15 \\
         --question "What is ...?" --due-at 2026-11-05T09:00:00+01:00 --request-id ...
+    thoughts-cli create-review-card --source ... --expected-source-sha256 ... --section-line 16 \\
+        --question "Explain ..." --due-at 2026-11-05T09:00:00+01:00 --request-id ...
     thoughts-cli move-review-card --card-id ... --source ... --expected-source-sha256 ... \\
         --start-line 12 --end-line 15 --request-id ...
     thoughts-cli move-review-card --card-id ... --source ... --expected-source-sha256 ... \\
@@ -23,6 +25,9 @@
         --html-file page.html --request-id ...
     thoughts-cli move-pdf --pdf Example_Paper_ebe6aaf90a9e --project MethodsComparison --request-id ...
     thoughts-cli build-status --document "SFT Memorizes, RL Generalizes (notes)"
+    thoughts-cli create-project --name math --request-id ...
+    thoughts-cli add-source-folder --project math --request-id ...
+    thoughts-cli move-document --document "powers of ten" --project math --dry-run --request-id ...
 
 Requests and results are thoughtsctl's (one JSON object on stdin without a
 command field, one JSON result on stdout); the request fields can also be given
@@ -52,6 +57,7 @@ from .client import ThoughtsClient, error_body
 from .documents import CREATE_DOCUMENT, MAX_CONTENT_BYTES
 from .html_pages import ADD_HTML_PAGE, MAX_PAGE_BYTES
 from .pdf_moves import MOVE_PDF
+from .project_folders import ADD_SOURCE_FOLDER, CREATE_PROJECT, MOVE_DOCUMENT
 from .review_cards import CREATE_REVIEW_CARD, MOVE_REVIEW_CARD
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
@@ -61,7 +67,8 @@ MAX_PAGE_REQUEST_BYTES = 6 * MAX_PAGE_BYTES + 64 * 1024
 READ = "read-source"
 COMMANDS = (READ, CREATE, CREATE_BATCH, REVISE, REMOVE, CREATE_DOCUMENT, PUBLISH_BUILD_INPUTS,
             CREATE_REVIEW_CARD, MOVE_REVIEW_CARD, MERGE_REVIEW_CARDS, ADD_HTML_PAGE, MOVE_PDF, BUILD_STATUS,
-            PENDING_CARD_MOVES, CANCEL_PENDING_CARD_MOVE, MOVE_CARD_PASSAGE)
+            PENDING_CARD_MOVES, CANCEL_PENDING_CARD_MOVE, MOVE_CARD_PASSAGE, CREATE_PROJECT, ADD_SOURCE_FOLDER,
+            MOVE_DOCUMENT)
 
 
 def exit_code(result: dict[str, Any]) -> int:
@@ -164,6 +171,11 @@ def parser() -> argparse.ArgumentParser:
     selection(card)
     card.add_argument("--question")
     card.add_argument("--due-at", help="First review time, ISO 8601 with a timezone.")
+    card.add_argument("--kind", choices=("knowledge", "project"),
+                      help="The card's kind; left out, it follows its Project's kind.")
+    card.add_argument("--section-line", type=int, help="Instead of --start-line/--end-line: the one-based line of a "
+                                                      "section's heading; the card hides the whole section.")
+    card.add_argument("--section-heading", help="Instead of --section-line: the heading's text.")
     moved = commands.add_parser(MOVE_REVIEW_CARD, help="Move a card without source markers (e.g. on an imported "
                                                       "PDF) into a note, keeping its history; onto a pending "
                                                       "proposal's text once the user accepts it.")
@@ -199,8 +211,8 @@ def parser() -> argparse.ArgumentParser:
     merged.add_argument("--card-id", dest="card_ids", action="append", help="A card to merge (give it 2 to 20 times).")
     merged.add_argument("--keep-card-id", help="The card that stays (default: the one with the most reviews).")
     merged.add_argument("--question", help="The merged card's question (default: the questions joined).")
-    merged.add_argument("--source")
-    merged.add_argument("--expected-source-sha256")
+    merged.add_argument("--source", help="The source that holds the cards' markers (leave out for cards of a PDF).")
+    merged.add_argument("--expected-source-sha256", help="The source's SHA-256 as read (leave out for cards of a PDF).")
     merged.add_argument("--request-id")
     page = commands.add_parser(ADD_HTML_PAGE, help="Add or replace one self-contained HTML page of a docs folder "
                                                   "(docs-x/tex/support/html/<name>.html), for thoughts-html: links.")
@@ -217,6 +229,24 @@ def parser() -> argparse.ArgumentParser:
     status = commands.add_parser(BUILD_STATUS, help="Why a document's PDF does not build, and the pending proposal "
                                                     "most likely to blame (reads only).")
     status.add_argument("--document", help="The document's id, name, PDF filename or source path.")
+    project = commands.add_parser(CREATE_PROJECT, help="A new Library Project, with a docs folder of its own unless "
+                                                      "--no-source-folder.")
+    project.add_argument("--name", help="The Project's name.")
+    project.add_argument("--source-folder", action=argparse.BooleanOptionalAction, default=None,
+                         help="Give it its own docs-* folder (default) or only its default folder.")
+    project.add_argument("--folder-name", help="The folder's label in the Library (default: the Project's name).")
+    project.add_argument("--request-id")
+    folder = commands.add_parser(ADD_SOURCE_FOLDER, help="Give a Project one more docs-* folder of its own (empty).")
+    folder.add_argument("--project", help="The Project's id or exact name.")
+    folder.add_argument("--name", help="The folder's label in the Library (default: the Project's name).")
+    folder.add_argument("--request-id")
+    note = commands.add_parser(MOVE_DOCUMENT, help="Move a note of a docs folder to another Project, with its review "
+                                                  "cards, comments, figures, links and HTML pages.")
+    note.add_argument("--document", help="The note's document id, source path or exact name.")
+    note.add_argument("--project", help="The destination Project's id or exact name.")
+    note.add_argument("--destination-path", help="Its path in the destination folder (default: the same).")
+    note.add_argument("--dry-run", action="store_true", default=None, help="Show the plan without moving.")
+    note.add_argument("--request-id")
     return root
 
 
@@ -228,7 +258,9 @@ FIELD_OPTIONS = {
     "content": "content", "document_id": "document_id", "publish": "publish", "question": "question",
     "due_at": "due_at", "card_id": "card_id", "folder": "folder", "replace": "replace", "pdf": "pdf",
     "document": "document", "card_ids": "card_ids", "keep_card_id": "keep_card_id",
-    "pending_move_id": "pending_move_id", "state": "state", "line": "line",
+    "pending_move_id": "pending_move_id", "state": "state", "line": "line", "source_folder": "source_folder",
+    "folder_name": "folder_name", "destination_path": "destination_path", "dry_run": "dry_run", "kind": "kind",
+    "section_line": "section_line", "section_heading": "section_heading",
 }
 FILE_OPTIONS = {"replacement_file": "replacement", "explanation_file": "explanation", "proposals_file": "proposals",
                 "content_file": "content", "html_file": "html"}
